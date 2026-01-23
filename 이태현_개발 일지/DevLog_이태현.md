@@ -11,4 +11,8 @@
 
 - 2026-01-07: IOCP 로비 서버 뼈대 구현(세션 구조/Accept 후 IOCP 연결/워커 스레드 완료 통지 루프) → [20260107.md](20260107.md)
 
-- 2026-01-07: IOCP 로비 서버 패킷 경계 처리 + Send 경로 추가 + Disconnect/에러 처리 강화 → [20260108.md](20260108.md)
+- 2026-01-08: IOCP 로비 서버 패킷 경계 처리 + Send 경로 추가 + Disconnect/에러 처리 강화 → [20260108.md](20260108.md)
+
+- 2026-01-22: IOCP 서버 송신 경로 고도화(SendQueue/in-flight + Partial Send) + 패킷 경계 처리(PacketHeader/Dispatcher) 적용 → [20260122.md](20260122.md)
+
+- 2026-01-23: 로비 서버 기본 로직(세션ID WELCOME/방 목록 자동 전송/방 목록 재요청) + LobbyService로 로비 로직 분리 → [20260123.md](20260123.md)
