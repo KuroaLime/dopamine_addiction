@@ -16,3 +16,7 @@
 - 2026-01-22: IOCP 서버 송신 경로 고도화(SendQueue/in-flight + Partial Send) + 패킷 경계 처리(PacketHeader/Dispatcher) 적용 → [20260122.md](20260122.md)
 
 - 2026-01-23: 로비 서버 기본 로직(세션ID WELCOME/방 목록 자동 전송/방 목록 재요청) + LobbyService로 로비 로직 분리 → [20260123.md](20260123.md)
+
+- 2026-01-26: 방 입장(Join) 로직 구현 + 4인 충족 시 상태 자동 변경 + 실시간 상태 브로드캐스트 동기화 → [20260126.md](20260126.md)
+
+- 2026-01-27: Dedicated Server 포트 풀링(Alloc/Free) 구현 + 4인 매칭 시 게임 서버 이동 명령(Handover) 패킷 적용 → [20260127.md](20260127.md)

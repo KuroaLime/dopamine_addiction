@@ -1,67 +1,173 @@
-// Protocol.h
 #pragma once
 #include <cstdint>
 
+// ===========================================================================
+// Packet Types & Header
+// ===========================================================================
+
 enum class PacketType : uint16_t
 {
-    // basic
+    // [System] 연결 확인 및 초기화
     C2S_PING = 1,
     S2C_PONG = 2,
+    S2C_WELCOME = 10,
 
-    // lobby #1 (스냅샷/방목록)
-    S2C_WELCOME = 10, // 접속 직후 세션ID 부여
-    C2S_ROOM_LIST_REQ = 11, // 방 목록 요청
-    S2C_ROOM_LIST_RES = 12, // 방 목록 응답
+    // [Auth] 로그인/회원가입
+    C2S_LOGIN_REQ = 20,
+    S2C_LOGIN_RES = 21,
+    C2S_REGISTER_REQ = 22,
+    S2C_REGISTER_RES = 23,
 
-    
-    C2S_CREATE_ROOM_REQ = 20,
-    S2C_CREATE_ROOM_RES = 21,
-    C2S_JOIN_ROOM_REQ = 22,
-    S2C_JOIN_ROOM_RES = 23,
+    // [Lobby] 방 목록 조회
+    C2S_ROOM_LIST_REQ = 100,
+    S2C_ROOM_LIST_RES = 101,
 
-    S2C_ERROR = 1000,
+    // [Room] 방 생성
+    C2S_ROOM_CREATE_REQ = 110,
+    S2C_ROOM_CREATE_RES = 111,
+
+    // [Room] 방 입장
+    C2S_ROOM_JOIN_REQ = 120,
+    S2C_ROOM_JOIN_RES = 121,
+
+    // [Room] 방 퇴장
+    C2S_ROOM_LEAVE_REQ = 130,
+    S2C_ROOM_LEAVE_RES = 131,
+
+    // [Room Action] 방장/레디 시스템
+    C2S_ROOM_READY_REQ = 140, // 클라 -> 서버: "나 레디할게/취소할게"
+    S2C_ROOM_READY_BRD = 141, // 서버 -> 클라: "누가 레디했대/취소했대" (Broadcast)
+    C2S_ROOM_START_REQ = 150, // 방장 -> 서버: "게임 시작하자!"
+    S2C_ROOM_START_RES = 151, // 서버 -> 클라: "다 레디 안 함" 또는 "시작 성공"
+
+    // [In-Game] 게임 시작 및 서버 이동 (Session Handover)
+    S2C_GAME_START = 200,
 };
 
-// 헤더(4바이트): size/type는 "네트워크 바이트 오더"로 송수신
 struct PacketHeader
 {
-    uint16_t size; // 헤더 포함 전체 크기
+    uint16_t size; // 전체 패킷 길이 (Header + Payload)
     uint16_t type; // PacketType
 };
-static_assert(sizeof(PacketHeader) == 4, "PacketHeader size must be 4");
+static_assert(sizeof(PacketHeader) == 4, "PacketHeader must be 4 bytes");
 
-// S2C_WELCOME payload (4바이트)
-struct WelcomePayload
+
+// ===========================================================================
+// Constants & Enums
+// ===========================================================================
+
+static constexpr uint8_t MAX_ID_LEN = 16;
+static constexpr uint8_t MAX_PW_LEN = 16;
+
+enum class LoginResult : uint8_t
 {
-    uint32_t sessionId; // network order (htonl)
-};
-static_assert(sizeof(WelcomePayload) == 4, "WelcomePayload size must be 4");
+    OK = 0, // 첫 로그인 성공 (로비로 이동)
+    OK_RECONNECT = 1, // 재접속 성공 (바로 인게임 진입)
 
-// S2C_ROOM_LIST_RES payload:
-// [RoomListResHeader][RoomEntry x N]
-struct RoomListResHeader
-{
-    uint16_t roomCount; // network order (htons)
-    uint16_t reserved;  // 0
-};
-static_assert(sizeof(RoomListResHeader) == 4, "RoomListResHeader size must be 4");
+    ID_NOT_FOUND = 10,
+    WRONG_PASSWORD = 11,
+    ALREADY_LOGGED_IN = 12,
 
+    ID_ALREADY_EXISTS = 20, // 회원가입 시
+    INVALID_FORMAT = 21,
+};
+
+// 게임 및 방 설정 상수
+static constexpr uint8_t  ROOM_MAX_PLAYERS = 4;
+static constexpr uint8_t  ROOM_TITLE_MAX = 32;     // UTF-8 바이트 기준
+static constexpr uint16_t MAX_PACKET_SIZE = 4096;   // 최대 패킷 크기
+
+// 방 상태 (표시용)
 enum class RoomState : uint8_t
 {
-    Waiting = 0,
-    InGame = 1,
+    WAITING = 0, // 대기 중
+    IN_GAME = 1, // 게임 진행 중
 };
 
-struct RoomEntry
+// 요청 처리 결과 코드
+enum class RoomResult : uint8_t
 {
-    uint32_t roomId;      // network order (htonl)
-    uint8_t  state;       // RoomState
-    uint8_t  curPlayers;  // 0~4
-    uint8_t  maxPlayers;  // 4
-    uint8_t  reserved0;   // 0
+    OK = 0,
 
-    uint32_t dediIp;      // IPv4 network order (0이면 아직 없음)
-    uint16_t dediPort;    // network order (htons), 0이면 아직 없음
-    uint16_t reserved1;   // 0
+    // 논리적 에러
+    INVALID_ROOM = 1,
+    FULL = 2,
+    IN_GAME = 3,
+
+    // 상태 에러
+    ALREADY_IN_ROOM = 10,
+    NOT_IN_ROOM = 11,
+
+    // 데이터 에러
+    BAD_PAYLOAD = 20,
+    TITLE_TOO_LONG = 21,
+
+    NOT_HOST = 30,          // 방장이 아닌데 시작 누름
+    NOT_ALL_READY = 31,     // 참여자 중 레디 안 한 사람이 있음
+    NEED_MORE_PLAYERS = 32, // 혼자 있는데 시작 누름 (최소 2명 필요)
 };
-static_assert(sizeof(RoomEntry) == 16, "RoomEntry size must be 16");
+
+
+// ===========================================================================
+// Data Structures
+// ===========================================================================
+
+// 방 정보 구조체 (서버 내부 목록 관리 및 클라이언트 전송용)
+struct RoomInfoView
+{
+    uint32_t  roomId = 0;
+    RoomState state = RoomState::WAITING;
+    uint8_t   curPlayers = 0;
+    uint8_t   maxPlayers = ROOM_MAX_PLAYERS;
+
+    uint32_t  hostId = 0; // 방장의 Session ID
+
+    uint8_t   titleLen = 0;
+    char      title[ROOM_TITLE_MAX]{};
+};
+
+
+// ===========================================================================
+// 참고용 주석
+// ===========================================================================
+/*
+    [S2C_WELCOME]
+      - u32 sessionId
+
+    [C2S_LOGIN_REQ] / [C2S_REGISTER_REQ]
+      - u8 idLen
+      - char id[idLen]
+      - u8 pwLen
+      - char pw[pwLen]
+
+    [S2C_LOGIN_RES] / [S2C_REGISTER_RES]
+      - u8 result (LoginResult)
+
+    [C2S_ROOM_LIST_REQ]
+      - (Empty)
+
+    [S2C_ROOM_LIST_RES]
+      - u16 roomCount
+      - List<RoomInfoView>
+
+    [C2S_ROOM_CREATE_REQ]
+      - u8 titleLen
+      - char title[titleLen]
+
+    [S2C_ROOM_CREATE_RES]
+      - u8 result (RoomResult)
+      - (If OK) RoomInfoView
+
+    [C2S_ROOM_JOIN_REQ]
+      - u32 roomId
+
+    [S2C_ROOM_JOIN_RES]
+      - u8 result
+      - (If OK) RoomInfoView
+
+    [S2C_GAME_START]
+      - u8 ipLen
+      - char ip[ipLen]
+      - u32 ticket
+      - u16 port
+*/
