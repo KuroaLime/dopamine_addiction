@@ -61,50 +61,86 @@ void LobbyService::OnClientAccepted(ClientContext* c) {
 }
 
 void LobbyService::OnClientDisconnected(ClientContext* c) {
+    bool shouldBroadcast = false;
+
     AcquireSRWLockExclusive(&m_lock);
+
     auto it = m_sessionByCtx.find(c);
     if (it != m_sessionByCtx.end()) {
         uint32_t sid = it->second;
-        uint32_t rid = m_roomBySession[sid];
+        uint32_t rid = 0;
 
-        // 방에 있고, 게임 중이라면? -> 강퇴하지 않고 유령 상태로 둡니다.
+        auto itRoomBySession = m_roomBySession.find(sid);
+        if (itRoomBySession != m_roomBySession.end()) {
+            rid = itRoomBySession->second;
+        }
+
+        // 방에 있고, 게임 중이 아니라면 내부적으로만 퇴장 처리
         if (rid != 0 && m_rooms.count(rid) > 0) {
             Room& r = m_rooms[rid];
             if (r.state != RoomState::IN_GAME) {
-                // 대기실이었다면 정상 퇴장 처리 (Lock을 잠깐 풀고 퇴장 함수 호출)
-                ReleaseSRWLockExclusive(&m_lock);
-                HandleRoomLeaveReq(c);
-                AcquireSRWLockExclusive(&m_lock);
+                LeaveRoomInternal_Unsafe(sid, shouldBroadcast);
             }
         }
 
-        // 컨텍스트(통신 객체) 매핑만 지우고, m_accountIdBySid 등은 남겨둡니다. (재접속 대기)
+        // 통신 컨텍스트 매핑 제거
         m_ctxBySession.erase(sid);
         m_sessionByCtx.erase(it);
+
+        // m_accountIdBySid는 남겨둠 (재접속 대비)
     }
+
     ReleaseSRWLockExclusive(&m_lock);
+
+    if (shouldBroadcast) {
+        BroadcastRoomList();
+    }
 }
 
 // ===========================================================================
 // Packet Dispatcher
 // ===========================================================================
 void LobbyService::OnPacket(ClientContext* c, uint16_t type, const char* payload, uint16_t payloadLen) {
-    switch (static_cast<PacketType>(type)) {
-        // [Auth]
+    PacketType pktType = static_cast<PacketType>(type);
+
+    // 1) 로그인 없이 허용할 패킷인지 먼저 판정
+    bool allowedWithoutLogin =
+        (pktType == PacketType::C2S_LOGIN_REQ) ||
+        (pktType == PacketType::C2S_REGISTER_REQ) ||
+        (pktType == PacketType::C2S_PING);
+
+    // 2) 로그인 여부 검사
+    bool isLoggedIn = false;
+    {
+        AcquireSRWLockShared(&m_lock);
+
+        auto itSession = m_sessionByCtx.find(c);
+        if (itSession != m_sessionByCtx.end()) {
+            uint32_t sid = itSession->second;
+            isLoggedIn = (m_accountIdBySid.find(sid) != m_accountIdBySid.end());
+        }
+
+        ReleaseSRWLockShared(&m_lock);
+    }
+
+    // 3) 로그인 전인데 허용되지 않은 패킷이면 무시
+    if (!isLoggedIn && !allowedWithoutLogin) {
+        return;
+    }
+
+    // 4) 디스패치
+    switch (pktType) {
     case PacketType::C2S_LOGIN_REQ:       HandleLoginReq(c, payload, payloadLen); break;
     case PacketType::C2S_REGISTER_REQ:    HandleRegisterReq(c, payload, payloadLen); break;
 
-        // [Lobby / Room]
     case PacketType::C2S_ROOM_LIST_REQ:   HandleRoomListReq(c); break;
     case PacketType::C2S_ROOM_CREATE_REQ: HandleRoomCreateReq(c, payload, payloadLen); break;
     case PacketType::C2S_ROOM_JOIN_REQ:   HandleRoomJoinReq(c, payload, payloadLen); break;
     case PacketType::C2S_ROOM_LEAVE_REQ:  HandleRoomLeaveReq(c); break;
 
-        // [Room Action]
     case PacketType::C2S_ROOM_READY_REQ:  HandleRoomReadyReq(c, payload, payloadLen); break;
     case PacketType::C2S_ROOM_START_REQ:  HandleRoomStartReq(c); break;
 
-        // [System]
     case PacketType::C2S_PING:            m_net.SendPong(c); break;
     default: break;
     }
@@ -254,69 +290,100 @@ RoomResult LobbyService::HandleRoomCreateReq(ClientContext* c, const char* paylo
 }
 
 RoomResult LobbyService::HandleRoomJoinReq(ClientContext* c, const char* payload, uint16_t payloadLen) {
-    uint32_t rid;
-    if (!ReadU32(payload, payloadLen, rid)) return RoomResult::BAD_PAYLOAD;
+    uint32_t rid = 0;
+    RoomResult result = RoomResult::OK;
+    RoomInfoView view{};
+    bool hasView = false;
+    bool shouldBroadcast = false;
+
+    // 1) payload 파싱 실패 -> 즉시 실패 응답
+    if (!ReadU32(payload, payloadLen, rid)) {
+        m_net.SendRoomJoinRes(c, RoomResult::BAD_PAYLOAD, nullptr);
+        return RoomResult::BAD_PAYLOAD;
+    }
 
     AcquireSRWLockExclusive(&m_lock);
-    uint32_t sid = m_sessionByCtx[c];
 
-    auto itRoom = m_rooms.find(rid);
-    if (itRoom == m_rooms.end()) { ReleaseSRWLockExclusive(&m_lock); return RoomResult::INVALID_ROOM; }
+    // 방어 코드: 세션 매핑이 없으면 비정상 요청으로 처리
+    auto itSession = m_sessionByCtx.find(c);
+    if (itSession == m_sessionByCtx.end()) {
+        ReleaseSRWLockExclusive(&m_lock);
+        m_net.SendRoomJoinRes(c, RoomResult::BAD_PAYLOAD, nullptr);
+        return RoomResult::BAD_PAYLOAD;
+    }
 
-    Room& r = itRoom->second;
-    if (r.state == RoomState::IN_GAME) { ReleaseSRWLockExclusive(&m_lock); return RoomResult::IN_GAME; }
-    if (r.members.size() >= ROOM_MAX_PLAYERS) { ReleaseSRWLockExclusive(&m_lock); return RoomResult::FULL; }
+    uint32_t sid = itSession->second;
 
-    r.members.push_back(sid);
-    r.readyStatus[sid] = false; // 들어온 사람은 기본 레디 안 됨
-    m_roomBySession[sid] = rid;
+    // 2) 이미 다른 방에 들어가 있는지 검사
+    auto itMyRoom = m_roomBySession.find(sid);
+    if (itMyRoom != m_roomBySession.end() && itMyRoom->second != 0) {
+        result = RoomResult::ALREADY_IN_ROOM;
+    }
+    else {
+        // 3) 대상 방 검사
+        auto itRoom = m_rooms.find(rid);
+        if (itRoom == m_rooms.end()) {
+            result = RoomResult::INVALID_ROOM;
+        }
+        else {
+            Room& r = itRoom->second;
 
-    RoomInfoView view = BuildRoomView_Unsafe(r);
+            if (r.state == RoomState::IN_GAME) {
+                result = RoomResult::IN_GAME;
+            }
+            else if (r.members.size() >= ROOM_MAX_PLAYERS) {
+                result = RoomResult::FULL;
+            }
+            else {
+                // 4) 정상 입장
+                r.members.push_back(sid);
+                r.readyStatus[sid] = false; // 새로 들어온 사람은 기본 not ready
+                m_roomBySession[sid] = rid;
+
+                view = BuildRoomView_Unsafe(r);
+                hasView = true;
+                shouldBroadcast = true;
+                result = RoomResult::OK;
+            }
+        }
+    }
+
     ReleaseSRWLockExclusive(&m_lock);
 
-    m_net.SendRoomJoinRes(c, RoomResult::OK, &view);
-    BroadcastRoomList();
-    return RoomResult::OK;
+    // 5) 성공/실패 상관없이 요청자에게 응답
+    m_net.SendRoomJoinRes(c, result, hasView ? &view : nullptr);
+
+    // 6) 실제 상태가 바뀐 성공 케이스만 전체 목록 갱신
+    if (shouldBroadcast) {
+        BroadcastRoomList();
+    }
+
+    return result;
 }
 
 RoomResult LobbyService::HandleRoomLeaveReq(ClientContext* c) {
+    RoomResult result = RoomResult::BAD_PAYLOAD;
+    bool shouldBroadcast = false;
+
     AcquireSRWLockExclusive(&m_lock);
-    if (m_sessionByCtx.count(c) == 0) { ReleaseSRWLockExclusive(&m_lock); return RoomResult::BAD_PAYLOAD; }
 
-    uint32_t sid = m_sessionByCtx[c];
-    uint32_t rid = m_roomBySession[sid];
-    if (rid == 0) { ReleaseSRWLockExclusive(&m_lock); return RoomResult::NOT_IN_ROOM; }
-
-    Room& r = m_rooms[rid];
-    for (auto it = r.members.begin(); it != r.members.end(); ++it) {
-        if (*it == sid) { r.members.erase(it); break; }
-    }
-    m_roomBySession[sid] = 0;
-    r.readyStatus.erase(sid);
-
-    // 방장 승계: 방장이 나갔는데 사람이 남았다면 제일 앞사람한테 넘김
-    if (r.hostId == sid) {
-        if (!r.members.empty()) {
-            r.hostId = r.members.front();
-            r.readyStatus[r.hostId] = true; // 새 방장은 레디 취급
-        }
-        else {
-            r.hostId = 0;
-        }
-    }
-
-    if (r.members.empty()) {
-        if (r.dedicatedPort != 0) {
-            FreePort(r.dedicatedPort);
-            r.dedicatedPort = 0;
-        }
-        r.state = RoomState::WAITING;
+    auto itSession = m_sessionByCtx.find(c);
+    if (itSession != m_sessionByCtx.end()) {
+        uint32_t sid = itSession->second;
+        result = LeaveRoomInternal_Unsafe(sid, shouldBroadcast);
     }
 
     ReleaseSRWLockExclusive(&m_lock);
-    m_net.SendRoomLeaveRes(c, RoomResult::OK);
-    BroadcastRoomList();
-    return RoomResult::OK;
+
+    if (result == RoomResult::OK) {
+        m_net.SendRoomLeaveRes(c, RoomResult::OK);
+    }
+
+    if (shouldBroadcast) {
+        BroadcastRoomList();
+    }
+
+    return result;
 }
 
 // ===========================================================================
@@ -435,6 +502,61 @@ RoomInfoView LobbyService::BuildRoomView_Unsafe(const Room& room) const {
     return v;
 }
 
+RoomResult LobbyService::LeaveRoomInternal_Unsafe(uint32_t sid, bool& shouldBroadcast) {
+    shouldBroadcast = false;
+
+    auto itRoomBySession = m_roomBySession.find(sid);
+    if (itRoomBySession == m_roomBySession.end()) {
+        return RoomResult::BAD_PAYLOAD;
+    }
+
+    uint32_t rid = itRoomBySession->second;
+    if (rid == 0) {
+        return RoomResult::NOT_IN_ROOM;
+    }
+
+    auto itRoom = m_rooms.find(rid);
+    if (itRoom == m_rooms.end()) {
+        m_roomBySession[sid] = 0;
+        return RoomResult::INVALID_ROOM;
+    }
+
+    Room& r = itRoom->second;
+
+    for (auto it = r.members.begin(); it != r.members.end(); ++it) {
+        if (*it == sid) {
+            r.members.erase(it);
+            break;
+        }
+    }
+
+    m_roomBySession[sid] = 0;
+    r.readyStatus.erase(sid);
+
+    // 방장 승계
+    if (r.hostId == sid) {
+        if (!r.members.empty()) {
+            r.hostId = r.members.front();
+            r.readyStatus[r.hostId] = true; // 새 방장은 레디 취급
+        }
+        else {
+            r.hostId = 0;
+        }
+    }
+
+    // 방이 비면 포트 반납 및 상태 정리
+    if (r.members.empty()) {
+        if (r.dedicatedPort != 0) {
+            FreePort(r.dedicatedPort);
+            r.dedicatedPort = 0;
+        }
+        r.state = RoomState::WAITING;
+    }
+
+    shouldBroadcast = true;
+    return RoomResult::OK;
+}
+
 std::vector<RoomInfoView> LobbyService::BuildRoomListView_Unsafe() const {
     std::vector<RoomInfoView> views;
     for (uint32_t rid : m_roomOrder) {
@@ -449,9 +571,18 @@ void LobbyService::BroadcastRoomList() {
 
     AcquireSRWLockShared(&m_lock);
     rooms = BuildRoomListView_Unsafe();
-    for (auto& kv : m_sessionByCtx) {
-        targets.push_back(kv.first);
-        AddIO(kv.first);
+
+    for (const auto& kv : m_sessionByCtx) {
+        ClientContext* ctx = kv.first;
+        uint32_t sid = kv.second;
+
+        // 로그인한 세션만 브로드캐스트 대상
+        if (m_accountIdBySid.find(sid) == m_accountIdBySid.end()) {
+            continue;
+        }
+
+        targets.push_back(ctx);
+        AddIO(ctx);
     }
     ReleaseSRWLockShared(&m_lock);
 

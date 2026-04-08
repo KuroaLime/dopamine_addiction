@@ -100,6 +100,8 @@ private:
     RoomResult HandleRoomJoinReq(ClientContext* c, const char* payload, uint16_t payloadLen);
     RoomResult HandleRoomLeaveReq(ClientContext* c);
 
+    RoomResult LeaveRoomInternal_Unsafe(uint32_t sid, bool& shouldBroadcast);
+
     // 4. Static Utils
     static bool ReadU32(const char* payload, uint16_t payloadLen, uint32_t& outHost);
 

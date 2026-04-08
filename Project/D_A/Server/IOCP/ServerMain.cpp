@@ -168,6 +168,8 @@ void WorkerThread() {
 
         // [수신 처리]
         if (ioCtx->type == IOType::RECV) {
+            bool closeClient = false;
+
             // 1. 받은 데이터를 streamBuf에 누적
             client->streamBuf.insert(client->streamBuf.end(), ioCtx->buffer, ioCtx->buffer + bytesTransferred);
 
@@ -179,21 +181,36 @@ void WorkerThread() {
                 uint16_t totalSize = ntohs(hdr.size);
                 uint16_t type = ntohs(hdr.type);
 
+                // 헤더 검증
+                if (totalSize < sizeof(PacketHeader) || totalSize > MAX_PACKET_SIZE) {
+                    if (!client->closing.exchange(true)) {
+                        g_lobby.OnClientDisconnected(client);
+                        closesocket(client->sock);
+                    }
+                    closeClient = true;
+                    break;
+                }
+
                 // 3. 하나의 온전한 패킷이 다 들어왔다면?
                 if (client->streamBuf.size() >= totalSize) {
                     uint16_t payloadLen = totalSize - static_cast<uint16_t>(sizeof(PacketHeader));
                     const char* payload = client->streamBuf.data() + sizeof(PacketHeader);
 
-                    // 패킷 분석을 위해 로비 서비스로 넘김!
                     g_lobby.OnPacket(client, type, payload, payloadLen);
 
-                    // 처리 완료한 패킷만큼 버퍼에서 지움
-                    client->streamBuf.erase(client->streamBuf.begin(), client->streamBuf.begin() + totalSize);
+                    client->streamBuf.erase(client->streamBuf.begin(),
+                        client->streamBuf.begin() + totalSize);
                 }
                 else {
                     // 패킷이 아직 덜 왔으면 루프 탈출해서 더 받음
                     break;
                 }
+            }
+
+            // 비정상 헤더로 클라를 닫아야 하면, 현재 I/O만 정리하고 다음 GQCS로 넘어감
+            if (closeClient) {
+                ReleaseIO(client);
+                continue;
             }
 
             // 4. 다음 데이터를 받기 위해 다시 Recv 요청
