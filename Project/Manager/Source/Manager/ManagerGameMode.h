@@ -102,15 +102,7 @@ protected:
 	void DisplayFinalResults(const TArray<int32> WinnerIndices);
 
 	/** GameState ���� �Լ� */
-	FORCEINLINE AManagerGameState* GetGS() const
-	{
-		if (MGS_Ptr) return MGS_Ptr;
-
-		AManagerGameMode* MutableThis = const_cast<AManagerGameMode*>(this);
-		MutableThis->MGS_Ptr = Cast<AManagerGameState>(GetWorld()->GetGameState());
-
-		return MGS_Ptr;
-	}
+	FORCEINLINE AManagerGameState* GetGS() const;
 
 protected:
 	/** --- 5. AI �ǻ���� ���� --- */
