@@ -6,6 +6,7 @@
 #include "Actor/Spawn/A_Spawn.h"
 #include "PlayerManager.h"
 #include "ManagerPlayerController.h"
+#include "GameFramework/GameStateBase.h"
 #include "ManagerGameState.h"
 
 #define VALIDATE_GS if (!GetGS()) return;
@@ -57,7 +58,15 @@ void AManagerGameMode::BeginPlay() {
 	}
 
 }
+FORCEINLINE AManagerGameState*  AManagerGameMode::GetGS() const
+{
+	if (MGS_Ptr) return MGS_Ptr;
 
+	AManagerGameMode* MutableThis = const_cast<AManagerGameMode*>(this);
+	MutableThis->MGS_Ptr = Cast<AManagerGameState>(GetWorld()->GetGameState());
+
+	return MGS_Ptr;
+}
 void AManagerGameMode::OnPlayerAction(AActor* Executor, FName ActionName)
 {
 	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Red,
