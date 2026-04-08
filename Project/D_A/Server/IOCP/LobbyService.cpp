@@ -1,0 +1,470 @@
+// LobbyService.cpp
+#ifndef NOMINMAX
+#define NOMINMAX
+#endif
+
+#include "LobbyService.h"
+#include <cstring>
+#include <algorithm> 
+#include <cstdio>    
+
+#ifdef _WIN32
+#include <winsock2.h>
+#endif
+
+extern void AddIO(struct ClientContext* c);
+extern void ReleaseIO(struct ClientContext* c);
+
+// ===========================================================================
+// Constructor & Initialization
+// ===========================================================================
+LobbyService::LobbyService(NetApi& net) : m_net(net) {
+    InitializeSRWLock(&m_lock);
+    InitPortPool(7777, 15);
+
+    AcquireSRWLockExclusive(&m_lock);
+    SeedRoomsForTest_Unsafe();
+    ReleaseSRWLockExclusive(&m_lock);
+}
+
+// ===========================================================================
+// Port Management (Resource Pool)
+// ===========================================================================
+void LobbyService::InitPortPool(uint16_t start, int count) {
+    m_freePorts.reserve(count);
+    for (int i = count - 1; i >= 0; --i) m_freePorts.push_back(start + i);
+}
+
+uint16_t LobbyService::AllocPort() {
+    if (m_freePorts.empty()) return 0;
+    uint16_t p = m_freePorts.back();
+    m_freePorts.pop_back();
+    return p;
+}
+
+void LobbyService::FreePort(uint16_t port) {
+    if (port != 0) m_freePorts.push_back(port);
+}
+
+// ===========================================================================
+// Connection Event Handlers
+// ===========================================================================
+void LobbyService::OnClientAccepted(ClientContext* c) {
+    AcquireSRWLockExclusive(&m_lock);
+    uint32_t sid = m_nextSessionId++;
+    m_sessionByCtx[c] = sid;
+    m_ctxBySession[sid] = c;
+    m_roomBySession[sid] = 0;
+    ReleaseSRWLockExclusive(&m_lock);
+
+    m_net.SendWelcome(c, sid);
+}
+
+void LobbyService::OnClientDisconnected(ClientContext* c) {
+    AcquireSRWLockExclusive(&m_lock);
+    auto it = m_sessionByCtx.find(c);
+    if (it != m_sessionByCtx.end()) {
+        uint32_t sid = it->second;
+        uint32_t rid = m_roomBySession[sid];
+
+        // 방에 있고, 게임 중이라면? -> 강퇴하지 않고 유령 상태로 둡니다.
+        if (rid != 0 && m_rooms.count(rid) > 0) {
+            Room& r = m_rooms[rid];
+            if (r.state != RoomState::IN_GAME) {
+                // 대기실이었다면 정상 퇴장 처리 (Lock을 잠깐 풀고 퇴장 함수 호출)
+                ReleaseSRWLockExclusive(&m_lock);
+                HandleRoomLeaveReq(c);
+                AcquireSRWLockExclusive(&m_lock);
+            }
+        }
+
+        // 컨텍스트(통신 객체) 매핑만 지우고, m_accountIdBySid 등은 남겨둡니다. (재접속 대기)
+        m_ctxBySession.erase(sid);
+        m_sessionByCtx.erase(it);
+    }
+    ReleaseSRWLockExclusive(&m_lock);
+}
+
+// ===========================================================================
+// Packet Dispatcher
+// ===========================================================================
+void LobbyService::OnPacket(ClientContext* c, uint16_t type, const char* payload, uint16_t payloadLen) {
+    switch (static_cast<PacketType>(type)) {
+        // [Auth]
+    case PacketType::C2S_LOGIN_REQ:       HandleLoginReq(c, payload, payloadLen); break;
+    case PacketType::C2S_REGISTER_REQ:    HandleRegisterReq(c, payload, payloadLen); break;
+
+        // [Lobby / Room]
+    case PacketType::C2S_ROOM_LIST_REQ:   HandleRoomListReq(c); break;
+    case PacketType::C2S_ROOM_CREATE_REQ: HandleRoomCreateReq(c, payload, payloadLen); break;
+    case PacketType::C2S_ROOM_JOIN_REQ:   HandleRoomJoinReq(c, payload, payloadLen); break;
+    case PacketType::C2S_ROOM_LEAVE_REQ:  HandleRoomLeaveReq(c); break;
+
+        // [Room Action]
+    case PacketType::C2S_ROOM_READY_REQ:  HandleRoomReadyReq(c, payload, payloadLen); break;
+    case PacketType::C2S_ROOM_START_REQ:  HandleRoomStartReq(c); break;
+
+        // [System]
+    case PacketType::C2S_PING:            m_net.SendPong(c); break;
+    default: break;
+    }
+}
+
+// ===========================================================================
+// Auth Logic
+// ===========================================================================
+
+// ID, PW 파싱 도구
+bool LobbyService::ParseAuthPayload(const char* payload, uint16_t payloadLen, std::string& outId, std::string& outPw) {
+    if (payloadLen < 1) return false;
+    uint8_t idLen = payload[0];
+    if (payloadLen < 1 + idLen + 1) return false;
+    outId.assign(payload + 1, idLen);
+
+    uint8_t pwLen = payload[1 + idLen];
+    if (payloadLen < 1 + idLen + 1 + pwLen) return false;
+    outPw.assign(payload + 1 + idLen + 1, pwLen);
+    return true;
+}
+
+void LobbyService::HandleRegisterReq(ClientContext* c, const char* payload, uint16_t payloadLen) {
+    std::string id, pw;
+    if (!ParseAuthPayload(payload, payloadLen, id, pw)) {
+        m_net.SendRegisterRes(c, LoginResult::INVALID_FORMAT);
+        return;
+    }
+    AcquireSRWLockExclusive(&m_lock);
+    if (m_userDB.find(id) != m_userDB.end()) {
+        ReleaseSRWLockExclusive(&m_lock);
+        m_net.SendRegisterRes(c, LoginResult::ID_ALREADY_EXISTS);
+        return;
+    }
+    m_userDB[id] = pw; // 임시 DB에 저장
+    ReleaseSRWLockExclusive(&m_lock);
+    m_net.SendRegisterRes(c, LoginResult::OK);
+}
+
+void LobbyService::HandleLoginReq(ClientContext* c, const char* payload, uint16_t payloadLen) {
+    std::string id, pw;
+    if (!ParseAuthPayload(payload, payloadLen, id, pw)) {
+        m_net.SendLoginRes(c, LoginResult::INVALID_FORMAT); return;
+    }
+
+    AcquireSRWLockExclusive(&m_lock);
+    auto it = m_userDB.find(id);
+    if (it == m_userDB.end()) {
+        ReleaseSRWLockExclusive(&m_lock);
+        m_net.SendLoginRes(c, LoginResult::ID_NOT_FOUND); return;
+    }
+    if (it->second != pw) {
+        ReleaseSRWLockExclusive(&m_lock);
+        m_net.SendLoginRes(c, LoginResult::WRONG_PASSWORD); return;
+    }
+
+    // [재접속 검사] 이 아이디가 예전에 접속한 적이 있는가?
+    uint32_t oldSid = 0;
+    for (const auto& kv : m_accountIdBySid) {
+        if (kv.second == id) { oldSid = kv.first; break; }
+    }
+
+    if (oldSid != 0) {
+        if (m_ctxBySession.count(oldSid) > 0) {
+            // 다른 PC에서 접속 중
+            ReleaseSRWLockExclusive(&m_lock);
+            m_net.SendLoginRes(c, LoginResult::ALREADY_LOGGED_IN); return;
+        }
+
+        // 유령 상태의 옛날 세션을 찾음 -> 재접속 처리
+        uint32_t currentSid = m_sessionByCtx[c];
+
+        // 새로 부여받았던 임시 세션을 지우고, 옛날 세션 번호를 이 클라이언트에 물려줌
+        m_ctxBySession.erase(currentSid);
+        m_roomBySession.erase(currentSid);
+        m_accountIdBySid.erase(currentSid);
+
+        m_sessionByCtx[c] = oldSid;
+        m_ctxBySession[oldSid] = c;
+
+        uint32_t rid = m_roomBySession[oldSid];
+        if (rid != 0 && m_rooms.count(rid) > 0) {
+            Room& r = m_rooms[rid];
+            if (r.state == RoomState::IN_GAME) {
+                // 게임 중 튕겼던 유저 복귀 성공
+                ReleaseSRWLockExclusive(&m_lock);
+                m_net.SendLoginRes(c, LoginResult::OK_RECONNECT);
+                m_net.SendGameStart(c, "127.0.0.1", r.dedicatedPort, 0); // 즉시 겜서버로 전송
+                return;
+            }
+        }
+    }
+    else {
+        // 완전 첫 로그인
+        m_accountIdBySid[m_sessionByCtx[c]] = id;
+    }
+
+    ReleaseSRWLockExclusive(&m_lock);
+    m_net.SendLoginRes(c, LoginResult::OK);
+    HandleRoomListReq(c); // 로그인 성공 시 방 목록 보내줌
+}
+
+// ===========================================================================
+// Room Logic Handlers
+// ===========================================================================
+
+RoomResult LobbyService::HandleRoomListReq(ClientContext* c) {
+    AcquireSRWLockShared(&m_lock);
+    auto views = BuildRoomListView_Unsafe();
+    ReleaseSRWLockShared(&m_lock);
+    m_net.SendRoomListRes(c, views);
+    return RoomResult::OK;
+}
+
+RoomResult LobbyService::HandleRoomCreateReq(ClientContext* c, const char* payload, uint16_t payloadLen) {
+    if (payloadLen < 1) return RoomResult::BAD_PAYLOAD;
+    uint8_t titleLen = (uint8_t)payload[0];
+    if (titleLen > ROOM_TITLE_MAX || payloadLen < (1 + titleLen)) return RoomResult::BAD_PAYLOAD;
+
+    AcquireSRWLockExclusive(&m_lock);
+    uint32_t sid = m_sessionByCtx[c];
+    if (m_roomBySession[sid] != 0) {
+        ReleaseSRWLockExclusive(&m_lock);
+        m_net.SendRoomCreateRes(c, RoomResult::ALREADY_IN_ROOM, nullptr); return RoomResult::ALREADY_IN_ROOM;
+    }
+
+    Room r;
+    r.id = m_nextRoomId++;
+    r.title.assign(payload + 1, titleLen);
+    r.members.push_back(sid);
+
+    // 방장 설정 및 레디 (방장은 기본 레디 취급)
+    r.hostId = sid;
+    r.readyStatus[sid] = true;
+
+    uint32_t rid = r.id;
+    m_rooms[rid] = std::move(r);
+    m_roomOrder.push_back(rid);
+    m_roomBySession[sid] = rid;
+
+    RoomInfoView view = BuildRoomView_Unsafe(m_rooms[rid]);
+    ReleaseSRWLockExclusive(&m_lock);
+
+    m_net.SendRoomCreateRes(c, RoomResult::OK, &view);
+    BroadcastRoomList();
+    return RoomResult::OK;
+}
+
+RoomResult LobbyService::HandleRoomJoinReq(ClientContext* c, const char* payload, uint16_t payloadLen) {
+    uint32_t rid;
+    if (!ReadU32(payload, payloadLen, rid)) return RoomResult::BAD_PAYLOAD;
+
+    AcquireSRWLockExclusive(&m_lock);
+    uint32_t sid = m_sessionByCtx[c];
+
+    auto itRoom = m_rooms.find(rid);
+    if (itRoom == m_rooms.end()) { ReleaseSRWLockExclusive(&m_lock); return RoomResult::INVALID_ROOM; }
+
+    Room& r = itRoom->second;
+    if (r.state == RoomState::IN_GAME) { ReleaseSRWLockExclusive(&m_lock); return RoomResult::IN_GAME; }
+    if (r.members.size() >= ROOM_MAX_PLAYERS) { ReleaseSRWLockExclusive(&m_lock); return RoomResult::FULL; }
+
+    r.members.push_back(sid);
+    r.readyStatus[sid] = false; // 들어온 사람은 기본 레디 안 됨
+    m_roomBySession[sid] = rid;
+
+    RoomInfoView view = BuildRoomView_Unsafe(r);
+    ReleaseSRWLockExclusive(&m_lock);
+
+    m_net.SendRoomJoinRes(c, RoomResult::OK, &view);
+    BroadcastRoomList();
+    return RoomResult::OK;
+}
+
+RoomResult LobbyService::HandleRoomLeaveReq(ClientContext* c) {
+    AcquireSRWLockExclusive(&m_lock);
+    if (m_sessionByCtx.count(c) == 0) { ReleaseSRWLockExclusive(&m_lock); return RoomResult::BAD_PAYLOAD; }
+
+    uint32_t sid = m_sessionByCtx[c];
+    uint32_t rid = m_roomBySession[sid];
+    if (rid == 0) { ReleaseSRWLockExclusive(&m_lock); return RoomResult::NOT_IN_ROOM; }
+
+    Room& r = m_rooms[rid];
+    for (auto it = r.members.begin(); it != r.members.end(); ++it) {
+        if (*it == sid) { r.members.erase(it); break; }
+    }
+    m_roomBySession[sid] = 0;
+    r.readyStatus.erase(sid);
+
+    // 방장 승계: 방장이 나갔는데 사람이 남았다면 제일 앞사람한테 넘김
+    if (r.hostId == sid) {
+        if (!r.members.empty()) {
+            r.hostId = r.members.front();
+            r.readyStatus[r.hostId] = true; // 새 방장은 레디 취급
+        }
+        else {
+            r.hostId = 0;
+        }
+    }
+
+    if (r.members.empty()) {
+        if (r.dedicatedPort != 0) {
+            FreePort(r.dedicatedPort);
+            r.dedicatedPort = 0;
+        }
+        r.state = RoomState::WAITING;
+    }
+
+    ReleaseSRWLockExclusive(&m_lock);
+    m_net.SendRoomLeaveRes(c, RoomResult::OK);
+    BroadcastRoomList();
+    return RoomResult::OK;
+}
+
+// ===========================================================================
+// Room Actions
+// ===========================================================================
+void LobbyService::HandleRoomReadyReq(ClientContext* c, const char* payload, uint16_t payloadLen) {
+    if (payloadLen < 1) return;
+    bool isReady = (payload[0] != 0);
+
+    AcquireSRWLockExclusive(&m_lock);
+    uint32_t sid = m_sessionByCtx[c];
+    uint32_t rid = m_roomBySession[sid];
+    if (rid == 0) { ReleaseSRWLockExclusive(&m_lock); return; }
+
+    Room& r = m_rooms[rid];
+    // 게임 중이거나 방장이면 레디 불가
+    if (r.state == RoomState::IN_GAME || r.hostId == sid) { ReleaseSRWLockExclusive(&m_lock); return; }
+
+    r.readyStatus[sid] = isReady;
+    std::vector<uint32_t> membersCopy = r.members;
+    ReleaseSRWLockExclusive(&m_lock);
+
+    // 같은 방 사람들에게 "누가 레디했대" 방송
+    AcquireSRWLockShared(&m_lock);
+    for (uint32_t mSid : membersCopy) {
+        if (m_ctxBySession.count(mSid)) {
+            m_net.SendRoomReadyBrd(m_ctxBySession[mSid], sid, isReady);
+        }
+    }
+    ReleaseSRWLockShared(&m_lock);
+}
+
+void LobbyService::HandleRoomStartReq(ClientContext* c) {
+    AcquireSRWLockExclusive(&m_lock);
+    uint32_t sid = m_sessionByCtx[c];
+    uint32_t rid = m_roomBySession[sid];
+    if (rid == 0) { ReleaseSRWLockExclusive(&m_lock); return; }
+
+    Room& r = m_rooms[rid];
+    // 1. 방장만 누를 수 있음
+    if (r.hostId != sid) {
+        ReleaseSRWLockExclusive(&m_lock);
+        m_net.SendRoomStartRes(c, RoomResult::NOT_HOST); return;
+    }
+    // 2. 최소 2명 필요
+    if (r.members.size() < 2) {
+        ReleaseSRWLockExclusive(&m_lock);
+        m_net.SendRoomStartRes(c, RoomResult::NEED_MORE_PLAYERS); return;
+    }
+    // 3. 다 레디 했는지 확인
+    for (uint32_t mSid : r.members) {
+        if (mSid != r.hostId && !r.readyStatus[mSid]) {
+            ReleaseSRWLockExclusive(&m_lock);
+            m_net.SendRoomStartRes(c, RoomResult::NOT_ALL_READY); return;
+        }
+    }
+
+    uint16_t port = AllocPort();
+    if (port == 0) {
+        ReleaseSRWLockExclusive(&m_lock);
+        // 포트 없음 에러 처리 (현재는 로그만 남김)
+        return;
+    }
+
+    r.state = RoomState::IN_GAME;
+    r.dedicatedPort = port;
+    std::vector<uint32_t> membersCopy = r.members;
+    ReleaseSRWLockExclusive(&m_lock);
+
+    // 방장에게 성공 알림
+    m_net.SendRoomStartRes(c, RoomResult::OK);
+
+    // 전원에게 게임 서버 이동 패킷 전송
+    AcquireSRWLockShared(&m_lock);
+    for (uint32_t mSid : membersCopy) {
+        if (m_ctxBySession.count(mSid)) {
+            m_net.SendGameStart(m_ctxBySession[mSid], "127.0.0.1", port, 0);
+        }
+    }
+    ReleaseSRWLockShared(&m_lock);
+
+    BroadcastRoomList(); // 방이 게임 중으로 변했음을 전체 알림
+}
+
+
+// ===========================================================================
+// Helper Functions
+// ===========================================================================
+void LobbyService::SeedRoomsForTest_Unsafe() {
+    for (int i = 0; i < 2; ++i) {
+        Room r;
+        r.id = m_nextRoomId++;
+        r.title = "Dopamine Test " + std::to_string(r.id);
+
+        // 더미 호스트 지정
+        r.hostId = 999;
+
+        uint32_t rid = r.id;
+        m_rooms[rid] = std::move(r);
+        m_roomOrder.push_back(rid);
+    }
+}
+
+RoomInfoView LobbyService::BuildRoomView_Unsafe(const Room& room) const {
+    RoomInfoView v{};
+    v.roomId = room.id;
+    v.state = room.state;
+    v.curPlayers = (uint8_t)room.members.size();
+    v.maxPlayers = ROOM_MAX_PLAYERS;
+    v.hostId = room.hostId; // 방장 정보 세팅
+
+    v.titleLen = (uint8_t)(std::min)((size_t)ROOM_TITLE_MAX, room.title.size());
+    if (v.titleLen > 0) {
+        std::memcpy(v.title, room.title.data(), v.titleLen);
+    }
+    return v;
+}
+
+std::vector<RoomInfoView> LobbyService::BuildRoomListView_Unsafe() const {
+    std::vector<RoomInfoView> views;
+    for (uint32_t rid : m_roomOrder) {
+        views.push_back(BuildRoomView_Unsafe(m_rooms.at(rid)));
+    }
+    return views;
+}
+
+void LobbyService::BroadcastRoomList() {
+    std::vector<RoomInfoView> rooms;
+    std::vector<ClientContext*> targets;
+
+    AcquireSRWLockShared(&m_lock);
+    rooms = BuildRoomListView_Unsafe();
+    for (auto& kv : m_sessionByCtx) {
+        targets.push_back(kv.first);
+        AddIO(kv.first);
+    }
+    ReleaseSRWLockShared(&m_lock);
+
+    for (auto* ctx : targets) {
+        m_net.SendRoomListRes(ctx, rooms);
+        ReleaseIO(ctx);
+    }
+}
+
+bool LobbyService::ReadU32(const char* payload, uint16_t payloadLen, uint32_t& outHost) {
+    if (!payload || payloadLen < 4) return false;
+    uint32_t net;
+    std::memcpy(&net, payload, 4);
+    outHost = ntohl(net);
+    return true;
+}
