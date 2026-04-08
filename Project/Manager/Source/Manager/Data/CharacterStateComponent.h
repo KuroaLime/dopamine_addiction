@@ -1,0 +1,112 @@
+// Fill out your copyright notice in the Description page of Project Settings.
+
+#pragma once
+
+#include "CoreMinimal.h"
+#include "Components/ActorComponent.h"
+#include "CharacterStateComponent.generated.h"
+
+//PLAYER IMAGE
+DECLARE_MULTICAST_DELEGATE(FOnPlayerImageChangedDelegate);
+//HP
+DECLARE_MULTICAST_DELEGATE(FOnHPChangedDelegate);
+DECLARE_MULTICAST_DELEGATE(FOnHPISZeroDelegate);
+//LEVEL
+DECLARE_MULTICAST_DELEGATE(FOnLEVELChangedDelegate);
+//NAME
+DECLARE_MULTICAST_DELEGATE(FOnNameChangedDelegate);
+//SKILL
+DECLARE_MULTICAST_DELEGATE(FOnSkillStateChangedDelegate);
+//WEAPON IMAGE
+DECLARE_MULTICAST_DELEGATE(FOnWeaponStateChangedDelegate);
+//WEAPON COUNT
+DECLARE_MULTICAST_DELEGATE(FOnWeaponCountChangedDelegate);
+//EXP
+DECLARE_MULTICAST_DELEGATE(FOnEXPChangedDelegate);
+//Compass
+DECLARE_MULTICAST_DELEGATE(FOnComapassChangedDelegate);
+//Gold
+DECLARE_MULTICAST_DELEGATE(FOnGoldChangeDelegate);
+
+
+UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
+class MANAGER_API UCharacterStateComponent : public UActorComponent
+{
+	GENERATED_BODY()
+
+public:	
+	// Sets default values for this component's properties
+	UCharacterStateComponent();
+
+protected:
+	// Called when the game starts
+	virtual void BeginPlay() override;
+	virtual void InitializeComponent() override;
+public:	
+	// Called every frame
+	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
+
+public:
+	void SetNewLevel(int32 NewLevel);
+	void SetDamage(float NewDamage);
+
+	void SetHP(float NewHP);
+
+	float GetHPRatio();
+	float GetMaxHP();
+	float GetCurrentHP();
+	float GetGold();
+	float GetAttack();
+
+	int GetLevel();
+
+	//PLAYER IMAGE
+	FOnPlayerImageChangedDelegate OnPlayerImageChanged;
+	//HP
+	FOnHPISZeroDelegate OnHPIsZero;
+	FOnHPChangedDelegate OnHPChanged;
+	//LEVEL
+	FOnLEVELChangedDelegate OnLEVELChanged;
+	//NAME
+	FOnNameChangedDelegate OnNameChanged;
+	//SKILL
+	FOnSkillStateChangedDelegate OnSkillStateChanged;
+	//WEAPON IMAGE
+	FOnWeaponStateChangedDelegate OnWeaponStateChanged;
+	//WEAPON COUNT
+	FOnWeaponCountChangedDelegate OnWeaponCountChanged;
+	//EXP
+	FOnEXPChangedDelegate OnEXPChanged;
+	//Compass
+	FOnComapassChangedDelegate OnCompassChanged;
+	//Gold
+	FOnGoldChangeDelegate OnGoldChanged;
+	
+private:
+	struct FABCharacterData* CurrentStateData = nullptr;
+
+
+
+public:
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+protected:
+	//HP
+	UPROPERTY(ReplicatedUsing = OnRep_CurrentHP, Transient, VisibleInstanceOnly, Category = State, Meta = (AllowPrivateAccess = true))
+	float CurrentHP;
+	UFUNCTION()
+	void OnRep_CurrentHP();
+
+	//Level
+	UPROPERTY(ReplicatedUsing = OnRep_Level, EditInstanceOnly, Category = State, Meta = (AllowPrivateAccess = true))
+	int32 Level;
+	UFUNCTION()
+	void OnRep_Level();
+
+	//Gold
+	UPROPERTY(ReplicatedUsing = OnRep_HoldingGold, Transient, VisibleInstanceOnly, Category = State, Meta = (AllowPrivateAccess = true))
+	float HoldingGold;
+	UFUNCTION()
+	void OnRep_HoldingGold();
+
+	
+};
