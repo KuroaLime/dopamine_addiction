@@ -18,6 +18,43 @@
 #include "NetApi.h"
 #include "LobbyService.h"
 
+// ===========================================================================
+// 디버깅용 출력
+// ===========================================================================
+const char* PacketTypeToString(uint16_t type) {
+    switch (static_cast<PacketType>(type)) {
+    case PacketType::C2S_PING:            return "C2S_PING";
+    case PacketType::S2C_PONG:            return "S2C_PONG";
+    case PacketType::S2C_WELCOME:         return "S2C_WELCOME";
+
+    case PacketType::C2S_LOGIN_REQ:       return "C2S_LOGIN_REQ";
+    case PacketType::S2C_LOGIN_RES:       return "S2C_LOGIN_RES";
+    case PacketType::C2S_REGISTER_REQ:    return "C2S_REGISTER_REQ";
+    case PacketType::S2C_REGISTER_RES:    return "S2C_REGISTER_RES";
+
+    case PacketType::C2S_ROOM_LIST_REQ:   return "C2S_ROOM_LIST_REQ";
+    case PacketType::S2C_ROOM_LIST_RES:   return "S2C_ROOM_LIST_RES";
+
+    case PacketType::C2S_ROOM_CREATE_REQ: return "C2S_ROOM_CREATE_REQ";
+    case PacketType::S2C_ROOM_CREATE_RES: return "S2C_ROOM_CREATE_RES";
+
+    case PacketType::C2S_ROOM_JOIN_REQ:   return "C2S_ROOM_JOIN_REQ";
+    case PacketType::S2C_ROOM_JOIN_RES:   return "S2C_ROOM_JOIN_RES";
+
+    case PacketType::C2S_ROOM_LEAVE_REQ:  return "C2S_ROOM_LEAVE_REQ";
+    case PacketType::S2C_ROOM_LEAVE_RES:  return "S2C_ROOM_LEAVE_RES";
+
+    case PacketType::C2S_ROOM_READY_REQ:  return "C2S_ROOM_READY_REQ";
+    case PacketType::S2C_ROOM_READY_BRD:  return "S2C_ROOM_READY_BRD";
+
+    case PacketType::C2S_ROOM_START_REQ:  return "C2S_ROOM_START_REQ";
+    case PacketType::S2C_ROOM_START_RES:  return "S2C_ROOM_START_RES";
+
+    case PacketType::S2C_GAME_START:      return "S2C_GAME_START";
+    default:                              return "UNKNOWN_PACKET";
+    }
+}
+
 
 // ===========================================================================
 // 전역 설정 및 변수
@@ -113,6 +150,17 @@ void SendPacket(ClientContext* c, uint16_t type, const void* payload, uint16_t p
         std::memcpy(pkt.data() + sizeof(hdr), payload, payloadLen);
     }
 
+    // 디버깅용 출력
+    printf("[SEND] to=%d.%d.%d.%d type=%s(%u) payloadLen=%u totalSize=%u\n",
+        c->addr.sin_addr.S_un.S_un_b.s_b1,
+        c->addr.sin_addr.S_un.S_un_b.s_b2,
+        c->addr.sin_addr.S_un.S_un_b.s_b3,
+        c->addr.sin_addr.S_un.S_un_b.s_b4,
+        PacketTypeToString(type),
+        type,
+        payloadLen,
+        totalSize);
+
     AcquireSRWLockExclusive(&c->sendLock);
     c->sendQueue.push_back(std::move(pkt));
 
@@ -129,7 +177,17 @@ void SendPacket(ClientContext* c, uint16_t type, const void* payload, uint16_t p
         AddIO(c);
         DWORD flags = 0;
         if (WSASend(c->sock, &sendCtx->wsaBuf, 1, NULL, flags, &sendCtx->ol, NULL) == SOCKET_ERROR) {
-            if (WSAGetLastError() != WSA_IO_PENDING) {
+            int err = WSAGetLastError();
+            if (err != WSA_IO_PENDING) {
+                printf("[SEND-ERR] to=%d.%d.%d.%d type=%s(%u) WSA=%d\n",
+                    c->addr.sin_addr.S_un.S_un_b.s_b1,
+                    c->addr.sin_addr.S_un.S_un_b.s_b2,
+                    c->addr.sin_addr.S_un.S_un_b.s_b3,
+                    c->addr.sin_addr.S_un.S_un_b.s_b4,
+                    PacketTypeToString(type),
+                    type,
+                    err);
+
                 ReleaseIO(c);
                 delete sendCtx;
                 c->sendInFlight = false;
@@ -195,6 +253,16 @@ void WorkerThread() {
                 if (client->streamBuf.size() >= totalSize) {
                     uint16_t payloadLen = totalSize - static_cast<uint16_t>(sizeof(PacketHeader));
                     const char* payload = client->streamBuf.data() + sizeof(PacketHeader);
+
+                    printf("[RECV] from=%d.%d.%d.%d type=%s(%u) payloadLen=%u totalSize=%u\n",
+                        client->addr.sin_addr.S_un.S_un_b.s_b1,
+                        client->addr.sin_addr.S_un.S_un_b.s_b2,
+                        client->addr.sin_addr.S_un.S_un_b.s_b3,
+                        client->addr.sin_addr.S_un.S_un_b.s_b4,
+                        PacketTypeToString(type),
+                        type,
+                        payloadLen,
+                        totalSize);
 
                     g_lobby.OnPacket(client, type, payload, payloadLen);
 
