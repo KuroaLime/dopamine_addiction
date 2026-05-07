@@ -30,6 +30,10 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Seotda")
 	void SetSeotdaMode(bool bEnable);
 
+	// 서버가 클라이언트에게 섯다 입력 모드로 전환하라고 요청할 때 사용
+	UFUNCTION(Client, Reliable)
+	void Client_SetSeotdaMode(bool bEnable);
+
 	UFUNCTION(Client, Reliable)
 	void Client_SetHandInfo(const TArray<FString>& CardNames);
 
@@ -40,7 +44,7 @@ protected:
 	bool bSelectedCards[3] = { false, false, false };
 	TArray<FString> MyHandNames;
 
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason);
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	/** Input Mapping Contexts */
 	UPROPERTY(EditAnywhere, Category ="Input|Input Mappings")
 	TArray<UInputMappingContext*> DefaultMappingContexts;

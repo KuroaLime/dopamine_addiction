@@ -11,7 +11,7 @@
 #include "CustomASC.h"
 #include "ManagerCharacter.h" 
 #include "Net/UnrealNetwork.h"
-#include "PlayerManager.h"
+//#include "PlayerManager.h"
 #include "ManagerGameMode.h"
 #include "UI/TpsPlayerMainHUD.h"
 #include "UI/CardPlayerMainHUD.h"
@@ -163,6 +163,11 @@ void AManagerPlayerController::SetSeotdaMode(bool bEnable)
 	}
 }
 
+void AManagerPlayerController::Client_SetSeotdaMode_Implementation(bool bEnable)
+{
+	SetSeotdaMode(bEnable);
+}	
+
 void AManagerPlayerController::Client_SetHandInfo_Implementation(const TArray<FString>& CardNames)
 {
 	MyHandNames = CardNames;
@@ -307,53 +312,52 @@ void AManagerPlayerController::Input_Skill00()
 
 void AManagerPlayerController::Input_Check()
 {
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[1] Check Pressed"));
+	}
 
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[1] Check Pressed"));
-	
-	Server_SendAction(FName("Check"))
-		;
-	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
-		Manager->AddCommand(GetPawn(), FName("Check"));
+	Server_SendAction(FName("Check"));
 }
 
 void AManagerPlayerController::Input_Call()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[2] Call Pressed"));
-	
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[2] Call Pressed"));
+	}
+
 	Server_SendAction(FName("Call"));
-	
-	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
-		Manager->AddCommand(GetPawn(), FName("Call"));
 }
 
 void AManagerPlayerController::Input_Half()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[3] Half Pressed"));
-	
-	Server_SendAction(FName("Half"));
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[3] Half Pressed"));
+	}
 
-	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
-		Manager->AddCommand(GetPawn(), FName("Half"));
+	Server_SendAction(FName("Half"));
 }
 
 void AManagerPlayerController::Input_Die()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("[4] Die Pressed"));
-	
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("[4] Die Pressed"));
+	}
+
 	Server_SendAction(FName("Die"));
-	
-	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
-		Manager->AddCommand(GetPawn(), FName("Die"));
 }
 
 void AManagerPlayerController::Input_AllIn()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Magenta, TEXT("[5] All-In Pressed"));
-	
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Magenta, TEXT("[5] All-In Pressed"));
+	}
+
 	Server_SendAction(FName("AllIn"));
-	
-	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
-		Manager->AddCommand(GetPawn(), FName("AllIn"));
 }
 
 
@@ -379,6 +383,7 @@ void AManagerPlayerController::Input_ConfirmSelection()
 {
 	int32 Count = 0;
 	TArray<int32> Indices;
+
 	for (int32 i = 0; i < 3; ++i)
 	{
 		if (bSelectedCards[i])
@@ -390,16 +395,20 @@ void AManagerPlayerController::Input_ConfirmSelection()
 
 	if (Count != 2)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("You must select exactly 2 cards!"));
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("You must select exactly 2 cards!"));
+		}
 		return;
 	}
 
-	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
-	{
-		FString Command = FString::Printf(TEXT("SelectCards_%d_%d"), Indices[0], Indices[1]);
-		Manager->AddCommand(GetPawn(), FName(*Command));
+	FString Command = FString::Printf(TEXT("SelectCards_%d_%d"), Indices[0], Indices[1]);
 
-		GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan, TEXT("Sending Selection..."));
+	Server_SendAction(FName(*Command));
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Cyan, TEXT("Sending Selection to Server..."));
 	}
 }
 

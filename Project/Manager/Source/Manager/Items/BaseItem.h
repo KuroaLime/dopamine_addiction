@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/Actor.h"
+#include "SeotdaTypes.h"
 #include "BaseItem.generated.h"
 
 class AManagerCharacter;
@@ -34,6 +35,10 @@ public:
 	virtual void Tick(float DeltaTime) override;
 	virtual void OnPickedUp(AManagerCharacter* Player);
 	virtual void OnDropped(FVector DropLocation);
+
+	EPickableType GetItemType() const { return ItemType; }
+	ECardMonth GetCardMonth() const { return CardMonth; }
+	bool IsKwangCard() const { return bIsKwangCard; }
 protected:
 	// --- 컴포넌트 ---
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Components")
@@ -56,4 +61,12 @@ protected:
 	// 종류
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Pickable Data")
 	EPickableType ItemType;
+
+	// 섯다 카드 월
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda Card")
+	ECardMonth CardMonth = ECardMonth::None;
+
+	// 광 카드 여부
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda Card")
+	bool bIsKwangCard = false;
 };

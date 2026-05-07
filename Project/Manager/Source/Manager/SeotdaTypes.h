@@ -30,6 +30,16 @@ enum class EBettingAction : uint8
 };
 
 UENUM(BlueprintType)
+enum class EMatchPhase : uint8
+{
+	WaitingForPlayers UMETA(DisplayName = "Waiting For Players"),
+	BattleRoyale UMETA(DisplayName = "Battle Royale"),
+	SeotdaCardSelection UMETA(DisplayName = "Seotda Card Selection"),
+	SeotdaBetting UMETA(DisplayName = "Seotda Betting"),
+	SeotdaResult UMETA(DisplayName = "Seotda Result")
+};
+
+UENUM(BlueprintType)
 enum class ECardMonth : uint8
 {
 	None = 0,
@@ -114,6 +124,9 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	bool bIsAI = false;
 
+	UPROPERTY(EditAnywhere, BlueprintReadWrite)
+	bool bHasSelectedCards = false;
+
 	int32 Score = 0;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
@@ -124,10 +137,11 @@ public:
 public:
 	void ResetForNewRound()
 	{
-		Hand.Empty();
+		// 배틀로얄에서 획득한 카드는 유지해야 하므로 Hand는 비우지 않는다.
 		Score = 0;
 		bIsFolded = false;
 		BetMoney = 0;
+		bHasSelectedCards = false;
 		LastActionStatus = TEXT("-");
 	}
 
