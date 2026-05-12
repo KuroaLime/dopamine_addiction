@@ -19,7 +19,8 @@ public class Manager : ModuleRules
 			"GameplayStateTreeModule",
 			"UMG",
 			"Slate",
-			"GameplayTags",
+			"SlateCore",
+            "GameplayTags",
             "AnimGraphRuntime",
 			"Niagara"
         });

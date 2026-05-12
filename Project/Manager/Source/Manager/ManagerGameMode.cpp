@@ -9,6 +9,7 @@
 #include "GameFramework/GameStateBase.h"
 #include "Manager/ManagerCharacter.h"
 #include "ManagerGameState.h"
+#include "Manager/Items/BaseItem.h"
 
 #define VALIDATE_GS if (!GetGS()) return;
 #define VALIDATE_GS_RET(ret) if (!GetGS()) return ret;
