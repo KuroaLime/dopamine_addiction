@@ -4,6 +4,7 @@
 #include "Login/LoginWidget.h"
 #include "Components/EditableTextBox.h"
 #include "Components/Button.h"
+#include "Kismet/GameplayStatics.h"
 
 void ULoginWidget::NativeConstruct()
 {
@@ -23,4 +24,9 @@ void ULoginWidget::OnLoginButtonClick()
 {
 	FString ID = IDInput->GetText().ToString();
 	FString PW = PWInput->GetText().ToString();
+
+	if (!ID.IsEmpty())
+	{
+		UGameplayStatics::OpenLevel(GetWorld(), FName("Lobby_Stage"));
+	}
 }
