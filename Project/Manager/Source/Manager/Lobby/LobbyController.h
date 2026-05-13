@@ -7,19 +7,33 @@
 #include "LobbyController.generated.h"
 
 /**
- * 
+ *
  */
+UENUM(BlueprintType)
+enum class ELobbyState : uint8 {
+	RoomList,
+	InRoom,
+	Settings
+};
+
+
 UCLASS()
 class MANAGER_API ALobbyController : public APlayerController
 {
 	GENERATED_BODY()
-	
+
 protected:
 	virtual void BeginPlay() override;
 
 	UPROPERTY(EditAnywhere, Category = "UI")
-	TSubclassOf<class UUserWidget> LobbyWidgetClass;
-
+	TMap<ELobbyState, TSubclassOf<UUserWidget>> LobbyWidgetClass;
 	UPROPERTY()
-	class UUserWidget* LobbyWidget;
+	TMap<ELobbyState, UUserWidget*> WidgetInstances;
+
+	//UPROPERTY()
+	//class UUserWidget* LobbyWidget;
+	UPROPERTY()
+	class UUserWidget* CurrentWidget;
+public:
+	void ToggleLobbyUI(bool bSucceed, ELobbyState NewState);
 };
