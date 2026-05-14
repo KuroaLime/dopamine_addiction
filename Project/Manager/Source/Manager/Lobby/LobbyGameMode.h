@@ -16,4 +16,7 @@ class MANAGER_API ALobbyGameMode : public AGameModeBase
 	
 public:
 	ALobbyGameMode();
+
+	void PostLogin(APlayerController* NewPlayer);
+	void Logout(AController* Exiting);
 };
