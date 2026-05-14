@@ -55,5 +55,8 @@ private:
 	UFUNCTION()
 	void OnPrevPageClicked();
 
+	UFUNCTION()
+	void OnRoomButtonClicked(FString SelectedRoomName);
+
 	void UpdateRoomDisplay();
 };

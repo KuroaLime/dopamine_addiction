@@ -13,8 +13,16 @@ UCLASS()
 class MANAGER_API ULobbyRoomWidget : public UUserWidget
 {
 	GENERATED_BODY()
+
+protected:
+	virtual void NativeConstruct() override;
+
+	UFUNCTION()
+	void OnEntryButtonClicked();
 	
 protected:
+	FString MyRoomName;
+
 	UPROPERTY(meta = (BindWidget))
 	class UImage* RoomImage;
 

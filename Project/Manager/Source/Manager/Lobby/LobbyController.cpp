@@ -6,7 +6,7 @@
 
 void ALobbyController::BeginPlay() {
 	Super::BeginPlay();
-
+	
 	if (IsLocalController())
 	{
 		for (auto& Pair : LobbyWidgetClass) {
@@ -26,8 +26,41 @@ void ALobbyController::BeginPlay() {
 		}
 		ToggleLobbyUI(true, ELobbyState::RoomList);
 	}
+}
 
+void ALobbyController::ProcessInterpolatedMovement()
+{
+	APawn* LobbyPawn = GetPawn();
+	if (!LobbyPawn)
+	{
+		GetWorldTimerManager().ClearTimer(MovementTimerHandle);
+		return;
+	}
 
+	InterpAlpha += (0.01f / TravelDuration);
+
+	float SmoothAlpha = FMath::InterpEaseInOut(0.0f, 1.0f, InterpAlpha, 2.0f);
+	FVector NewLocation = FMath::Lerp(StartLocation, TargetLocation, SmoothAlpha);
+
+	LobbyPawn->SetActorLocation(NewLocation);
+
+	if (InterpAlpha >= 1.0f)
+	{
+		LobbyPawn->SetActorLocation(TargetLocation);
+		GetWorldTimerManager().ClearTimer(MovementTimerHandle);
+	}
+}
+
+void ALobbyController::SwitchToRoomUI(bool bIsInsideRoom)
+{
+	if (bIsInsideRoom)
+	{
+		ToggleLobbyUI(true, ELobbyState::InRoom);
+	}
+	else
+	{
+		ToggleLobbyUI(true, ELobbyState::RoomList);
+	}
 }
 
 void ALobbyController::ToggleLobbyUI(bool bSucceed, ELobbyState NewState) {
@@ -52,5 +85,32 @@ void ALobbyController::ToggleLobbyUI(bool bSucceed, ELobbyState NewState) {
 			bShowMouseCursor = true;
 		}
 	}
+}
 
+void ALobbyController::MoveLobbyCamera(FVector NewTarget)
+{
+	APawn* LobbyPawn = GetPawn();
+	if (!LobbyPawn) return;
+
+	StartLocation = LobbyPawn->GetActorLocation();
+	TargetLocation = NewTarget;
+	InterpAlpha = 0.0f;
+
+	GetWorldTimerManager().ClearTimer(MovementTimerHandle);
+
+	GetWorldTimerManager().SetTimer(MovementTimerHandle, this, &ALobbyController::ProcessInterpolatedMovement, 0.01f, true);
+}
+
+void ALobbyController::JoinRoomSelected(FString RoomName)
+{
+	ToggleLobbyUI(true, ELobbyState::InRoom);
+
+	MoveLobbyCamera(RoomLocation);
+}
+
+void ALobbyController::LeaveRoom()
+{
+	ToggleLobbyUI(true, ELobbyState::RoomList);
+
+	MoveLobbyCamera(LobbyLocation);
 }

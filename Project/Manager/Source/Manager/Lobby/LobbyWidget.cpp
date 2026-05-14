@@ -5,6 +5,7 @@
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
 #include "LobbyRoomWidget.h"
+#include "LobbyController.h"
 
 void ULobbyWidget::NativeConstruct()
 {
@@ -36,21 +37,18 @@ void ULobbyWidget::UpdateRoomDisplay()
 
     for (int32 i = 0; i < 6; ++i)
     {
-        if (!RoomButtons.IsValidIndex(i) || !RoomButtons[i]) continue;
+        ULobbyRoomWidget* RoomEntry = Cast<ULobbyRoomWidget>(RoomButtons[i]);
+        if (!RoomEntry) continue;
 
-        int32 DataIndex = StartIndex + i;
-
+        int32 DataIndex = (CurrentPage * 6) + i;
         if (TotalRoomNames.IsValidIndex(DataIndex))
         {
-            RoomButtons[i]->SetVisibility(ESlateVisibility::Visible);
-
-            // 여기서 방 데이터를 전달합니다. 
-            // (실제 데이터 구조체가 있다면 그걸 넘겨주는 게 더 좋습니다)
-            RoomButtons[i]->UpdateRoomInfo(TotalRoomNames[DataIndex], 3, 4, nullptr);
+            RoomEntry->SetVisibility(ESlateVisibility::Visible);
+            RoomEntry->UpdateRoomInfo(TotalRoomNames[DataIndex], 0, 8, nullptr);
         }
         else
         {
-            RoomButtons[i]->SetVisibility(ESlateVisibility::Hidden);
+            RoomEntry->SetVisibility(ESlateVisibility::Collapsed);
         }
     }
 
@@ -66,6 +64,16 @@ void ULobbyWidget::OnNextPageClicked()
     {
         CurrentPage++;
         UpdateRoomDisplay();
+    }
+}
+
+void ULobbyWidget::OnRoomButtonClicked(FString SelectedRoomName)
+{
+	ALobbyController* PC = Cast<ALobbyController>(GetOwningPlayer());
+
+    if (PC)
+    {
+        PC->JoinRoomSelected(SelectedRoomName);
     }
 }
 

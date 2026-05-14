@@ -5,10 +5,29 @@
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Components/Button.h"
+#include "LobbyController.h"
+
+void ULobbyRoomWidget::NativeConstruct()
+{
+	Super::NativeConstruct();
+	if (EntryButton)
+	{
+		EntryButton->OnClicked.AddDynamic(this, &ULobbyRoomWidget::OnEntryButtonClicked);
+	}
+}
 
 void ULobbyRoomWidget::UpdateRoomInfo(const FString& Name, int32 CurrentPlayers, int32 MaxPlayers, UTexture2D* Image)
 {
 	if (RoomNameText) RoomNameText->SetText(FText::FromString(Name));
 	if (PlayerCountText) PlayerCountText->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), CurrentPlayers, MaxPlayers)));
 	if (RoomImage) RoomImage->SetBrushFromTexture(Image);
+}
+
+void ULobbyRoomWidget::OnEntryButtonClicked()
+{
+	ALobbyController* PC = Cast<ALobbyController>(GetOwningPlayer());
+	if (PC)
+	{
+		PC->JoinRoomSelected(MyRoomName);
+	}
 }
