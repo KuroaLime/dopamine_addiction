@@ -28,7 +28,14 @@ public:
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
+	void AddRoomName(const FString& NewRoomName);
 protected:
 	UFUNCTION()
 	void OnRep_RemainingTime();
+
+	UPROPERTY(ReplicatedUsing = OnRep_CreatedRooms)
+	TArray<FString> CreatedRoomNames;
+
+	UFUNCTION()
+	void OnRep_CreatedRooms();
 };

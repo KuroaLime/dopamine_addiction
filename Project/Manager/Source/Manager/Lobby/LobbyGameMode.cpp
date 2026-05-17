@@ -4,9 +4,11 @@
 #include "LobbyGameMode.h"
 #include"Game/Lobby/GS_Lobby.h"
 #include "LobbyController.h"
+#include "ManagerGameState.h"
 
 ALobbyGameMode::ALobbyGameMode() {
 	PlayerControllerClass = ALobbyController::StaticClass();
+	GameStateClass = AManagerGameState::StaticClass();
 }
 
 void ALobbyGameMode::PostLogin(APlayerController* NewPlayer)

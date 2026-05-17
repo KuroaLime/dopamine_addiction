@@ -39,6 +39,10 @@ protected:
 	class UTextBlock* PageText;
 
 	UPROPERTY(meta = (BindWidget))
+	class UEditableTextBox* RoomNameInputText;
+	UPROPERTY(meta = (BindWidget))
+	class UButton* CreateRoomButton;
+	UPROPERTY(meta = (BindWidget))
 	class UButton* UpdateRoomButton;
 
 	virtual void NativeConstruct() override;
@@ -56,7 +60,13 @@ private:
 	void OnPrevPageClicked();
 
 	UFUNCTION()
+	void OnCreateRoomClicked();
+
+	UFUNCTION()
 	void OnRoomButtonClicked(FString SelectedRoomName);
 
 	void UpdateRoomDisplay();
+
+public:
+	void RefreshRoomList(const TArray<FString>& NewRoomNames);
 };

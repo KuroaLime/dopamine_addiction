@@ -4,6 +4,7 @@
 #include "LobbyWidget.h"
 #include "Components/Button.h"
 #include "Components/TextBlock.h"
+#include "Components/EditableTextBox.h"
 #include "LobbyRoomWidget.h"
 #include "LobbyController.h"
 
@@ -19,13 +20,9 @@ void ULobbyWidget::NativeConstruct()
     RoomButtons.Add(RoomButton_4);
     RoomButtons.Add(RoomButton_5);
 
-    // 임시 데이터 15개 생성 (테스트용)
-    for (int32 i = 1; i <= 15; ++i) TotalRoomNames.Add(FString::Printf(TEXT("Room %d"), i));
-
-    MaxPage = (TotalRoomNames.Num() - 1) / 6;
-
     NextPageButton->OnClicked.AddDynamic(this, &ULobbyWidget::OnNextPageClicked);
     PrevPageButton->OnClicked.AddDynamic(this, &ULobbyWidget::OnPrevPageClicked);
+	CreateRoomButton->OnClicked.AddDynamic(this, &ULobbyWidget::OnCreateRoomClicked);
 	UpdateRoomButton->OnClicked.AddDynamic(this, &ULobbyWidget::UpdateRoomDisplay);
 
     UpdateRoomDisplay();
@@ -84,4 +81,36 @@ void ULobbyWidget::OnPrevPageClicked()
         CurrentPage--;
         UpdateRoomDisplay();
     }
+}
+
+void ULobbyWidget::OnCreateRoomClicked()
+{
+    FString RoomName = TEXT("New Room");
+    if (RoomNameInputText)
+    {
+        RoomName = RoomNameInputText->GetText().ToString();
+        if (RoomName.IsEmpty()) return;
+    }
+
+    ALobbyController* PC = Cast<ALobbyController>(GetOwningPlayer());
+    if (PC)
+    {
+        TotalRoomNames.Add(RoomName);
+        MaxPage = (TotalRoomNames.Num() - 1) / 6;
+
+        PC->CreateRoom(RoomName);
+    }
+}
+
+void ULobbyWidget::RefreshRoomList(const TArray<FString>& NewRoomNames)
+{
+    TotalRoomNames = NewRoomNames;
+    MaxPage = TotalRoomNames.Num() > 0 ? (TotalRoomNames.Num() - 1) / 6 : 0;
+
+    if (CurrentPage > MaxPage)
+    {
+        CurrentPage = MaxPage;
+    }
+
+    UpdateRoomDisplay();
 }

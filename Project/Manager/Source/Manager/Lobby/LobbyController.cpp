@@ -3,12 +3,19 @@
 
 #include "LobbyController.h"
 #include "Blueprint/UserWidget.h"
+#include "GameFramework/GameStateBase.h"
+#include "ManagerGameState.h"
 
 void ALobbyController::BeginPlay() {
 	Super::BeginPlay();
 	
 	if (IsLocalController())
 	{
+		if (APawn* LobbyPawn = GetPawn())
+		{
+			LobbyLocation = LobbyPawn->GetActorLocation();
+		}
+
 		for (auto& Pair : LobbyWidgetClass) {
 			ELobbyState State = Pair.Key;
 			TSubclassOf<UUserWidget> Class = Pair.Value;
@@ -113,4 +120,22 @@ void ALobbyController::LeaveRoom()
 	ToggleLobbyUI(true, ELobbyState::RoomList);
 
 	MoveLobbyCamera(LobbyLocation);
+}
+
+void ALobbyController::CreateRoom(const FString& RoomName)
+{
+	Server_CreateRoom(RoomName);
+
+	ToggleLobbyUI(true, ELobbyState::InRoom);
+	MoveLobbyCamera(RoomLocation);
+}
+
+void ALobbyController::Server_CreateRoom_Implementation(const FString& RoomName) {
+	if (AManagerGameState* GS = Cast<AManagerGameState>(GetWorld()->GetGameState())) {
+		GS->AddRoomName(RoomName);
+	}
+}
+
+bool ALobbyController::Server_CreateRoom_Validate(const FString& RoomName) {
+	return true;
 }

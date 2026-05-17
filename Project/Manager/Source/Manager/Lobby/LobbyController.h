@@ -23,14 +23,15 @@ class MANAGER_API ALobbyController : public APlayerController
 {
 	GENERATED_BODY()
 	
+public:
+	UPROPERTY()
+	TMap<ELobbyState, UUserWidget*> WidgetInstances;
+
 protected:
 	virtual void BeginPlay() override;
 
 	UPROPERTY(EditAnywhere, Category = "UI")
 	TMap<ELobbyState, TSubclassOf<UUserWidget>> LobbyWidgetClass;
-
-	UPROPERTY()
-	TMap<ELobbyState, UUserWidget*> WidgetInstances;
 
 	UPROPERTY()
 	class UUserWidget* CurrentWidget;
@@ -66,4 +67,9 @@ public:
 
 	void JoinRoomSelected(FString RoomName);
 	void LeaveRoom();
+
+	void CreateRoom(const FString& RoomName);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_CreateRoom(const FString& RoomName);
 };
