@@ -31,4 +31,13 @@ public:
     FOnLobbyUpdated OnLobbyUpdated;
 
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+    void AddRoomName(const FString& NewRoomName);
+
+protected:
+    UPROPERTY(ReplicatedUsing = OnRep_CreatedRooms)
+    TArray<FString> CreatedRoomNames;
+
+    UFUNCTION()
+    void OnRep_CreatedRooms();
 };

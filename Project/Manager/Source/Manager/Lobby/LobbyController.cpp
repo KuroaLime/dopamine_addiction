@@ -4,7 +4,7 @@
 #include "LobbyController.h"
 #include "Blueprint/UserWidget.h"
 #include "GameFramework/GameStateBase.h"
-#include "ManagerGameState.h"
+#include "Game/Lobby/GS_Lobby.h"
 
 void ALobbyController::BeginPlay() {
 	Super::BeginPlay();
@@ -131,7 +131,7 @@ void ALobbyController::CreateRoom(const FString& RoomName)
 }
 
 void ALobbyController::Server_CreateRoom_Implementation(const FString& RoomName) {
-	if (AManagerGameState* GS = Cast<AManagerGameState>(GetWorld()->GetGameState())) {
+	if (AGS_Lobby* GS = Cast<AGS_Lobby>(GetWorld()->GetGameState())) {
 		GS->AddRoomName(RoomName);
 	}
 }
