@@ -80,6 +80,9 @@ private:
     uint16_t AllocPort();
     void     FreePort(uint16_t port);
 
+    // Dedicated Server Process
+    bool     LaunchDedicatedServer(uint16_t port);
+
     // 2. Helper Functions (Room Views & Broadcast)
     void     SeedRoomsForTest_Unsafe();
     void     BroadcastRoomList();
