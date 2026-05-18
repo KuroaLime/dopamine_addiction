@@ -61,18 +61,3 @@ Thumbs.db
 Build/*/**
 !Build/*/PakBlacklist*.txt
 !Build/**/*.ico
-
-# =========================================================
-# Dedicated Server build output to share
-# =========================================================
-
-# Unreal 전체 Binaries는 기본적으로 무시하지만,
-# Manager Dedicated Server 실행 파일만 예외 허용
-!Project/Manager/Binaries/
-!Project/Manager/Binaries/Win64/
-!Project/Manager/Binaries/Win64/ManagerServer.exe
-!Project/Manager/Binaries/Win64/ManagerServer.target
-!Project/Manager/Binaries/Win64/ManagerServer.modules
-
-# 필요할 때만 사용: 서버 디버깅 심볼
-# !Project/Manager/Binaries/Win64/ManagerServer.pdb
