@@ -61,3 +61,17 @@ Thumbs.db
 Build/*/**
 !Build/*/PakBlacklist*.txt
 !Build/**/*.ico
+
+# =========================================================
+# Dedicated Server build output to share
+# =========================================================
+
+!Project/Manager/Binaries/
+!Project/Manager/Binaries/Win64/
+!Project/Manager/Binaries/Win64/ManagerServer.exe
+!Project/Manager/Binaries/Win64/ManagerServer.target
+!Project/Manager/Binaries/Win64/ManagerServer.modules
+
+# Debug symbols are not required to run and are too large
+*.pdb
+Project/Manager/Binaries/Win64/*.pdb
