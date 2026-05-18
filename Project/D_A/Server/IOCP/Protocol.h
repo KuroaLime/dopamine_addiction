@@ -75,7 +75,7 @@ enum class LoginResult : uint8_t
 // 게임 및 방 설정 상수
 static constexpr uint8_t  ROOM_MAX_PLAYERS = 4;
 static constexpr uint8_t  ROOM_TITLE_MAX = 32;     // UTF-8 바이트 기준
-static constexpr uint16_t MAX_PACKET_SIZE = 4096;   // 최대 패킷 크기
+static constexpr uint16_t PACKET_SIZE_MAX = 4096;   // 최대 패킷 크기
 
 // 방 상태 (표시용)
 enum class RoomState : uint8_t

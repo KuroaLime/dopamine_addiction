@@ -137,7 +137,7 @@ void ReleaseIO(ClientContext* c) {
 // ===========================================================================
 void SendPacket(ClientContext* c, uint16_t type, const void* payload, uint16_t payloadLen) {
     const uint16_t totalSize = static_cast<uint16_t>(sizeof(PacketHeader) + payloadLen);
-    if (totalSize > MAX_PACKET_SIZE) return;
+    if (totalSize > PACKET_SIZE_MAX) return;
 
     std::vector<char> pkt(totalSize);
     PacketHeader hdr{};
@@ -239,7 +239,7 @@ void WorkerThread() {
                 uint16_t type = ntohs(hdr.type);
 
                 // 헤더 검증
-                if (totalSize < sizeof(PacketHeader) || totalSize > MAX_PACKET_SIZE) {
+                if (totalSize < sizeof(PacketHeader) || totalSize > PACKET_SIZE_MAX) {
                     if (!client->closing.exchange(true)) {
                         g_lobby.OnClientDisconnected(client);
                         closesocket(client->sock);
