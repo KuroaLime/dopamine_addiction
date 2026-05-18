@@ -75,3 +75,8 @@ Build/*/**
 # Debug symbols are not required to run and are too large
 *.pdb
 Project/Manager/Binaries/Win64/*.pdb
+
+# Dedicated Server unnecessary build artifacts
+Project/Manager/Binaries/Win64/*.exp
+Project/Manager/Binaries/Win64/*.lib
+Project/Manager/Binaries/Win64/*.pdb
