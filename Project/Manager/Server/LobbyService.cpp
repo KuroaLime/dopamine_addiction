@@ -18,12 +18,12 @@
 
 // Unreal Dedicated Server 실행 파일 경로
 static const char* DEDI_EXE_PATH =
-"X:\\Project\\Manager\\Binaries\\Win64\\ManagerServer.exe";
+"../Binaries/Win64/ManagerServer.exe";
 
 // 실행할 Unreal 맵 경로
 // 실제 맵 경로가 다르면 여기만 바꾸면 됨.
 static const char* DEDI_MAP_PATH =
-"/Game/ThirdPerson/Lvl_ThirdPerson";
+"/Game/Lobby/Lobby_Stage";
 
 // 같은 PC에서 테스트할 때는 127.0.0.1.
 // 다른 PC 클라이언트가 접속할 때는 서버 PC의 실제 LAN IP로 바꿔야 함.
