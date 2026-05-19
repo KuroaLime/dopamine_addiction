@@ -6,7 +6,8 @@
 #include "LobbyService.h"
 #include <cstring>
 #include <algorithm> 
-#include <cstdio>    
+#include <cstdio>
+#include <direct.h>
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -16,21 +17,29 @@
 // Dedicated Server Settings
 // ===========================================================================
 
-// Unreal Dedicated Server 실행 파일 경로
-static const char* DEDI_EXE_PATH =
-"../Binaries/Win64/ManagerServer.exe";
-
 // 실행할 Unreal 맵 경로
 // 실제 맵 경로가 다르면 여기만 바꾸면 됨.
-static const char* DEDI_MAP_PATH =
-"/Game/Lobby/Lobby_Stage";
+// 현재는 ManagerServer.exe가 Cook/AssetRegistry 문제로 터지므로,
+// 테스트 단계에서는 UnrealEditor-Cmd.exe를 서버처럼 실행한다.
+// 나중에 Dedicated Server Cook/Stage가 끝나면 DEDI_EXE_PATH를
+// 패키징된 ManagerServer.exe 경로로 다시 바꾸면 된다.
 
-// 같은 PC에서 테스트할 때는 127.0.0.1.
-// 다른 PC 클라이언트가 접속할 때는 서버 PC의 실제 LAN IP로 바꿔야 함.
-// 예: "192.168.0.15"
+static const char* DEDI_EXE_PATH =
+"S:\\UE\\UE_5.7_Source\\Engine\\Binaries\\Win64\\UnrealEditor-Cmd.exe";
+
+static const char* DEDI_PROJECT_PATH =
+"X:\\Project\\Manager\\Manager.uproject";
+
+static const char* DEDI_WORKING_DIR =
+"X:\\Project\\Manager\\";
+
+static const char* DEDI_MAP_PATH =
+"/Game/ThirdPerson/Lvl_ThirdPerson";
+
+// 같은 PC 테스트는 127.0.0.1.
+// 다른 PC 클라이언트 접속이면 서버 PC의 실제 LAN IP로 변경.
 static const char* DEDI_PUBLIC_IP =
 "127.0.0.1";
-
 // 디버깅용 출력
 const char* LoginResultToString(LoginResult r) {
     switch (r) {
@@ -106,12 +115,34 @@ void LobbyService::FreePort(uint16_t port) {
 
 bool LobbyService::LaunchDedicatedServer(uint16_t port)
 {
-    char cmdLine[1024];
+    DWORD exeAttr = GetFileAttributesA(DEDI_EXE_PATH);
+    if (exeAttr == INVALID_FILE_ATTRIBUTES)
+    {
+        printf("[DEDI] EXE not found: %s\n", DEDI_EXE_PATH);
+        return false;
+    }
+
+    DWORD projectAttr = GetFileAttributesA(DEDI_PROJECT_PATH);
+    if (projectAttr == INVALID_FILE_ATTRIBUTES)
+    {
+        printf("[DEDI] Project file not found: %s\n", DEDI_PROJECT_PATH);
+        return false;
+    }
+
+    DWORD workAttr = GetFileAttributesA(DEDI_WORKING_DIR);
+    if (workAttr == INVALID_FILE_ATTRIBUTES || !(workAttr & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        printf("[DEDI] Working directory not found: %s\n", DEDI_WORKING_DIR);
+        return false;
+    }
+
+    char cmdLine[4096]{};
 
     sprintf_s(
         cmdLine,
-        "\"%s\" %s -log -port=%u",
+        "\"%s\" \"%s\" %s -server -log -stdout -FullStdOutLogOutput -port=%u",
         DEDI_EXE_PATH,
+        DEDI_PROJECT_PATH,
         DEDI_MAP_PATH,
         port
     );
@@ -122,33 +153,36 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port)
     PROCESS_INFORMATION pi{};
 
     BOOL ok = CreateProcessA(
-        nullptr,              // application name
-        cmdLine,              // command line
-        nullptr,              // process security
-        nullptr,              // thread security
-        FALSE,                // inherit handles
-        CREATE_NEW_CONSOLE,   // 테스트 중에는 새 콘솔창으로 Dedi 로그 확인
-        nullptr,              // environment
-        nullptr,              // current directory
+        DEDI_EXE_PATH,
+        cmdLine,
+        nullptr,
+        nullptr,
+        FALSE,
+        CREATE_NEW_CONSOLE,
+        nullptr,
+        DEDI_WORKING_DIR,
         &si,
         &pi
     );
 
-    if (!ok) {
+    if (!ok)
+    {
         DWORD err = GetLastError();
 
-        printf("[DEDI] Launch failed. port=%u err=%lu cmd=%s\n",
-            port,
-            err,
-            cmdLine);
+        printf("[DEDI] Launch failed. port=%u err=%lu\n", port, err);
+        printf("[DEDI] exe=%s\n", DEDI_EXE_PATH);
+        printf("[DEDI] project=%s\n", DEDI_PROJECT_PATH);
+        printf("[DEDI] workdir=%s\n", DEDI_WORKING_DIR);
+        printf("[DEDI] cmd=%s\n", cmdLine);
 
         return false;
     }
 
-    printf("[DEDI] Launch success. port=%u pid=%lu cmd=%s\n",
-        port,
-        pi.dwProcessId,
-        cmdLine);
+    printf("[DEDI] Launch success. port=%u pid=%lu\n", port, pi.dwProcessId);
+    printf("[DEDI] exe=%s\n", DEDI_EXE_PATH);
+    printf("[DEDI] project=%s\n", DEDI_PROJECT_PATH);
+    printf("[DEDI] workdir=%s\n", DEDI_WORKING_DIR);
+    printf("[DEDI] cmd=%s\n", cmdLine);
 
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
@@ -616,38 +650,83 @@ void LobbyService::HandleRoomReadyReq(ClientContext* c, const char* payload, uin
 
 void LobbyService::HandleRoomStartReq(ClientContext* c) {
     AcquireSRWLockExclusive(&m_lock);
-    uint32_t sid = m_sessionByCtx[c];
+
+    auto itSession = m_sessionByCtx.find(c);
+    if (itSession == m_sessionByCtx.end()) {
+        ReleaseSRWLockExclusive(&m_lock);
+        printf("[ROOM] START result=%s (no session)\n",
+            RoomResultToString(RoomResult::BAD_PAYLOAD));
+        m_net.SendRoomStartRes(c, RoomResult::BAD_PAYLOAD);
+        return;
+    }
+
+    uint32_t sid = itSession->second;
     uint32_t rid = m_roomBySession[sid];
+
     if (rid == 0) {
         printf("[ROOM] START sid=%u result=%s\n",
             sid, RoomResultToString(RoomResult::NOT_IN_ROOM));
         ReleaseSRWLockExclusive(&m_lock);
+        m_net.SendRoomStartRes(c, RoomResult::NOT_IN_ROOM);
         return;
     }
 
-    Room& r = m_rooms[rid];
+    auto itRoom = m_rooms.find(rid);
+    if (itRoom == m_rooms.end()) {
+        ReleaseSRWLockExclusive(&m_lock);
+        printf("[ROOM] START sid=%u rid=%u result=%s\n",
+            sid, rid, RoomResultToString(RoomResult::INVALID_ROOM));
+        m_net.SendRoomStartRes(c, RoomResult::INVALID_ROOM);
+        return;
+    }
+
+    Room& r = itRoom->second;
+
+    // 이미 게임 시작된 방이면 Dedicated Server를 또 띄우면 안 됨.
+    if (r.state == RoomState::IN_GAME) {
+        uint16_t existingPort = r.dedicatedPort;
+
+        ReleaseSRWLockExclusive(&m_lock);
+
+        printf("[ROOM] START sid=%u rid=%u ignored result=%s existingPort=%u\n",
+            sid, rid, RoomResultToString(RoomResult::IN_GAME), existingPort);
+
+        m_net.SendRoomStartRes(c, RoomResult::IN_GAME);
+        return;
+    }
+
     // 1. 방장만 누를 수 있음
     if (r.hostId != sid) {
         ReleaseSRWLockExclusive(&m_lock);
+
         printf("[ROOM] START sid=%u rid=%u result=%s\n",
             sid, rid, RoomResultToString(RoomResult::NOT_HOST));
+
         m_net.SendRoomStartRes(c, RoomResult::NOT_HOST);
         return;
     }
+
     // 2. 최소 2명 필요
     if (r.members.size() < 2) {
+        size_t memberCount = r.members.size();
+
         ReleaseSRWLockExclusive(&m_lock);
+
         printf("[ROOM] START sid=%u rid=%u players=%zu result=%s\n",
-            sid, rid, r.members.size(), RoomResultToString(RoomResult::NEED_MORE_PLAYERS));
+            sid, rid, memberCount, RoomResultToString(RoomResult::NEED_MORE_PLAYERS));
+
         m_net.SendRoomStartRes(c, RoomResult::NEED_MORE_PLAYERS);
         return;
     }
+
     // 3. 다 레디 했는지 확인
     for (uint32_t mSid : r.members) {
         if (mSid != r.hostId && !r.readyStatus[mSid]) {
             ReleaseSRWLockExclusive(&m_lock);
+
             printf("[ROOM] START sid=%u rid=%u blockerSid=%u result=%s\n",
                 sid, rid, mSid, RoomResultToString(RoomResult::NOT_ALL_READY));
+
             m_net.SendRoomStartRes(c, RoomResult::NOT_ALL_READY);
             return;
         }
@@ -663,8 +742,14 @@ void LobbyService::HandleRoomStartReq(ClientContext* c) {
         return;
     }
 
-    // 현재 방 멤버 목록만 복사해두고, Dedi 실행은 락 밖에서 한다.
+    // 현재 방 멤버 목록 복사
     std::vector<uint32_t> membersCopy = r.members;
+
+    // 중요:
+    // Dedicated Server 실행은 락 밖에서 하지만,
+    // 그 전에 방 상태를 IN_GAME으로 예약해 중복 START 요청을 막는다.
+    r.state = RoomState::IN_GAME;
+    r.dedicatedPort = port;
 
     ReleaseSRWLockExclusive(&m_lock);
 
@@ -672,10 +757,10 @@ void LobbyService::HandleRoomStartReq(ClientContext* c) {
     if (!LaunchDedicatedServer(port)) {
         AcquireSRWLockExclusive(&m_lock);
 
-        auto itRoom = m_rooms.find(rid);
-        if (itRoom != m_rooms.end()) {
-            itRoom->second.state = RoomState::WAITING;
-            itRoom->second.dedicatedPort = 0;
+        auto itRollbackRoom = m_rooms.find(rid);
+        if (itRollbackRoom != m_rooms.end()) {
+            itRollbackRoom->second.state = RoomState::WAITING;
+            itRollbackRoom->second.dedicatedPort = 0;
         }
 
         FreePort(port);
@@ -686,28 +771,9 @@ void LobbyService::HandleRoomStartReq(ClientContext* c) {
             sid, rid, port);
 
         m_net.SendRoomStartRes(c, RoomResult::BAD_PAYLOAD);
+        BroadcastRoomList();
         return;
     }
-
-    // Dedi 서버 실행 성공 후에만 방 상태를 IN_GAME으로 변경
-    AcquireSRWLockExclusive(&m_lock);
-
-    auto itRoom = m_rooms.find(rid);
-    if (itRoom == m_rooms.end()) {
-        FreePort(port);
-        ReleaseSRWLockExclusive(&m_lock);
-
-        printf("[ROOM] START sid=%u rid=%u result=%s after launch\n",
-            sid, rid, RoomResultToString(RoomResult::INVALID_ROOM));
-
-        m_net.SendRoomStartRes(c, RoomResult::INVALID_ROOM);
-        return;
-    }
-
-    itRoom->second.state = RoomState::IN_GAME;
-    itRoom->second.dedicatedPort = port;
-
-    ReleaseSRWLockExclusive(&m_lock);
 
     printf("[ROOM] START sid=%u rid=%u result=%s port=%u members=%zu\n",
         sid, rid, RoomResultToString(RoomResult::OK), port, membersCopy.size());
