@@ -6,8 +6,15 @@
 #include "LobbyService.h"
 #include <cstring>
 #include <algorithm> 
+<<<<<<< Updated upstream
 #include <cstdio>
 #include <direct.h>
+=======
+#include <cstdio>    
+#include <string>
+#include <vector>
+#include <filesystem>
+>>>>>>> Stashed changes
 
 #ifdef _WIN32
 #include <winsock2.h>
@@ -16,7 +23,10 @@
 // ===========================================================================
 // Dedicated Server Settings
 // ===========================================================================
+// 기준: IOCP 서버 실행 파일 또는 작업 디렉토리가 Manager/Server 쪽에 있다고 가정.
+// 절대 경로 X. 프로젝트 폴더 구조 기준 상대 경로 사용.
 
+<<<<<<< Updated upstream
 // 실행할 Unreal 맵 경로
 // 실제 맵 경로가 다르면 여기만 바꾸면 됨.
 // 현재는 ManagerServer.exe가 Cook/AssetRegistry 문제로 터지므로,
@@ -38,6 +48,22 @@ static const char* DEDI_MAP_PATH =
 
 // 같은 PC 테스트는 127.0.0.1.
 // 다른 PC 클라이언트 접속이면 서버 PC의 실제 LAN IP로 변경.
+=======
+static const char* DEDI_EXE_REL_PATH =
+"..\\Binaries\\Win64\\ManagerServer.exe";
+
+static const char* DEDI_PROJECT_REL_PATH =
+"..\\Manager.uproject";
+
+static const char* DEDI_WORKING_REL_DIR =
+"..\\";
+
+// 테스트 중 확인된 맵.
+// Lobby_Stage를 쓸 거면 여기만 "/Game/Lobby/Lobby_Stage"로 바꾸면 됨.
+static const char* DEDI_MAP_PATH =
+"/Game/ThirdPerson/Lvl_ThirdPerson";
+
+>>>>>>> Stashed changes
 static const char* DEDI_PUBLIC_IP =
 "127.0.0.1";
 // 디버깅용 출력
@@ -82,6 +108,23 @@ const char* RoomStateToString(RoomState s) {
 extern void AddIO(struct ClientContext* c);
 extern void ReleaseIO(struct ClientContext* c);
 
+static std::string GetProcessDir()
+{
+    char path[MAX_PATH]{};
+    GetModuleFileNameA(nullptr, path, MAX_PATH);
+
+    std::filesystem::path p(path);
+    return p.parent_path().string();
+}
+
+static std::string MakeAbsFromProcessDir(const char* relPath)
+{
+    std::filesystem::path base = GetProcessDir();
+    std::filesystem::path full = base / relPath;
+
+    return std::filesystem::weakly_canonical(full).string();
+}
+
 // ===========================================================================
 // Constructor & Initialization
 // ===========================================================================
@@ -115,6 +158,7 @@ void LobbyService::FreePort(uint16_t port) {
 
 bool LobbyService::LaunchDedicatedServer(uint16_t port)
 {
+<<<<<<< Updated upstream
     DWORD exeAttr = GetFileAttributesA(DEDI_EXE_PATH);
     if (exeAttr == INVALID_FILE_ATTRIBUTES)
     {
@@ -146,21 +190,75 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port)
         DEDI_MAP_PATH,
         port
     );
+=======
+    std::string exePath = MakeAbsFromProcessDir(DEDI_EXE_REL_PATH);
+    std::string projectPath = MakeAbsFromProcessDir(DEDI_PROJECT_REL_PATH);
+    std::string workDir = MakeAbsFromProcessDir(DEDI_WORKING_REL_DIR);
+
+    DWORD exeAttr = GetFileAttributesA(exePath.c_str());
+    if (exeAttr == INVALID_FILE_ATTRIBUTES)
+    {
+        printf("[DEDI] EXE not found: %s\n", exePath.c_str());
+        return false;
+    }
+
+    DWORD projectAttr = GetFileAttributesA(projectPath.c_str());
+    if (projectAttr == INVALID_FILE_ATTRIBUTES)
+    {
+        printf("[DEDI] Project file not found: %s\n", projectPath.c_str());
+        return false;
+    }
+
+    DWORD workAttr = GetFileAttributesA(workDir.c_str());
+    if (workAttr == INVALID_FILE_ATTRIBUTES || !(workAttr & FILE_ATTRIBUTE_DIRECTORY))
+    {
+        printf("[DEDI] Working directory not found: %s\n", workDir.c_str());
+        return false;
+    }
+
+    std::filesystem::path logPath =
+        std::filesystem::path(workDir) / "Saved" / "Logs" /
+        ("Dedi_" + std::to_string(port) + ".log");
+
+    std::string cmdLine =
+        "\"" + exePath + "\" "
+        "\"" + projectPath + "\" "
+        + std::string(DEDI_MAP_PATH) +
+        " -server"
+        " -log"
+        " -forcelogflush"
+        " -NullRHI"
+        " -NoSound"
+        " -port=" + std::to_string(port) +
+        " -abslog=\"" + logPath.string() + "\"";
+>>>>>>> Stashed changes
 
     STARTUPINFOA si{};
     si.cb = sizeof(si);
 
     PROCESS_INFORMATION pi{};
 
+    std::vector<char> mutableCmd(cmdLine.begin(), cmdLine.end());
+    mutableCmd.push_back('\0');
+
     BOOL ok = CreateProcessA(
+<<<<<<< Updated upstream
         DEDI_EXE_PATH,
         cmdLine,
+=======
+        exePath.c_str(),
+        mutableCmd.data(),
+>>>>>>> Stashed changes
         nullptr,
         nullptr,
         FALSE,
         CREATE_NEW_CONSOLE,
         nullptr,
+<<<<<<< Updated upstream
         DEDI_WORKING_DIR,
+=======
+        workDir.c_str(),
+>>>>>>> Stashed changes
         &si,
         &pi
     );
@@ -170,19 +268,52 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port)
         DWORD err = GetLastError();
 
         printf("[DEDI] Launch failed. port=%u err=%lu\n", port, err);
+<<<<<<< Updated upstream
         printf("[DEDI] exe=%s\n", DEDI_EXE_PATH);
         printf("[DEDI] project=%s\n", DEDI_PROJECT_PATH);
         printf("[DEDI] workdir=%s\n", DEDI_WORKING_DIR);
         printf("[DEDI] cmd=%s\n", cmdLine);
+=======
+        printf("[DEDI] exe=%s\n", exePath.c_str());
+        printf("[DEDI] project=%s\n", projectPath.c_str());
+        printf("[DEDI] workdir=%s\n", workDir.c_str());
+        printf("[DEDI] cmd=%s\n", cmdLine.c_str());
+>>>>>>> Stashed changes
 
         return false;
     }
 
+<<<<<<< Updated upstream
     printf("[DEDI] Launch success. port=%u pid=%lu\n", port, pi.dwProcessId);
     printf("[DEDI] exe=%s\n", DEDI_EXE_PATH);
     printf("[DEDI] project=%s\n", DEDI_PROJECT_PATH);
     printf("[DEDI] workdir=%s\n", DEDI_WORKING_DIR);
     printf("[DEDI] cmd=%s\n", cmdLine);
+=======
+    Sleep(3000);
+
+    DWORD exitCode = 0;
+    if (GetExitCodeProcess(pi.hProcess, &exitCode))
+    {
+        if (exitCode != STILL_ACTIVE)
+        {
+            printf("[DEDI] Process exited too early. port=%u exitCode=%lu\n",
+                port, exitCode);
+
+            CloseHandle(pi.hThread);
+            CloseHandle(pi.hProcess);
+
+            return false;
+        }
+    }
+
+    printf("[DEDI] Launch success. port=%u pid=%lu\n", port, pi.dwProcessId);
+    printf("[DEDI] exe=%s\n", exePath.c_str());
+    printf("[DEDI] project=%s\n", projectPath.c_str());
+    printf("[DEDI] workdir=%s\n", workDir.c_str());
+    printf("[DEDI] cmd=%s\n", cmdLine.c_str());
+    printf("[DEDI] log=%s\n", logPath.string().c_str());
+>>>>>>> Stashed changes
 
     CloseHandle(pi.hThread);
     CloseHandle(pi.hProcess);
@@ -304,38 +435,90 @@ void LobbyService::OnPacket(ClientContext* c, uint16_t type, const char* payload
 // ===========================================================================
 
 // ID, PW 파싱 도구
-bool LobbyService::ParseAuthPayload(const char* payload, uint16_t payloadLen, std::string& outId, std::string& outPw) {
+bool LobbyService::ParseAuthPayload(
+    const char* payload,
+    uint16_t payloadLen,
+    std::string& outId,
+    std::string& outPw,
+    std::string* outNickname
+) {
     if (payloadLen < 1) return false;
-    uint8_t idLen = payload[0];
+
+    uint8_t idLen = static_cast<uint8_t>(payload[0]);
+    if (idLen == 0 || idLen > MAX_ID_LEN) return false;
     if (payloadLen < 1 + idLen + 1) return false;
+
     outId.assign(payload + 1, idLen);
 
-    uint8_t pwLen = payload[1 + idLen];
+    uint8_t pwLen = static_cast<uint8_t>(payload[1 + idLen]);
+    if (pwLen == 0 || pwLen > MAX_PW_LEN) return false;
     if (payloadLen < 1 + idLen + 1 + pwLen) return false;
+
     outPw.assign(payload + 1 + idLen + 1, pwLen);
+
+    // Register용 optional nickname
+    // 예전 클라처럼 id/pw만 보내면 nickname은 id로 처리.
+    if (outNickname) {
+        size_t nickOffset = 1 + idLen + 1 + pwLen;
+
+        if (payloadLen > nickOffset) {
+            if (payloadLen < nickOffset + 1) return false;
+
+            uint8_t nickLen = static_cast<uint8_t>(payload[nickOffset]);
+
+            if (nickLen == 0 || nickLen > MAX_NICKNAME_LEN) {
+                return false;
+            }
+
+            if (payloadLen < nickOffset + 1 + nickLen) {
+                return false;
+            }
+
+            outNickname->assign(payload + nickOffset + 1, nickLen);
+        }
+        else {
+            *outNickname = outId;
+        }
+    }
+
     return true;
 }
 
 void LobbyService::HandleRegisterReq(ClientContext* c, const char* payload, uint16_t payloadLen) {
-    std::string id, pw;
-    if (!ParseAuthPayload(payload, payloadLen, id, pw)) {
+    std::string id, pw, nickname;
+
+    if (!ParseAuthPayload(payload, payloadLen, id, pw, &nickname)) {
         printf("[AUTH] REGISTER result=%s\n", LoginResultToString(LoginResult::INVALID_FORMAT));
         m_net.SendRegisterRes(c, LoginResult::INVALID_FORMAT);
         return;
     }
+
+    if (nickname.empty()) {
+        nickname = id;
+    }
+
     AcquireSRWLockExclusive(&m_lock);
+
     if (m_userDB.find(id) != m_userDB.end()) {
         ReleaseSRWLockExclusive(&m_lock);
+
         printf("[AUTH] REGISTER id=%s result=%s\n",
             id.c_str(), LoginResultToString(LoginResult::ID_ALREADY_EXISTS));
+
         m_net.SendRegisterRes(c, LoginResult::ID_ALREADY_EXISTS);
         return;
     }
-    m_userDB[id] = pw;
+
+    UserRecord record;
+    record.password = pw;
+    record.nickname = nickname;
+
+    m_userDB[id] = record;
+
     ReleaseSRWLockExclusive(&m_lock);
 
-    printf("[AUTH] REGISTER id=%s result=%s\n",
-        id.c_str(), LoginResultToString(LoginResult::OK));
+    printf("[AUTH] REGISTER id=%s nickname=%s result=%s\n",
+        id.c_str(), nickname.c_str(), LoginResultToString(LoginResult::OK));
 
     m_net.SendRegisterRes(c, LoginResult::OK);
 }
@@ -358,7 +541,7 @@ void LobbyService::HandleLoginReq(ClientContext* c, const char* payload, uint16_
         m_net.SendLoginRes(c, LoginResult::ID_NOT_FOUND);
         return;
     }
-    if (it->second != pw) {
+    if (it->second.password != pw) {
         ReleaseSRWLockExclusive(&m_lock);
         printf("[AUTH] LOGIN id=%s result=%s\n",
             id.c_str(), LoginResultToString(LoginResult::WRONG_PASSWORD));
@@ -388,9 +571,11 @@ void LobbyService::HandleLoginReq(ClientContext* c, const char* payload, uint16_
         m_ctxBySession.erase(currentSid);
         m_roomBySession.erase(currentSid);
         m_accountIdBySid.erase(currentSid);
+        m_nicknameBySid.erase(currentSid);
 
         m_sessionByCtx[c] = oldSid;
         m_ctxBySession[oldSid] = c;
+        m_nicknameBySid[oldSid] = it->second.nickname;
 
         uint32_t rid = m_roomBySession[oldSid];
         if (rid != 0 && m_rooms.count(rid) > 0) {
@@ -409,7 +594,9 @@ void LobbyService::HandleLoginReq(ClientContext* c, const char* payload, uint16_
     }
     else {
         // 완전 첫 로그인
-        m_accountIdBySid[m_sessionByCtx[c]] = id;
+        uint32_t currentSid = m_sessionByCtx[c];
+        m_accountIdBySid[currentSid] = id;
+        m_nicknameBySid[currentSid] = it->second.nickname;
     }
 
     uint32_t loginSid = m_sessionByCtx[c];
@@ -483,6 +670,7 @@ RoomResult LobbyService::HandleRoomCreateReq(ClientContext* c, const char* paylo
 
     m_net.SendRoomCreateRes(c, RoomResult::OK, &view);
     BroadcastRoomList();
+    BroadcastRoomMemberList(rid);
     return RoomResult::OK;
 }
 
@@ -570,6 +758,7 @@ RoomResult LobbyService::HandleRoomJoinReq(ClientContext* c, const char* payload
     // 6) 실제 상태가 바뀐 성공 케이스만 전체 목록 갱신
     if (shouldBroadcast) {
         BroadcastRoomList();
+        BroadcastRoomMemberList(rid);
     }
 
     return result;
@@ -579,19 +768,26 @@ RoomResult LobbyService::HandleRoomLeaveReq(ClientContext* c) {
     RoomResult result = RoomResult::BAD_PAYLOAD;
     bool shouldBroadcast = false;
     uint32_t sid = 0;
+    uint32_t oldRid = 0;
 
     AcquireSRWLockExclusive(&m_lock);
 
     auto itSession = m_sessionByCtx.find(c);
     if (itSession != m_sessionByCtx.end()) {
         sid = itSession->second;
+
+        auto itRoomBySession = m_roomBySession.find(sid);
+        if (itRoomBySession != m_roomBySession.end()) {
+            oldRid = itRoomBySession->second;
+        }
+
         result = LeaveRoomInternal_Unsafe(sid, shouldBroadcast);
     }
 
     ReleaseSRWLockExclusive(&m_lock);
 
-    printf("[ROOM] LEAVE sid=%u result=%s\n",
-        sid, RoomResultToString(result));
+    printf("[ROOM] LEAVE sid=%u rid=%u result=%s\n",
+        sid, oldRid, RoomResultToString(result));
 
     if (result == RoomResult::OK) {
         m_net.SendRoomLeaveRes(c, RoomResult::OK);
@@ -599,6 +795,10 @@ RoomResult LobbyService::HandleRoomLeaveReq(ClientContext* c) {
 
     if (shouldBroadcast) {
         BroadcastRoomList();
+
+        if (oldRid != 0) {
+            BroadcastRoomMemberList(oldRid);
+        }
     }
 
     return result;
@@ -646,6 +846,7 @@ void LobbyService::HandleRoomReadyReq(ClientContext* c, const char* payload, uin
         }
     }
     ReleaseSRWLockShared(&m_lock);
+    BroadcastRoomMemberList(rid);
 }
 
 void LobbyService::HandleRoomStartReq(ClientContext* c) {
@@ -653,6 +854,7 @@ void LobbyService::HandleRoomStartReq(ClientContext* c) {
 
     auto itSession = m_sessionByCtx.find(c);
     if (itSession == m_sessionByCtx.end()) {
+<<<<<<< Updated upstream
         ReleaseSRWLockExclusive(&m_lock);
         printf("[ROOM] START result=%s (no session)\n",
             RoomResultToString(RoomResult::BAD_PAYLOAD));
@@ -696,6 +898,59 @@ void LobbyService::HandleRoomStartReq(ClientContext* c) {
     }
 
     // 1. 방장만 누를 수 있음
+=======
+        ReleaseSRWLockExclusive(&m_lock);
+
+        printf("[ROOM] START result=%s (no session)\n",
+            RoomResultToString(RoomResult::BAD_PAYLOAD));
+
+        m_net.SendRoomStartRes(c, RoomResult::BAD_PAYLOAD);
+        return;
+    }
+
+    uint32_t sid = itSession->second;
+
+    auto itRoomBySession = m_roomBySession.find(sid);
+    if (itRoomBySession == m_roomBySession.end() || itRoomBySession->second == 0) {
+        ReleaseSRWLockExclusive(&m_lock);
+
+        printf("[ROOM] START sid=%u result=%s\n",
+            sid, RoomResultToString(RoomResult::NOT_IN_ROOM));
+
+        m_net.SendRoomStartRes(c, RoomResult::NOT_IN_ROOM);
+        return;
+    }
+
+    uint32_t rid = itRoomBySession->second;
+
+    auto itRoom = m_rooms.find(rid);
+    if (itRoom == m_rooms.end()) {
+        ReleaseSRWLockExclusive(&m_lock);
+
+        printf("[ROOM] START sid=%u rid=%u result=%s\n",
+            sid, rid, RoomResultToString(RoomResult::INVALID_ROOM));
+
+        m_net.SendRoomStartRes(c, RoomResult::INVALID_ROOM);
+        return;
+    }
+
+    Room& r = itRoom->second;
+
+    // 이미 게임 시작된 방이면 Dedicated Server를 또 띄우면 안 됨.
+    if (r.state == RoomState::IN_GAME) {
+        uint16_t existingPort = r.dedicatedPort;
+
+        ReleaseSRWLockExclusive(&m_lock);
+
+        printf("[ROOM] START sid=%u rid=%u ignored result=%s existingPort=%u\n",
+            sid, rid, RoomResultToString(RoomResult::IN_GAME), existingPort);
+
+        m_net.SendRoomStartRes(c, RoomResult::IN_GAME);
+        return;
+    }
+
+    // 1. 방장만 시작 가능
+>>>>>>> Stashed changes
     if (r.hostId != sid) {
         ReleaseSRWLockExclusive(&m_lock);
 
@@ -719,7 +974,11 @@ void LobbyService::HandleRoomStartReq(ClientContext* c) {
         return;
     }
 
+<<<<<<< Updated upstream
     // 3. 다 레디 했는지 확인
+=======
+    // 3. 방장을 제외한 모든 인원이 레디했는지 확인
+>>>>>>> Stashed changes
     for (uint32_t mSid : r.members) {
         if (mSid != r.hostId && !r.readyStatus[mSid]) {
             ReleaseSRWLockExclusive(&m_lock);
@@ -736,18 +995,29 @@ void LobbyService::HandleRoomStartReq(ClientContext* c) {
     if (port == 0) {
         ReleaseSRWLockExclusive(&m_lock);
 
-        printf("[ROOM] START sid=%u rid=%u result=NO_FREE_PORT\n", sid, rid);
+        printf("[ROOM] START sid=%u rid=%u result=NO_FREE_PORT\n",
+            sid, rid);
 
         m_net.SendRoomStartRes(c, RoomResult::BAD_PAYLOAD);
         return;
     }
 
+<<<<<<< Updated upstream
     // 현재 방 멤버 목록 복사
     std::vector<uint32_t> membersCopy = r.members;
 
     // 중요:
     // Dedicated Server 실행은 락 밖에서 하지만,
     // 그 전에 방 상태를 IN_GAME으로 예약해 중복 START 요청을 막는다.
+=======
+    // 현재 방 멤버 목록 복사.
+    // Dedi 실행은 락 밖에서 하므로, 그 전에 복사해둔다.
+    std::vector<uint32_t> membersCopy = r.members;
+
+    // 중요:
+    // Dedi 실행 전에 먼저 IN_GAME으로 예약한다.
+    // 그래야 Start 패킷이 연속으로 들어와도 7777, 7778 서버가 중복 실행되지 않는다.
+>>>>>>> Stashed changes
     r.state = RoomState::IN_GAME;
     r.dedicatedPort = port;
 
@@ -935,6 +1205,87 @@ void LobbyService::BroadcastRoomList() {
         m_net.SendRoomListRes(ctx, rooms);
         ReleaseIO(ctx);
     }
+}
+
+void LobbyService::BroadcastRoomMemberList(uint32_t roomId)
+{
+    std::vector<RoomMemberInfoView> members;
+    std::vector<ClientContext*> targets;
+
+    AcquireSRWLockShared(&m_lock);
+
+    auto itRoom = m_rooms.find(roomId);
+    if (itRoom == m_rooms.end()) {
+        ReleaseSRWLockShared(&m_lock);
+        return;
+    }
+
+    const Room& room = itRoom->second;
+    members = BuildRoomMemberListView_Unsafe(room);
+
+    for (uint32_t sid : room.members) {
+        auto itCtx = m_ctxBySession.find(sid);
+        if (itCtx != m_ctxBySession.end()) {
+            ClientContext* ctx = itCtx->second;
+            targets.push_back(ctx);
+            AddIO(ctx);
+        }
+    }
+
+    ReleaseSRWLockShared(&m_lock);
+
+    printf("[ROOM] BROADCAST_MEMBER_LIST rid=%u targets=%zu members=%zu\n",
+        roomId, targets.size(), members.size());
+
+    for (ClientContext* ctx : targets) {
+        m_net.SendRoomMemberList(ctx, roomId, members);
+        ReleaseIO(ctx);
+    }
+}
+
+std::vector<RoomMemberInfoView> LobbyService::BuildRoomMemberListView_Unsafe(const Room& room) const
+{
+    std::vector<RoomMemberInfoView> views;
+    views.reserve(room.members.size());
+
+    for (uint32_t sid : room.members)
+    {
+        RoomMemberInfoView v{};
+        v.sessionId = sid;
+        v.isHost = (sid == room.hostId) ? 1 : 0;
+
+        auto itReady = room.readyStatus.find(sid);
+        v.isReady = (itReady != room.readyStatus.end() && itReady->second) ? 1 : 0;
+
+        std::string nickname;
+
+        auto itNick = m_nicknameBySid.find(sid);
+        if (itNick != m_nicknameBySid.end()) {
+            nickname = itNick->second;
+        }
+        else {
+            auto itAccount = m_accountIdBySid.find(sid);
+            if (itAccount != m_accountIdBySid.end()) {
+                nickname = itAccount->second;
+            }
+            else {
+                nickname = "Player" + std::to_string(sid);
+            }
+        }
+
+        v.nicknameLen = static_cast<uint8_t>((std::min)(
+            nickname.size(),
+            static_cast<size_t>(MAX_NICKNAME_LEN)
+            ));
+
+        if (v.nicknameLen > 0) {
+            std::memcpy(v.nickname, nickname.data(), v.nicknameLen);
+        }
+
+        views.push_back(v);
+    }
+
+    return views;
 }
 
 bool LobbyService::ReadU32(const char* payload, uint16_t payloadLen, uint32_t& outHost) {

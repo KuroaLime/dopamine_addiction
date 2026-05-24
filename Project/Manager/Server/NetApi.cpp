@@ -154,6 +154,40 @@ void NetApi::SendRoomLeaveRes(ClientContext* c, RoomResult result) {
     m_send(c, (uint16_t)PacketType::S2C_ROOM_LEAVE_RES, &r, 1);
 }
 
+void NetApi::SendRoomMemberList(ClientContext* c, uint32_t roomId, const std::vector<RoomMemberInfoView>& members)
+{
+    std::vector<char> payload;
+
+    payload.reserve(4 + 1 + members.size() * 32);
+
+    // 1. roomId
+    AppendU32(payload, htonl(roomId));
+
+    // 2. memberCount
+    uint8_t count = static_cast<uint8_t>((std::min)(members.size(), static_cast<size_t>(ROOM_MAX_PLAYERS)));
+    AppendU8(payload, count);
+
+    // 3. members
+    for (uint8_t i = 0; i < count; ++i)
+    {
+        const RoomMemberInfoView& m = members[i];
+
+        AppendU32(payload, htonl(m.sessionId));
+        AppendU8(payload, m.isHost);
+        AppendU8(payload, m.isReady);
+
+        AppendU8(payload, m.nicknameLen);
+        if (m.nicknameLen > 0)
+        {
+            payload.insert(payload.end(), m.nickname, m.nickname + m.nicknameLen);
+        }
+    }
+
+    m_send(c, static_cast<uint16_t>(PacketType::S2C_ROOM_MEMBER_LIST),
+        payload.data(),
+        static_cast<uint16_t>(payload.size()));
+}
+
 // ---------------------------------------------------------------------------
 // [Room Action] 레디 브로드캐스트 / 시작 결과
 // ---------------------------------------------------------------------------

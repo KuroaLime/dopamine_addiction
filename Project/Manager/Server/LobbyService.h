@@ -43,6 +43,12 @@ private:
         uint16_t dedicatedPort = 0;    // 0 = None, Others = Assigned Port
     };
 
+    struct UserRecord
+    {
+        std::string password;
+        std::string nickname;
+    };
+
 
     // =======================================================================
     // [SECTION 3] Member Variables
@@ -67,8 +73,9 @@ private:
     std::unordered_map<uint32_t, Room>     m_rooms;              // RoomID -> Room Object
     std::vector<uint32_t>                  m_roomOrder;          // Room List Order
 
-    std::unordered_map<std::string, std::string> m_userDB;          // Account ID -> Password (회원가입 정보)
+    std::unordered_map<std::string, UserRecord> m_userDB;          // Account ID -> UserRecord (회원가입 정보)
     std::unordered_map<uint32_t, std::string>    m_accountIdBySid;  // Session ID -> Account ID (현재 접속자 추적)
+    std::unordered_map<uint32_t, std::string>    m_nicknameBySid;   // Session ID -> Nickname
 
 
     // =======================================================================
@@ -86,10 +93,12 @@ private:
     // 2. Helper Functions (Room Views & Broadcast)
     void     SeedRoomsForTest_Unsafe();
     void     BroadcastRoomList();
+    void     BroadcastRoomMemberList(uint32_t roomId);
 
     // View 생성 헬퍼
     RoomInfoView              BuildRoomView_Unsafe(const Room& room) const;
     std::vector<RoomInfoView> BuildRoomListView_Unsafe() const;
+    std::vector<RoomMemberInfoView> BuildRoomMemberListView_Unsafe(const Room& room) const;
 
     // 3. Packet Handlers
     void       HandleLoginReq(ClientContext* c, const char* payload, uint16_t payloadLen);
@@ -108,5 +117,11 @@ private:
     // 4. Static Utils
     static bool ReadU32(const char* payload, uint16_t payloadLen, uint32_t& outHost);
 
-    static bool ParseAuthPayload(const char* payload, uint16_t payloadLen, std::string& outId, std::string& outPw);
+    static bool ParseAuthPayload(
+        const char* payload,
+        uint16_t payloadLen,
+        std::string& outId,
+        std::string& outPw,
+        std::string* outNickname = nullptr
+    );
 };

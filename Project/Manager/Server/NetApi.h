@@ -49,6 +49,7 @@ public:
     // -----------------------------------------------------------------------
     void SendRoomJoinRes(ClientContext* c, RoomResult result, const RoomInfoView* roomOrNull);
     void SendRoomLeaveRes(ClientContext* c, RoomResult result);
+    void SendRoomMemberList(ClientContext* c, uint32_t roomId, const std::vector<RoomMemberInfoView>& members);
 
     // -----------------------------------------------------------------------
     // [Room Action] 방장/레디 시스템

@@ -29,6 +29,7 @@ enum class PacketType : uint16_t
     // [Room] 방 입장
     C2S_ROOM_JOIN_REQ = 120,
     S2C_ROOM_JOIN_RES = 121,
+    S2C_ROOM_MEMBER_LIST = 122,
 
     // [Room] 방 퇴장
     C2S_ROOM_LEAVE_REQ = 130,
@@ -58,6 +59,7 @@ static_assert(sizeof(PacketHeader) == 4, "PacketHeader must be 4 bytes");
 
 static constexpr uint8_t MAX_ID_LEN = 16;
 static constexpr uint8_t MAX_PW_LEN = 16;
+static constexpr uint8_t MAX_NICKNAME_LEN = 16;
 
 enum class LoginResult : uint8_t
 {
@@ -126,6 +128,17 @@ struct RoomInfoView
     char      title[ROOM_TITLE_MAX]{};
 };
 
+struct RoomMemberInfoView
+{
+    uint32_t sessionId = 0;
+
+    uint8_t isHost = 0;
+    uint8_t isReady = 0;
+
+    uint8_t nicknameLen = 0;
+    char    nickname[MAX_NICKNAME_LEN]{};
+};
+
 
 // ===========================================================================
 // 참고용 주석
@@ -170,4 +183,28 @@ struct RoomInfoView
       - char ip[ipLen]
       - u32 ticket
       - u16 port
+
+    [C2S_REGISTER_REQ]
+      - u8 idLen
+      - char id[idLen]
+      - u8 pwLen
+      - char pw[pwLen]
+      - u8 nicknameLen              // optional, 없으면 id를 nickname으로 사용
+      - char nickname[nicknameLen]
+
+    [C2S_LOGIN_REQ]
+      - u8 idLen
+      - char id[idLen]
+      - u8 pwLen
+      - char pw[pwLen]
+
+    [S2C_ROOM_MEMBER_LIST]
+      - u32 roomId
+      - u8 memberCount
+      - 반복:
+        - u32 sessionId
+        - u8 isHost
+        - u8 isReady
+        - u8 nicknameLen
+        - char nickname[nicknameLen]
 */
