@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Net/UnrealNetwork.h"
-#include "Data/Lobby/Struct/ST_LobbySlot.h"
+#include "Game/Lobby/Data/ST_LobbySlot.h"
 #include "GameFramework/GameStateBase.h"
 #include "GS_Lobby.generated.h"
 

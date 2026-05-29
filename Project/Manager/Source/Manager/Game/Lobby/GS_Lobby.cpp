@@ -2,8 +2,8 @@
 
 
 #include "Game/Lobby/GS_Lobby.h"
-#include "Lobby/LobbyController.h"
-#include "Lobby/LobbyWidget.h"
+#include "Game/Lobby/LobbyController.h"
+#include "Game/Lobby/UI/LobbyWidget.h"
 
 AGS_Lobby::AGS_Lobby()
 {
@@ -46,7 +46,7 @@ void AGS_Lobby::OnRep_CreatedRooms() {
             {
                 if (ULobbyWidget* LobbyWgt = Cast<ULobbyWidget>(ListWidget))
                 {
-                    LobbyWgt->RefreshRoomList(CreatedRoomNames);
+                    //LobbyWgt->RefreshRoomList();
                 }
             }
             break;
