@@ -5,7 +5,9 @@
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
-
+#include "Default/Ability/Interface/AbilityCheckInterface.h"
+#include "Default/Ability/Interface/AbilityOwnerInterface.h"
+#include "Default/Ability/Interface/AbilitySystemInterface.h"
 #include "ManagerCharacter.generated.h"
 
 class UCustomASC;
@@ -25,7 +27,10 @@ DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
  *  Implements a controllable orbiting camera
  */
 UCLASS(abstract)
-class AManagerCharacter : public ACharacter
+class AManagerCharacter : public ACharacter,
+	public IAbilityCheckInterface,
+	public IAbilityOwnerInterface,
+	public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
@@ -51,6 +56,13 @@ public:
 	virtual void Tick(float DeltaTime) override;
 
 public:
+	virtual bool IsCharacterAiming() const override;
+	virtual UCameraStateComponent* GetCameraStateComponent() const override { return CameraState; }
+	virtual UCameraComponent* GetFollowCameraComponent() const override { return FollowCamera; }
+	virtual AActor* GetEquippedWeapon() const override { return m_pEquippedGun; }
+	virtual UCustomASC* GetCustomASC() const override { return AbilitySystemComponent; }
+
+public:
 	//캐릭터 상태 컴포넌트
 	UPROPERTY(VisibleAnywhere, Category = State)
 	class UCharacterStateComponent* CharacterState;
@@ -64,7 +76,6 @@ public:
 	UCustomASC* AbilitySystemComponent;
 	UPROPERTY(EditAnywhere, Category = "GAS")
 	TArray<TSubclassOf<UCustomAbility>> DefaultAbilities;
-	UCustomASC* GetCustomASC() const { return AbilitySystemComponent; }
 
 public:
 	//인벤토리 컴포넌트 하나 만들어서 분리

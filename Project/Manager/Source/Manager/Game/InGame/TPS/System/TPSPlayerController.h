@@ -72,4 +72,8 @@ protected:
 	void Input_AimEnd();
 
 	virtual void TPS_UI();
+
+public:
+	UFUNCTION(Client, Reliable)
+	void Client_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
 };

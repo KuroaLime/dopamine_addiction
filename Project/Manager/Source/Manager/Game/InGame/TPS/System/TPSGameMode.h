@@ -43,7 +43,7 @@ protected:
 	ATPSGameState* pTGS;
 
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Game Flow")
-	int32 BattleRoyaleDuration = 60;
+	int32 BattleRoyaleDuration = 10;
 
 	UPROPERTY(BlueprintReadOnly, Category = "Dedicated Server")
 	bool bGameStarted = false;

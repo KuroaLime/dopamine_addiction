@@ -7,6 +7,8 @@
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
+#include "Kismet/GameplayStatics.h"
+#include "Engine/LevelStreaming.h"
 #include "Manager.h"
 #include "Default/Ability/CustomASC.h"
 #include "Net/UnrealNetwork.h"
@@ -147,5 +149,21 @@ void ATPSPlayerController::Server_SendAction_Implementation(FName ActionName)
 	if (ATPSGameMode* GM = Cast<ATPSGameMode>(GetWorld()->GetAuthGameMode()))
 	{
 		GM->OnPlayerAction(this, ActionName);
+	}
+}
+
+void ATPSPlayerController::Client_SwitchToLevel_Implementation(FName LevelToUnload, FName LevelToLoad)
+{
+	FLatentActionInfo UnloadInfo(1, 1, TEXT("TPS_Game_Stage"), this);
+	FLatentActionInfo LoadInfo(2, 2, TEXT("Card_Game_Stage"), this);
+
+	if (!LevelToUnload.IsNone())
+	{
+		UGameplayStatics::UnloadStreamLevel(GetWorld(), LevelToUnload, UnloadInfo, false);
+	}
+
+	if (!LevelToLoad.IsNone())
+	{
+		UGameplayStatics::LoadStreamLevel(GetWorld(), LevelToLoad, true, false, LoadInfo);
 	}
 }

@@ -27,7 +27,14 @@ void ATPSGameMode::BeginPlay()
 	pTGS = GetGameState<ATPSGameState>();
 
 	VALIDATE_GS
-	pTGS->RemainingTime = 60;
+	pTGS->RemainingTime = 10;
+
+	bGameStarted = true; // Ãß°¡
+
+	if (!GetWorldTimerManager().IsTimerActive(RoundTimerHandle))
+	{
+		GetWorldTimerManager().SetTimer(RoundTimerHandle, this, &ATPSGameMode::RoundTimerTick, 1.0f, true);
+	}
 
 	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
 	{
@@ -85,14 +92,35 @@ void ATPSGameMode::RoundTimerTick()
 
 	VALIDATE_GS
 	pTGS->RemainingTime--;
+
+	if(GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Yellow,
+			FString::Printf(TEXT("Remaining Time: %d"), pTGS->RemainingTime));
+	}
+
+
 	if (pTGS->OnTimeUpdated.IsBound())
 	{
 		pTGS->OnTimeUpdated.Broadcast(pTGS->RemainingTime);
 	}
+
 	if (pTGS->RemainingTime <= 0)
 	{
 		GetWorldTimerManager().ClearTimer(RoundTimerHandle);
-		StartBattleRoyalePhase();
+
+		//StartBattleRoyalePhase();
+
+		for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+		{
+			if (ATPSPlayerController* PC = Cast<ATPSPlayerController>(It->Get()))
+			{
+				PC->Client_SwitchToLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
+
+				PC->SetInputMode(FInputModeGameAndUI());
+				PC->bShowMouseCursor = true;
+			}
+		}
 	}
 }
 

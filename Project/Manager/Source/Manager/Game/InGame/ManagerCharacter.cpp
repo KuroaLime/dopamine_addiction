@@ -200,6 +200,16 @@ void AManagerCharacter::Tick(float DeltaTime)
 
 
 }
+
+bool AManagerCharacter::IsCharacterAiming() const
+{
+	if (AbilitySystemComponent)
+	{
+		return AbilitySystemComponent->HasAnyMatchingGameplayTags(FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("State.Movement.Aiming"))));
+	}
+	return false;
+}
+
 void AManagerCharacter::Move(const FInputActionValue& Value)
 {
 	// input is a Vector2D
