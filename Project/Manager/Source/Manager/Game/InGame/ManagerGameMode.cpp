@@ -1254,7 +1254,7 @@ void AManagerGameMode::RoundTimerTick()
 
 	VALIDATE_GS
 
-		MGS_Ptr->RemainingTime--;
+	MGS_Ptr->RemainingTime--;
 
 	if (MGS_Ptr->OnTimeUpdated.IsBound())
 	{

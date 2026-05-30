@@ -2,7 +2,7 @@
 
 
 #include "Default/Ability/AbilityAim.h"
-#include "Game/InGame/ManagerCharacter.h"
+#include "Game/InGame/TPS/System/TPSCharacter.h"
 #include "Default/Data/CameraStateComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
@@ -15,10 +15,11 @@ UAbilityAim::UAbilityAim()
 
 void UAbilityAim::ActivateAbility()
 {
-    AManagerCharacter* MC = Cast<AManagerCharacter>(OwnerCharacter);
+    ATPSCharacter* MC = Cast<ATPSCharacter>(OwnerCharacter);
+
     if (MC)
     {
-       MC->CameraState->SmoothZoom(true);
+        MC->CameraState->SmoothZoom(true);
         MC->GetCharacterMovement()->bOrientRotationToMovement = false;
         MC->bUseControllerRotationYaw = true;
     }
@@ -26,10 +27,9 @@ void UAbilityAim::ActivateAbility()
 
 void UAbilityAim::EndAbility(bool bWasCancelled)
 {
-    // [일관성] 어빌리티가 끝날 때(버튼 뗄 때) 캐릭터에게 줌아웃(false)을 명령합니다.
-    Super::EndAbility(bWasCancelled); // 태그 제거 로직 실행
+    Super::EndAbility(bWasCancelled);
 
-    AManagerCharacter* MC = Cast<AManagerCharacter>(OwnerCharacter);
+    ATPSCharacter* MC = Cast<ATPSCharacter>(OwnerCharacter);
     if (MC)
     {
         MC->CameraState->SmoothZoom(false);

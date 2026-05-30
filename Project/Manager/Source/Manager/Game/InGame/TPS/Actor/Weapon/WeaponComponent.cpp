@@ -3,6 +3,7 @@
 
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
 #include "Game/InGame/ManagerCharacter.h"
+#include "Game/InGame/TPS/System/TPSCharacter.h"
 #include "Default/Ability/CustomASC.h"
 #include "GameplayTagContainer.h"
 #include "Kismet/GameplayStatics.h"
@@ -74,8 +75,9 @@ void UWeaponComponent::Fire(const FVector& MuzzleLocation, const FVector& ShotDi
 		UGameplayStatics::PlaySoundAtLocation(this, m_FireSound, MuzzleLocation);
 	}
 }
+
 void UWeaponComponent::FireOnce() {
-	if (AManagerCharacter* MyChar = Cast<AManagerCharacter>(GetOwner()->GetOwner()))
+	if (ATPSCharacter* MyChar = Cast<ATPSCharacter>(GetOwner()->GetOwner()))
 	{
 		if (UCustomASC* ASC = MyChar->GetCustomASC())
 		{

@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Game/InGame/ManagerCharacter.h"
+#include "Game/InGame/TPS/System/TPSCharacter.h"
 #include "Components/ActorComponent.h"
 #include "CameraStateComponent.generated.h"
 
@@ -28,7 +28,7 @@ public:
 
 protected:
 	UPROPERTY()
-	AManagerCharacter* OwnerActor;
+	ATPSCharacter* OwnerActor;
 
 	UPROPERTY()
 	USpringArmComponent* OwnerArm;

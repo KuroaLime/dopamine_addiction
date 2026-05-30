@@ -20,7 +20,7 @@ void UCameraStateComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	OwnerActor = Cast<AManagerCharacter>(GetOwner());
+	OwnerActor = Cast<ATPSCharacter>(GetOwner());
 	if (!OwnerActor) return;
 
 	OwnerArm = OwnerActor->GetCameraBoom();

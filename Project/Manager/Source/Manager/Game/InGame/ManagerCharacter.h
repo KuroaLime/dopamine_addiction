@@ -66,7 +66,6 @@ public:
 	TArray<TSubclassOf<UCustomAbility>> DefaultAbilities;
 	UCustomASC* GetCustomASC() const { return AbilitySystemComponent; }
 
-
 public:
 	//인벤토리 컴포넌트 하나 만들어서 분리
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory")

@@ -1,6 +1,6 @@
 
 #include "Default/Ability/AbilityFire.h"
-#include "Game/InGame/ManagerCharacter.h"
+#include "Game/InGame/TPS/System/TPSCharacter.h"
 #include "Default/Ability/CustomASC.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
 #include "Camera/CameraComponent.h" // [추가] 카메라 컴포넌트 헤더 추가
@@ -17,7 +17,7 @@ UAbilityFire::UAbilityFire()
 
 void UAbilityFire::ActivateAbility()
 {
-    AManagerCharacter* MC = Cast<AManagerCharacter>(OwnerCharacter);
+    ATPSCharacter* MC = Cast<ATPSCharacter>(OwnerCharacter);
     if (!MC || !MC->GetEquippedGun()) return;
 
     // [수정된 부분 1] GetActorEyesViewPoint 대신, 실제 3인칭 FollowCamera의 트랜스폼을 가져옵니다.
