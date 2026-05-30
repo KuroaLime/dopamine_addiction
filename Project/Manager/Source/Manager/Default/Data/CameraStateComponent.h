@@ -3,7 +3,6 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Game/InGame/TPS/System/TPSCharacter.h"
 #include "Components/ActorComponent.h"
 #include "CameraStateComponent.generated.h"
 
@@ -28,15 +27,16 @@ public:
 
 protected:
 	UPROPERTY()
-	ATPSCharacter* OwnerActor;
+	class ACharacter* OwnerCharacter;
 
 	UPROPERTY()
-	USpringArmComponent* OwnerArm;
+	class USpringArmComponent* OwnerArm;
 
 	UPROPERTY()
-	UCameraComponent* OwnerCamera;
+	class UCameraComponent* OwnerCamera;
 
 	FTimerHandle ZoomTimerHandle;
+
 public:
 	void SmoothZoom(bool bZoomIn);
 };

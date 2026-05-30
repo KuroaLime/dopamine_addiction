@@ -155,6 +155,15 @@ void ATPSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputCompon
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
 }
 
+bool ATPSCharacter::IsCharacterAiming() const
+{
+	if (AbilitySystemComponent)
+	{
+		return AbilitySystemComponent->HasAnyMatchingGameplayTags(FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("State.Movement.Aiming"))));
+	}
+	return false;
+}
+
 void ATPSCharacter::Move(const FInputActionValue& Value)
 {
 	FVector2D MovementVector = Value.Get<FVector2D>();

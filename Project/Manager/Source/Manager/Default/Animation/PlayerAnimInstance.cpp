@@ -2,31 +2,36 @@
 
 
 #include "Default/Animation/PlayerAnimInstance.h"
-#include "Game/InGame/ManagerCharacter.h"
-#include "Game/InGame/TPS/System/TPSCharacter.h"
 #include "Default/Ability/CustomASC.h"
 #include "KismetAnimationLibrary.h"
+#include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Default/Ability/Interface/AbilityCheckInterface.h"
+
 void UPlayerAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();
 
+
 	if (APawn* PlayerPawn = TryGetPawnOwner()) {
-		TPSCharacter = Cast<ATPSCharacter>(PlayerPawn);
-		MoveComp = TPSCharacter ? TPSCharacter->GetCharacterMovement() : nullptr;
+		OwnerCharacter = Cast<ACharacter>(PlayerPawn);
+		MoveComp = OwnerCharacter ? OwnerCharacter->GetCharacterMovement() : nullptr;
 	}
 }
 
 void UPlayerAnimInstance::UpdateAnimProperties(float DeltaTime)
 {
 	APawn* OwnerNow = TryGetPawnOwner();
-	if (OwnerNow != TPSCharacter || !IsValid(MoveComp)) {
-		TPSCharacter = Cast<ATPSCharacter>(OwnerNow);
-		MoveComp = TPSCharacter ? TPSCharacter->GetCharacterMovement() : nullptr;
+	if (!OwnerNow) return;
+
+	if (OwnerNow != OwnerCharacter || !IsValid(MoveComp)) {
+		OwnerCharacter = Cast<ACharacter>(OwnerNow);
+		MoveComp = OwnerCharacter ? OwnerCharacter->GetCharacterMovement() : nullptr;
 	}
 
-	if (!TPSCharacter || !MoveComp) return;
-	const FVector Vel = TPSCharacter->GetVelocity();
+	if (!OwnerCharacter || !MoveComp) return;
+
+	const FVector Vel = OwnerCharacter->GetVelocity();
 	Speed = Vel.Size2D();
 
 	bIsInAir = MoveComp->IsFalling();
@@ -34,14 +39,15 @@ void UPlayerAnimInstance::UpdateAnimProperties(float DeltaTime)
 
 	bIsAccelerating = MoveComp->GetCurrentAcceleration().SizeSquared() > KINDA_SMALL_NUMBER;
 
-	//Direction = CalculateDirection(Vel, TPSCharacter->GetActorRotation());
-	Direction = UKismetAnimationLibrary::CalculateDirection(Vel, TPSCharacter->GetActorRotation());
+	Direction = UKismetAnimationLibrary::CalculateDirection(Vel, OwnerCharacter->GetActorRotation());
 	bIsMoving = (Speed > 3.0f) && bIsAccelerating;
-	
-	if (TPSCharacter && TPSCharacter->AbilitySystemComponent)
+
+	if (IAbilityCheckInterface* AimInterface = Cast<IAbilityCheckInterface>(OwnerCharacter))
 	{
-		// 현재 ASC에 "State.Movement.Aiming" 태그가 하나라도 있는지 확인
-		FGameplayTag AimTag = FGameplayTag::RequestGameplayTag(FName("State.Movement.Aiming"));
-		bIsAiming = TPSCharacter->AbilitySystemComponent->HasAnyMatchingGameplayTags(FGameplayTagContainer(AimTag));
+		bIsAiming = AimInterface->IsCharacterAiming();
+	}
+	else
+	{
+		bIsAiming = false;
 	}
 }

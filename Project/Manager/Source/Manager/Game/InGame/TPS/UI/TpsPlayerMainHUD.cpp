@@ -8,7 +8,7 @@
 #include "Components/Image.h"
 #include "Components/CanvasPanelSlot.h"
 #include "Camera/CameraComponent.h"
-#include "Game/InGame/ManagerCharacter.h"
+#include "Default/Ability/Interface/AbilityOwnerInterface.h"
 
 void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacterState) {
 
@@ -126,13 +126,12 @@ void UTpsPlayerMainHUD::UpdateCompass() {
 		APlayerController* PlayerController = GetOwningPlayer();
 
 		if (PlayerController) {
-			AManagerCharacter* MyChar = Cast<AManagerCharacter>(PlayerController->GetPawn());
+			IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(PlayerController->GetPawn());
+			if (Owner && Owner->GetFollowCameraComponent()) {
+				float CameraYaw = Owner->GetFollowCameraComponent()->GetComponentRotation().Yaw;
 
-			if (MyChar && MyChar->GetFollowCamera()) {
-				float CameraYaw = MyChar->GetFollowCamera()->GetComponentRotation().Yaw;
-
-				if (nullptr != PSU_Compass) { 
-					ChangeCompassSize(CameraYaw, PSU_Compass); 
+				if (nullptr != PSU_Compass) {
+					ChangeCompassSize(CameraYaw, PSU_Compass);
 				}
 			}
 		}

@@ -5,6 +5,9 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
+#include "Default/Ability/Interface/AbilityCheckInterface.h"
+#include "Default/Ability/Interface/AbilityOwnerInterface.h"
+#include "Default/Ability/Interface/AbilitySystemInterface.h"
 #include "TPSCharacter.generated.h"
 
 // =============================================================================
@@ -22,7 +25,10 @@ class UCustomAbility;
 struct FInputActionValue;
 
 UCLASS(Abstract)
-class MANAGER_API ATPSCharacter : public ACharacter
+class MANAGER_API ATPSCharacter : public ACharacter, 
+	public IAbilityCheckInterface,
+	public IAbilityOwnerInterface,
+	public IAbilitySystemInterface
 {
 	GENERATED_BODY()
 
@@ -31,6 +37,13 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+
+public:
+	virtual bool IsCharacterAiming() const override;
+	virtual UCameraStateComponent* GetCameraStateComponent() const override { return CameraState; }
+	virtual UCameraComponent* GetFollowCameraComponent() const override { return FollowCamera; }
+	virtual AActor* GetEquippedWeapon() const override { return m_pEquippedGun; }
+	virtual UCustomASC* GetCustomASC() const override { return AbilitySystemComponent; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -66,7 +79,6 @@ public:
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
 	FORCEINLINE AWeapon* GetEquippedGun() const { return m_pEquippedGun; }
-	FORCEINLINE UCustomASC* GetCustomASC() const { return AbilitySystemComponent; }
 
 	UCameraComponent* SetFollowCamera() { return FollowCamera; }
 

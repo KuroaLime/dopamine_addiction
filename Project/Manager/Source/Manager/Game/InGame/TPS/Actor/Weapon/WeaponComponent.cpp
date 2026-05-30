@@ -2,8 +2,7 @@
 
 
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
-#include "Game/InGame/ManagerCharacter.h"
-#include "Game/InGame/TPS/System/TPSCharacter.h"
+#include "Default/Ability/Interface/AbilitySystemInterface.h"
 #include "Default/Ability/CustomASC.h"
 #include "GameplayTagContainer.h"
 #include "Kismet/GameplayStatics.h"
@@ -77,12 +76,12 @@ void UWeaponComponent::Fire(const FVector& MuzzleLocation, const FVector& ShotDi
 }
 
 void UWeaponComponent::FireOnce() {
-	if (ATPSCharacter* MyChar = Cast<ATPSCharacter>(GetOwner()->GetOwner()))
+	IAbilitySystemInterface* Owner = Cast<IAbilitySystemInterface>(GetOwner()->GetOwner());
+	if (!Owner) return;
+
+	if (UCustomASC* ASC = Owner->GetCustomASC())
 	{
-		if (UCustomASC* ASC = MyChar->GetCustomASC())
-		{
-			ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire")));
-		}
+		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire")));
 	}
 }
 

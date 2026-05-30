@@ -1,5 +1,6 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 #include "Default/Data/CameraStateComponent.h"
+#include "GameFramework/Character.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 
@@ -20,12 +21,14 @@ void UCameraStateComponent::BeginPlay()
 {
 	Super::BeginPlay();
 
-	OwnerActor = Cast<ATPSCharacter>(GetOwner());
-	if (!OwnerActor) return;
+	OwnerCharacter = Cast<ACharacter>(GetOwner());
+	if (!OwnerCharacter) return;
 
-	OwnerArm = OwnerActor->GetCameraBoom();
-	OwnerCamera = OwnerActor->GetFollowCamera();
-	
+	OwnerArm = OwnerCharacter->FindComponentByClass<USpringArmComponent>();
+	OwnerCamera = OwnerCharacter->FindComponentByClass<UCameraComponent>();
+
+	if (!OwnerArm || !OwnerCamera)
+		return;
 }
 
 
@@ -38,6 +41,7 @@ void UCameraStateComponent::TickComponent(float DeltaTime, ELevelTick TickType, 
 }
 void UCameraStateComponent::SmoothZoom(bool bZoomIn)
 {
+	if (!OwnerArm || !OwnerCamera || !GetWorld()) return;
 
 	const float TargetFOV = bZoomIn ? 60.0f : 90.0f;
 	const float TargetArmLength = bZoomIn ? 200.0f : 400.0f;

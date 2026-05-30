@@ -2,10 +2,10 @@
 
 
 #include "Default/Ability/AbilityAim.h"
-#include "Game/InGame/TPS/System/TPSCharacter.h"
+#include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Default/Data/CameraStateComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
+#include "GameFramework/Character.h"
 
 UAbilityAim::UAbilityAim()
 {
@@ -15,25 +15,23 @@ UAbilityAim::UAbilityAim()
 
 void UAbilityAim::ActivateAbility()
 {
-    ATPSCharacter* MC = Cast<ATPSCharacter>(OwnerCharacter);
+    IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
+    if (!Owner) return;
 
-    if (MC)
-    {
-        MC->CameraState->SmoothZoom(true);
-        MC->GetCharacterMovement()->bOrientRotationToMovement = false;
-        MC->bUseControllerRotationYaw = true;
-    }
+    // 로직은 어빌리티가 소유, 캐릭터 내부 구조는 모름
+    Owner->GetCameraStateComponent()->SmoothZoom(true);
+    OwnerCharacter->GetCharacterMovement()->bOrientRotationToMovement = false;
+    OwnerCharacter->bUseControllerRotationYaw = true;
 }
 
 void UAbilityAim::EndAbility(bool bWasCancelled)
 {
     Super::EndAbility(bWasCancelled);
 
-    ATPSCharacter* MC = Cast<ATPSCharacter>(OwnerCharacter);
-    if (MC)
-    {
-        MC->CameraState->SmoothZoom(false);
-        MC->GetCharacterMovement()->bOrientRotationToMovement = true;
-        MC->bUseControllerRotationYaw = false;
-    }
+    IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
+    if (!Owner) return;
+
+    Owner->GetCameraStateComponent()->SmoothZoom(false);
+    OwnerCharacter->GetCharacterMovement()->bOrientRotationToMovement = true;
+    OwnerCharacter->bUseControllerRotationYaw = false;
 }

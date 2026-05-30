@@ -6,7 +6,6 @@
 #include "Animation/AnimInstance.h"
 #include "PlayerAnimInstance.generated.h"
 
-class ATPSCharacter;
 class UCharacterMovementComponent;
 /**
  * 
@@ -23,7 +22,7 @@ class MANAGER_API UPlayerAnimInstance : public UAnimInstance
 
 private:
 	UPROPERTY(Transient, VisibleAnywhere, BlueprintReadOnly, Category = Player, meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<ATPSCharacter> TPSCharacter = nullptr;
+	TObjectPtr<class ACharacter> OwnerCharacter = nullptr;
 
 	UPROPERTY(Transient)
 	TObjectPtr<UCharacterMovementComponent> MoveComp = nullptr;
