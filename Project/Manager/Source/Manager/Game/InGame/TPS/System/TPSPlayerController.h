@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
+#include "Game/InGame/PhasePlayerControllerInterface.h"
 #include "TPSPlayerController.generated.h"
 
 class UInputMappingContext;
@@ -15,7 +16,8 @@ class UUserWidget;
  * 
  */
 UCLASS(Abstract)
-class MANAGER_API ATPSPlayerController : public APlayerController
+class MANAGER_API ATPSPlayerController : public APlayerController,
+										 public IPhasePlayerControllerInterface
 {
 	GENERATED_BODY()
 	
@@ -30,6 +32,11 @@ protected:
 public:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SendAction(FName ActionName);
+
+public:
+	virtual void SwitchToTPSMode() override;
+	virtual void SwitchToCardMode() override;
+	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) override;
 
 protected:
 	UPROPERTY(EditAnywhere, Category = "Input|Input Mappings")

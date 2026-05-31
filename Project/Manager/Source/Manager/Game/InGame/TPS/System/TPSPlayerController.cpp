@@ -71,6 +71,22 @@ void ATPSPlayerController::SetupInputComponent()
 	}
 }
 
+void ATPSPlayerController::SwitchToTPSMode()
+{
+	// TPS 모드로 전환 시 필요한 로직을 여기에 추가
+}
+
+void ATPSPlayerController::SwitchToCardMode()
+{
+	// 카드 모드로 전환 시 필요한 로직을 여기에 추가
+}
+
+void ATPSPlayerController::SwitchToLevel(FName LevelToUnload, FName LevelToLoad)
+{
+	Server_SendAction(FName("SwitchLevel"));
+	Client_SwitchToLevel(LevelToUnload, LevelToLoad);
+}
+
 void ATPSPlayerController::Input_Move(const FInputActionValue& Value)
 {
 	VALIDATE_CHARACTER
