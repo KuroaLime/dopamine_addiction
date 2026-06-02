@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
-#include "Game/InGame/PhaseGameModeInterface.h"
+#include "Game/InGame/Interface/PhaseGameModeInterface.h"
 #include "MainGameMode.generated.h"
 
 class UPhaseStrategy;
@@ -26,7 +26,7 @@ public:
 	virtual void Logout(AController* Exiting) override;
 
 public:
-	virtual void BeginePhase(EGamePhase CurrPhase) override;
+	virtual void BeginPhase(EGamePhase CurrPhase) override;
 	virtual void EndPhase() override;
 	virtual void ChangePhase(EGamePhase NewPhase) override;
 

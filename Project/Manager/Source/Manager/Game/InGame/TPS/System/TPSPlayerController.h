@@ -3,9 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
-#include "Game/InGame/PhasePlayerControllerInterface.h"
+#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "TPSPlayerController.generated.h"
 
 class UInputMappingContext;
@@ -34,8 +33,7 @@ public:
 	void Server_SendAction(FName ActionName);
 
 public:
-	virtual void SwitchToTPSMode() override;
-	virtual void SwitchToCardMode() override;
+	virtual void SwitchMode(EGamePhase NewPhase) override;
 	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) override;
 
 protected:

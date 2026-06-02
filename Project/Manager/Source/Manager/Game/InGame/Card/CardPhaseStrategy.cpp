@@ -70,6 +70,7 @@ void UCardPhaseStrategy::UnloadStage()
 
 	if (IPhasePlayerControllerInterface* PC = GetPhasePlayerController())
 	{
+		PC->SwitchMode(EGamePhase::TPS);
 		PC->SwitchToLevel(TEXT("Card_Game_Stage"), TEXT("TPS_Game_Stage"));
 	}
 }

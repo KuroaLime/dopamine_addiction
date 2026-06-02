@@ -2,7 +2,6 @@
 
 
 #include "Game/InGame/TPS/System/TPSPhaseStrategy.h"
-//#include "GameFramework/GameStateBase.h"
 
 void UTPSPhaseStrategy::OnPhaseStart()
 {
@@ -71,6 +70,7 @@ void UTPSPhaseStrategy::UnloadStage()
 
 	if (IPhasePlayerControllerInterface* PC = GetPhasePlayerController())
 	{
+		PC->SwitchMode(EGamePhase::Card);
 		PC->SwitchToLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
 	}
 }

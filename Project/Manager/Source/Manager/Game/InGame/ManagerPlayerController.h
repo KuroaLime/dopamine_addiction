@@ -3,8 +3,8 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "GameFramework/PlayerController.h"
 #include "InputActionValue.h"
+#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "ManagerPlayerController.generated.h"
 
 class UInputMappingContext;
@@ -16,7 +16,8 @@ class UUserWidget;
  *  Manages input mappings
  */
 UCLASS(abstract)
-class AManagerPlayerController : public APlayerController
+class AManagerPlayerController : public APlayerController,
+								 public IPhasePlayerControllerInterface
 {
 	GENERATED_BODY()
 	
@@ -39,6 +40,10 @@ public:
 
 	UFUNCTION(Client, Reliable)
 	void Client_StateReset();
+
+public:
+	virtual void SwitchMode(EGamePhase NewPhase) override;
+	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) override;
 
 protected:
 	bool bSelectedCards[3] = { false, false, false };

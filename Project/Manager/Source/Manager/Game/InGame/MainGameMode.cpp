@@ -23,7 +23,7 @@ void AMainGameMode::BeginPlay()
 	CardStrategy->Initialize(this);
 	StrategyMap.Add(EGamePhase::Card, CardStrategy);
 
-	BeginePhase(EGamePhase::TPS);
+	BeginPhase(EGamePhase::TPS);
 }
 
 void AMainGameMode::PostLogin(APlayerController* NewPlayer)
@@ -36,7 +36,7 @@ void AMainGameMode::Logout(AController* Exiting)
 	Super::Logout(Exiting);
 }
 
-void AMainGameMode::BeginePhase(EGamePhase CurrPhase)
+void AMainGameMode::BeginPhase(EGamePhase CurrPhase)
 {
 	if (StrategyMap.Contains(CurrPhase))
 	{
@@ -60,7 +60,7 @@ void AMainGameMode::EndPhase()
 void AMainGameMode::ChangePhase(EGamePhase NewPhase)
 {
 	EndPhase();
-	BeginePhase(NewPhase);
+	BeginPhase(NewPhase);
 }
 
 void AMainGameMode::OnPlayerAction(AActor* Executor, FName ActionName)

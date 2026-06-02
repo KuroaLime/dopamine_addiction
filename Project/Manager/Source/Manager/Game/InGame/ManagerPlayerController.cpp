@@ -119,6 +119,16 @@ void AManagerPlayerController::SetupInputComponent()
 	}
 }
 
+void AManagerPlayerController::SwitchMode(EGamePhase NewPhase)
+{
+	// 모드 전환 시 필요한 로직을 여기에 추가
+}
+
+void AManagerPlayerController::SwitchToLevel(FName LevelToUnload, FName LevelToLoad)
+{
+
+}
+
 void AManagerPlayerController::SetSeotdaMode(bool bEnable)
 {
 	if (ULocalPlayer* LocalPlayer = GetLocalPlayer())

@@ -5,7 +5,7 @@
 #include "Net/UnrealNetwork.h"
 #include "CoreMinimal.h"
 #include "GameFramework/GameStateBase.h"
-#include "Game/InGame/PhaseGameStateInterface.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "TPSGameState.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTimeUpdatedDelegate_TPS, int32, NewTime);

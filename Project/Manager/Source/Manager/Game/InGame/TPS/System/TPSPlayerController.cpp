@@ -71,14 +71,9 @@ void ATPSPlayerController::SetupInputComponent()
 	}
 }
 
-void ATPSPlayerController::SwitchToTPSMode()
+void ATPSPlayerController::SwitchMode(EGamePhase NewPhase)
 {
 	// TPS 모드로 전환 시 필요한 로직을 여기에 추가
-}
-
-void ATPSPlayerController::SwitchToCardMode()
-{
-	// 카드 모드로 전환 시 필요한 로직을 여기에 추가
 }
 
 void ATPSPlayerController::SwitchToLevel(FName LevelToUnload, FName LevelToLoad)

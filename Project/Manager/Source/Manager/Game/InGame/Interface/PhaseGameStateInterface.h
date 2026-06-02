@@ -4,11 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "PhasePlayerControllerInterface.generated.h"
+#include "Game/InGame/Interface/InterfaceInfo.h"
+#include "PhaseGameStateInterface.generated.h"
 
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
-class UPhasePlayerControllerInterface : public UInterface
+class UPhaseGameStateInterface : public UInterface
 {
 	GENERATED_BODY()
 };
@@ -16,14 +17,13 @@ class UPhasePlayerControllerInterface : public UInterface
 /**
  * 
  */
-class MANAGER_API IPhasePlayerControllerInterface
+class MANAGER_API IPhaseGameStateInterface
 {
 	GENERATED_BODY()
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
-	virtual void SwitchToTPSMode() = 0;
-	virtual void SwitchToCardMode() = 0;
-
-	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) = 0;
+	virtual int32 GetRemainingTime() const = 0;
+	virtual void SetRemainingTime(int32 NewTime) = 0;
+	virtual void BroadcastTimeUpdated(int32 NewTime) = 0;
 };

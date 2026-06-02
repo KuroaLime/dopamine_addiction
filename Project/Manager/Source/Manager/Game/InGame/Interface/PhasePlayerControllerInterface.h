@@ -4,18 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "PhaseGameModeInterface.generated.h"
-
-UENUM(BlueprintType)
-enum class EGamePhase : uint8
-{
-	TPS,
-	Card,
-};
+#include "GameFramework/PlayerController.h"
+#include "Game/InGame/Interface/InterfaceInfo.h"
+#include "PhasePlayerControllerInterface.generated.h"
 
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
-class UPhaseGameModeInterface : public UInterface
+class UPhasePlayerControllerInterface : public UInterface
 {
 	GENERATED_BODY()
 };
@@ -23,13 +18,13 @@ class UPhaseGameModeInterface : public UInterface
 /**
  * 
  */
-class MANAGER_API IPhaseGameModeInterface
+class MANAGER_API IPhasePlayerControllerInterface
 {
 	GENERATED_BODY()
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
-	virtual void BeginePhase(EGamePhase CurrPhase) = 0;
-	virtual void EndPhase() = 0;
-	virtual void ChangePhase(EGamePhase NewPhase) = 0;
+	virtual void SwitchMode(EGamePhase NewPhase) = 0;
+
+	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) = 0;
 };

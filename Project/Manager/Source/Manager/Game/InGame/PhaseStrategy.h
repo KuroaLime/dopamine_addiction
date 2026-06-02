@@ -4,9 +4,9 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
-#include "Game/InGame/PhaseGameModeInterface.h"
-#include "Game/InGame/PhaseGameStateInterface.h"
-#include "Game/InGame/PhasePlayerControllerInterface.h"
+#include "Game/InGame/Interface/PhaseGameModeInterface.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "PhaseStrategy.generated.h"
 
 class AGameModeBase;
