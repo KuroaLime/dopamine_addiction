@@ -34,9 +34,18 @@ public:
 	void OnPlayerAction(AActor* Executor, FName ActionName);
 
 protected:
+	UPROPERTY(EditDefaultsOnly, Category = "GameMode|Setup")
+	TMap<EGamePhase, TSubclassOf<UPhaseStrategy>> StrategyClassMap;
+
+	UPROPERTY(EditDefaultsOnly, Category = "GameMode|Setup")
+	EGamePhase InitialPhase = EGamePhase::TPS;
+
 	UPROPERTY()
 	TMap<EGamePhase, TObjectPtr<UPhaseStrategy>> StrategyMap;
 
 	UPROPERTY()
 	UPhaseStrategy* CurrentStrategy;
+
+private:
+	void InitStrategy();
 };

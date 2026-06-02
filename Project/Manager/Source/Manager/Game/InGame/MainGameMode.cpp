@@ -3,8 +3,6 @@
 
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/PhaseStrategy.h"
-#include "Game/InGame/TPS/System/TPSPhaseStrategy.h"
-#include "Game/InGame/Card/CardPhaseStrategy.h"
 
 AMainGameMode::AMainGameMode()
 {
@@ -15,15 +13,8 @@ void AMainGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	UTPSPhaseStrategy* TPSStrategy = NewObject<UTPSPhaseStrategy>(this);
-	TPSStrategy->Initialize(this);
-	StrategyMap.Add(EGamePhase::TPS, TPSStrategy);
-
-	UCardPhaseStrategy* CardStrategy = NewObject<UCardPhaseStrategy>(this);
-	CardStrategy->Initialize(this);
-	StrategyMap.Add(EGamePhase::Card, CardStrategy);
-
-	BeginPhase(EGamePhase::TPS);
+	InitStrategy();
+	BeginPhase(InitialPhase);
 }
 
 void AMainGameMode::PostLogin(APlayerController* NewPlayer)
@@ -68,5 +59,20 @@ void AMainGameMode::OnPlayerAction(AActor* Executor, FName ActionName)
 	if (CurrentStrategy)
 	{
 		CurrentStrategy->OnPlayerAction(Executor, ActionName);
+	}
+}
+
+void AMainGameMode::InitStrategy()
+{
+	for (auto& Pair : StrategyClassMap)
+	{
+		if (!Pair.Value) continue;
+
+		UPhaseStrategy* Strategy = NewObject<UPhaseStrategy>(this, Pair.Value);
+		if (Strategy)
+		{
+			Strategy->Initialize(this);
+			StrategyMap.Add(Pair.Key, Strategy);
+		}
 	}
 }

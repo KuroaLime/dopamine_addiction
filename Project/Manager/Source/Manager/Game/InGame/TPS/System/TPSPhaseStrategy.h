@@ -9,7 +9,7 @@
 /**
  * 
  */
-UCLASS()
+UCLASS(Blueprintable, BlueprintType, meta = (BlueprintSpawnableComponent))
 class MANAGER_API UTPSPhaseStrategy : public UPhaseStrategy
 {
 	GENERATED_BODY()
