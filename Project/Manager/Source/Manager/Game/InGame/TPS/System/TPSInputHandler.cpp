@@ -14,6 +14,11 @@ UTPSInputHandler::UTPSInputHandler()
 	PrimaryComponentTick.bCanEverTick = false;
 }
 
+void UTPSInputHandler::BeginPlay()
+{
+	Super::BeginPlay();
+}
+
 void UTPSInputHandler::InputActivate()
 {
 	Super::InputActivate();

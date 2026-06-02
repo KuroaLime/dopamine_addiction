@@ -4,10 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "UIHandler.generated.h"
 
 class APlayerController;
 class UUserWidget;
+class UCharacterStateComponent;
 
 UCLASS( Abstract, ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class MANAGER_API UUIHandler : public UActorComponent
@@ -42,4 +44,6 @@ protected:
 	virtual void HideHUD();
 
 	void SetWidgetVisibility(ESlateVisibility Visibility);
+
+	UCharacterStateComponent* ResolveOwnerCharacterState() const;
 };

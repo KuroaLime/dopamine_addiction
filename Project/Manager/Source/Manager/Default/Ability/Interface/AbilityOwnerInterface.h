@@ -8,6 +8,7 @@
 
 class UCameraStateComponent;
 class UCameraComponent;
+class UCharacterStateComponent;
 class AActor;
 
 // This class does not need to be modified.
@@ -29,4 +30,5 @@ public:
 	virtual UCameraComponent* GetFollowCameraComponent() const = 0;
 
 	virtual AActor* GetEquippedWeapon() const = 0;
+	virtual UCharacterStateComponent* GetCharacterState() const = 0;
 };

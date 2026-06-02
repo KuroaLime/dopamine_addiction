@@ -18,10 +18,13 @@ public:
 	UCardUIHandler();
 
 	virtual void BeginPlay() override;
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 public:
 	virtual void UIActivate() override;
 	virtual void UIDeactivate() override;
+
+protected:
+	virtual void CreateHUD();
+	virtual void ShowHUD();
+	virtual void HideHUD();
 };

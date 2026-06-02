@@ -3,7 +3,10 @@
 
 #include "Game/InGame/Handler/UIHandler.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Pawn.h"
 #include "Blueprint/UserWidget.h"
+#include "Default/Data/CharacterStateComponent.h"
+#include "Default/UI/WidgetParent.h"
 
 UUIHandler::UUIHandler()
 {
@@ -45,6 +48,14 @@ void UUIHandler::CreateHUD()
 	{
 		PlayerWidget->AddToViewport();
 		PlayerWidget->SetVisibility(ESlateVisibility::Collapsed);
+
+		if (UWidgetParent* WidgetParent = Cast<UWidgetParent>(PlayerWidget))
+		{
+			if (UCharacterStateComponent* State = ResolveOwnerCharacterState())
+			{
+				WidgetParent->BindCharacterState(State);
+			}
+		}
 	}
 }
 
@@ -62,4 +73,17 @@ void UUIHandler::SetWidgetVisibility(ESlateVisibility Visibility)
 {
 	if (PlayerWidget)
 		PlayerWidget->SetVisibility(Visibility);
+}
+
+UCharacterStateComponent* UUIHandler::ResolveOwnerCharacterState() const
+{
+	if (!OwnerController) return nullptr;
+
+	APawn* OwnerPawn = OwnerController->GetPawn();
+	if (!OwnerPawn) return nullptr;
+
+	IAbilityOwnerInterface* OwnerInterface = Cast<IAbilityOwnerInterface>(OwnerPawn);
+	if (!OwnerInterface) return nullptr;
+
+	return OwnerInterface->GetCharacterState();
 }

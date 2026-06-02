@@ -44,6 +44,7 @@ public:
 	virtual UCameraComponent* GetFollowCameraComponent() const override { return FollowCamera; }
 	virtual AActor* GetEquippedWeapon() const override { return m_pEquippedGun; }
 	virtual UCustomASC* GetCustomASC() const override { return AbilitySystemComponent; }
+	virtual UCharacterStateComponent* GetCharacterState() const override { return CharacterState; }
 
 protected:
 	virtual void BeginPlay() override;

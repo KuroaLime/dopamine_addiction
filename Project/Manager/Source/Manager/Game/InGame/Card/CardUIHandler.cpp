@@ -14,16 +14,6 @@ void UCardUIHandler::BeginPlay()
 	Super::BeginPlay();
 }
 
-void UCardUIHandler::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
-	Super::EndPlay(EndPlayReason);
-}
-
-void UCardUIHandler::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
-{
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-}
-
 void UCardUIHandler::UIActivate()
 {
 	Super::UIActivate();
@@ -32,4 +22,19 @@ void UCardUIHandler::UIActivate()
 void UCardUIHandler::UIDeactivate()
 {
 	Super::UIDeactivate();
+}
+
+void UCardUIHandler::CreateHUD()
+{
+	Super::CreateHUD();
+}
+
+void UCardUIHandler::ShowHUD()
+{
+	Super::ShowHUD();
+}
+
+void UCardUIHandler::HideHUD()
+{
+	Super::HideHUD();
 }

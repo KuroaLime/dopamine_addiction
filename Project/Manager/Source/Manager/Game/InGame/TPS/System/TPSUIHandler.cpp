@@ -14,16 +14,6 @@ void UTPSUIHandler::BeginPlay()
 	Super::BeginPlay();
 }
 
-void UTPSUIHandler::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
-	Super::EndPlay(EndPlayReason);
-}
-
-void UTPSUIHandler::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
-{
-	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
-}
-
 void UTPSUIHandler::UIActivate()
 {
 	Super::UIActivate();
@@ -32,4 +22,19 @@ void UTPSUIHandler::UIActivate()
 void UTPSUIHandler::UIDeactivate()
 {
 	Super::UIDeactivate();
+}
+
+void UTPSUIHandler::CreateHUD()
+{
+	Super::CreateHUD();
+}
+
+void UTPSUIHandler::ShowHUD()
+{
+	Super::ShowHUD();
+}
+
+void UTPSUIHandler::HideHUD()
+{
+	Super::HideHUD();
 }
