@@ -4,13 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Game/InGame/PhaseStrategy.h"
-#include "TPSPhaseStrategy.generated.h"
+#include "CardPhaseStrategy.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class MANAGER_API UTPSPhaseStrategy : public UPhaseStrategy
+class MANAGER_API UCardPhaseStrategy : public UPhaseStrategy
 {
 	GENERATED_BODY()
 	

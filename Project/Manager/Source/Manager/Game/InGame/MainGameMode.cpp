@@ -4,10 +4,10 @@
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/PhaseStrategy.h"
 #include "Game/InGame/TPS/System/TPSPhaseStrategy.h"
+#include "Game/InGame/Card/CardPhaseStrategy.h"
 
 AMainGameMode::AMainGameMode()
 {
-	CurrentPhase = EGamePhase::TPS;
 	CurrentStrategy = nullptr;
 }
 
@@ -15,7 +15,15 @@ void AMainGameMode::BeginPlay()
 {
 	Super::BeginPlay();
 
-	ChangePhase(EGamePhase::TPS);
+	UTPSPhaseStrategy* TPSStrategy = NewObject<UTPSPhaseStrategy>(this);
+	TPSStrategy->Initialize(this);
+	StrategyMap.Add(EGamePhase::TPS, TPSStrategy);
+
+	UCardPhaseStrategy* CardStrategy = NewObject<UCardPhaseStrategy>(this);
+	CardStrategy->Initialize(this);
+	StrategyMap.Add(EGamePhase::Card, CardStrategy);
+
+	BeginePhase(EGamePhase::TPS);
 }
 
 void AMainGameMode::PostLogin(APlayerController* NewPlayer)
@@ -28,43 +36,31 @@ void AMainGameMode::Logout(AController* Exiting)
 	Super::Logout(Exiting);
 }
 
-void AMainGameMode::ChangePhase(EGamePhase NewPhase)
+void AMainGameMode::BeginePhase(EGamePhase CurrPhase)
+{
+	if (StrategyMap.Contains(CurrPhase))
+	{
+		CurrentStrategy = StrategyMap[CurrPhase];
+	}
+
+	if (CurrentStrategy)
+	{
+		CurrentStrategy->OnPhaseStart();
+	}
+}
+
+void AMainGameMode::EndPhase()
 {
 	if (CurrentStrategy)
 	{
 		CurrentStrategy->OnPhaseEnd();
-		CurrentStrategy = nullptr;
 	}
+}
 
-	CurrentPhase = NewPhase;
-
-	switch (NewPhase)
-	{
-
-	case EGamePhase::TPS:
-	{
-		UTPSPhaseStrategy* TPS = NewObject<UTPSPhaseStrategy>(this);
-		TPS->Initialize(this);
-		CurrentStrategy = TPS;
-		break;
-	}
-
-	case EGamePhase::Card:
-	{
-		/*UCardPhaseStrategy* Card = NewObject<UCardPhaseStrategy>(this);
-		Card->Initialize(this);
-		CurrentStrategy = Card;*/
-		break;
-	}
-
-	default:
-		break;
-	}
-
-	if(CurrentStrategy)
-	{
-		CurrentStrategy->OnPhaseStart();
-	}
+void AMainGameMode::ChangePhase(EGamePhase NewPhase)
+{
+	EndPhase();
+	BeginePhase(NewPhase);
 }
 
 void AMainGameMode::OnPlayerAction(AActor* Executor, FName ActionName)

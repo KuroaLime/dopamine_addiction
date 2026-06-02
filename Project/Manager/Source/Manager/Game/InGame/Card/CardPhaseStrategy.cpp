@@ -1,14 +1,13 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 
-#include "Game/InGame/TPS/System/TPSPhaseStrategy.h"
-//#include "GameFramework/GameStateBase.h"
+#include "Game/InGame/Card/CardPhaseStrategy.h"
 
-void UTPSPhaseStrategy::OnPhaseStart()
+void UCardPhaseStrategy::OnPhaseStart()
 {
-	if(GEngine)
+	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("TPS Phase Started"));
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("Card Phase Started"));
 	}
 
 	PhaseDuration = 3;
@@ -17,9 +16,9 @@ void UTPSPhaseStrategy::OnPhaseStart()
 	StartPhaseTimer();
 }
 
-void UTPSPhaseStrategy::OnPhaseEnd()
+void UCardPhaseStrategy::OnPhaseEnd()
 {
-	if(UWorld* World = GetWorld())
+	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(RoundTimerHandle);
 	}
@@ -27,7 +26,7 @@ void UTPSPhaseStrategy::OnPhaseEnd()
 	UnloadStage();
 }
 
-void UTPSPhaseStrategy::OnTimerTick()
+void UCardPhaseStrategy::OnTimerTick()
 {
 	IPhaseGameStateInterface* GS = GetPhaseGameState();
 	if (!GS) return;
@@ -49,33 +48,33 @@ void UTPSPhaseStrategy::OnTimerTick()
 	}
 }
 
-void UTPSPhaseStrategy::OnPlayerAction(AActor* Executor, FName ActionName)
+void UCardPhaseStrategy::OnPlayerAction(AActor* Executor, FName ActionName)
 {
-	
+
 }
 
-void UTPSPhaseStrategy::LoadStage()
+void UCardPhaseStrategy::LoadStage()
 {
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Blue, TEXT("Loading TPS Level..."));
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Blue, TEXT("Loading Card Level..."));
 	}
 }
 
-void UTPSPhaseStrategy::UnloadStage()
+void UCardPhaseStrategy::UnloadStage()
 {
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Unloading TPS Level..."));
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Unloading Card Level..."));
 	}
 
 	if (IPhasePlayerControllerInterface* PC = GetPhasePlayerController())
 	{
-		PC->SwitchToLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
+		PC->SwitchToLevel(TEXT("Card_Game_Stage"), TEXT("TPS_Game_Stage"));
 	}
 }
 
-void UTPSPhaseStrategy::StartPhaseTimer()
+void UCardPhaseStrategy::StartPhaseTimer()
 {
 	if (IPhaseGameStateInterface* GS = GetPhaseGameState())
 	{
@@ -90,7 +89,7 @@ void UTPSPhaseStrategy::StartPhaseTimer()
 			World->GetTimerManager().SetTimer(
 				RoundTimerHandle,
 				this,
-				&UTPSPhaseStrategy::OnTimerTick,
+				&UCardPhaseStrategy::OnTimerTick,
 				1.0f,
 				true
 			);
@@ -98,13 +97,13 @@ void UTPSPhaseStrategy::StartPhaseTimer()
 	}
 }
 
-void UTPSPhaseStrategy::OnPhaseTimeout()
+void UCardPhaseStrategy::OnPhaseTimeout()
 {
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta, TEXT("Ending Battle Royale..."));
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta, TEXT("Ending Card..."));
 	}
 
 	if (IPhaseGameModeInterface* GM = GetPhaseGameMode())
-		GM->ChangePhase(EGamePhase::Card);
+		GM->ChangePhase(EGamePhase::TPS);
 }

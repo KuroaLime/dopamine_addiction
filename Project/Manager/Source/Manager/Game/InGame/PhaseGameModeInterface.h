@@ -29,5 +29,7 @@ class MANAGER_API IPhaseGameModeInterface
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
+	virtual void BeginePhase(EGamePhase CurrPhase) = 0;
+	virtual void EndPhase() = 0;
 	virtual void ChangePhase(EGamePhase NewPhase) = 0;
 };

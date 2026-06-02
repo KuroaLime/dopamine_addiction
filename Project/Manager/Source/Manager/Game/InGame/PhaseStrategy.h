@@ -33,7 +33,16 @@ protected:
 	UPROPERTY()
 	AGameModeBase* OwnerGameMode = nullptr;
 
+	int32 PhaseDuration = 0;
+	FTimerHandle RoundTimerHandle;
+
+protected:
 	IPhaseGameModeInterface* GetPhaseGameMode() const;
 	IPhaseGameStateInterface* GetPhaseGameState() const;
 	IPhasePlayerControllerInterface* GetPhasePlayerController() const;
+
+	virtual void LoadStage() {}
+	virtual void UnloadStage() {}
+	virtual void StartPhaseTimer() {}
+	virtual void OnPhaseTimeout() {}
 };

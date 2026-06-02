@@ -26,14 +26,16 @@ public:
 	virtual void Logout(AController* Exiting) override;
 
 public:
+	virtual void BeginePhase(EGamePhase CurrPhase) override;
+	virtual void EndPhase() override;
 	virtual void ChangePhase(EGamePhase NewPhase) override;
 
 public:
 	void OnPlayerAction(AActor* Executor, FName ActionName);
 
 protected:
-	UPROPERTY(BlueprintReadOnly, Category = "Phase")
-	EGamePhase CurrentPhase;
+	UPROPERTY()
+	TMap<EGamePhase, TObjectPtr<UPhaseStrategy>> StrategyMap;
 
 	UPROPERTY()
 	UPhaseStrategy* CurrentStrategy;
