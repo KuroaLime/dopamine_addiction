@@ -68,10 +68,10 @@ void UTPSPhaseStrategy::UnloadStage()
 		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Unloading TPS Level..."));
 	}
 
-	if (IPhasePlayerControllerInterface* PC = GetPhasePlayerController())
+	if (IPhaseGameModeInterface* GM = GetPhaseGameMode())
 	{
-		PC->SwitchMode(EGamePhase::Card);
-		PC->SwitchToLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
+		GM->BroadcastSwitchMode(EGamePhase::Card);
+		GM->BroadcastSwitchLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
 	}
 }
 

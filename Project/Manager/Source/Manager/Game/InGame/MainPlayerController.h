@@ -36,7 +36,8 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Controller|Setup")
 	TMap<EGamePhase, TSubclassOf<UUIHandler>> UIHandlerClassMap;
 
-	EGamePhase CurrentPhase;
+	UPROPERTY(BlueprintReadOnly, Category = "Controller|State")
+	EGamePhase CurrentPhase = EGamePhase::TPS;
 
 protected:
 	UPROPERTY()
@@ -50,6 +51,11 @@ private:
 	void SetupHandlerInput();
 
 public:
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_SwitchMode(EGamePhase NewPhase);
+
+	void ApplySwitchMode(EGamePhase NewPhase);
+
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
 

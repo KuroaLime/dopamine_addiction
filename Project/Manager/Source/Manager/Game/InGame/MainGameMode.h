@@ -29,6 +29,8 @@ public:
 	virtual void BeginPhase(EGamePhase CurrPhase) override;
 	virtual void EndPhase() override;
 	virtual void ChangePhase(EGamePhase NewPhase) override;
+	virtual void BroadcastSwitchMode(EGamePhase NewPhase) override;
+	virtual void BroadcastSwitchLevel(FName LevelToUnload, FName LevelToLoad) override;
 
 public:
 	void OnPlayerAction(AActor* Executor, FName ActionName);

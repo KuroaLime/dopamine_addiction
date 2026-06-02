@@ -16,7 +16,6 @@ void AMainPlayerController::BeginPlay()
 	InitHandler();
 	SetupHandlerInput();
 
-	CurrentPhase = EGamePhase::TPS;
 	SwitchMode(CurrentPhase);
 }
 
@@ -32,25 +31,14 @@ void AMainPlayerController::SetupInputComponent()
 
 void AMainPlayerController::SwitchMode(EGamePhase NewPhase)
 {
-	if (InputHandlerMap.Contains(CurrentPhase))
+	if (HasAuthority())
 	{
-		InputHandlerMap[CurrentPhase]->InputDeactivate();
+		Multicast_SwitchMode(NewPhase);
 	}
-	if (UIHandlerMap.Contains(CurrentPhase))
+	else
 	{
-		UIHandlerMap[CurrentPhase]->UIDeactivate();
+		ApplySwitchMode(NewPhase);
 	}
-
-	if (InputHandlerMap.Contains(NewPhase))
-	{
-		InputHandlerMap[NewPhase]->InputActivate();
-	}
-	if (UIHandlerMap.Contains(NewPhase))
-	{
-		UIHandlerMap[NewPhase]->UIActivate();
-	}
-
-	CurrentPhase = NewPhase;
 }
 
 void AMainPlayerController::SwitchToLevel(FName LevelToUnload, FName LevelToLoad)
@@ -103,6 +91,34 @@ void AMainPlayerController::SetupHandlerInput()
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Networked Level Streaming
+void AMainPlayerController::Multicast_SwitchMode_Implementation(EGamePhase NewPhase)
+{
+	ApplySwitchMode(NewPhase);
+}
+
+void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
+{
+	if (InputHandlerMap.Contains(CurrentPhase))
+	{
+		InputHandlerMap[CurrentPhase]->InputDeactivate();
+	}
+	if (UIHandlerMap.Contains(CurrentPhase))
+	{
+		UIHandlerMap[CurrentPhase]->UIDeactivate();
+	}
+
+	if (InputHandlerMap.Contains(NewPhase))
+	{
+		InputHandlerMap[NewPhase]->InputActivate();
+	}
+	if (UIHandlerMap.Contains(NewPhase))
+	{
+		UIHandlerMap[NewPhase]->UIActivate();
+	}
+
+	CurrentPhase = NewPhase;
+}
+
 bool AMainPlayerController::Server_SwitchToLevel_Validate(FName LevelToUnload, FName LevelToLoad)
 {
 	return true;

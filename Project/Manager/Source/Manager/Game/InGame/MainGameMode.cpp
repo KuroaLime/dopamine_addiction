@@ -3,6 +3,7 @@
 
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/PhaseStrategy.h"
+#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 
 AMainGameMode::AMainGameMode()
 {
@@ -52,6 +53,28 @@ void AMainGameMode::ChangePhase(EGamePhase NewPhase)
 {
 	EndPhase();
 	BeginPhase(NewPhase);
+}
+
+void AMainGameMode::BroadcastSwitchMode(EGamePhase NewPhase)
+{
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (IPhasePlayerControllerInterface* PC = Cast<IPhasePlayerControllerInterface>(It->Get()))
+		{
+			PC->SwitchMode(NewPhase);
+		}
+	}
+}
+
+void AMainGameMode::BroadcastSwitchLevel(FName LevelToUnload, FName LevelToLoad)
+{
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		if (IPhasePlayerControllerInterface* PC = Cast<IPhasePlayerControllerInterface>(It->Get()))
+		{
+			PC->SwitchToLevel(LevelToUnload, LevelToLoad);
+		}
+	}
 }
 
 void AMainGameMode::OnPlayerAction(AActor* Executor, FName ActionName)

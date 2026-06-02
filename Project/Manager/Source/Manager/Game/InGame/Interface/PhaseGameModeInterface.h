@@ -26,4 +26,6 @@ public:
 	virtual void BeginPhase(EGamePhase CurrPhase) = 0;
 	virtual void EndPhase() = 0;
 	virtual void ChangePhase(EGamePhase NewPhase) = 0;
+	virtual void BroadcastSwitchMode(EGamePhase NewPhase) = 0;
+	virtual void BroadcastSwitchLevel(FName LevelToUnload, FName LevelToLoad) = 0;
 };
