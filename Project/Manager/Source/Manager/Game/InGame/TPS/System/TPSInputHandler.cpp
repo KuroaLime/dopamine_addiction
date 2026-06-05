@@ -73,6 +73,10 @@ void UTPSInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputComponen
 		EnhancedInputComponent->BindAction(IA_Aim, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_Aim);
 		EnhancedInputComponent->BindAction(IA_Aim, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_AimEnd);
 	}
+	if (IA_Shop)
+	{
+		EnhancedInputComponent->BindAction(IA_Shop, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_Shop);
+	}
 }
 
 void UTPSInputHandler::Input_Move(const FInputActionValue& Value)
@@ -150,4 +154,14 @@ void UTPSInputHandler::Input_AimEnd()
 	{
 		ASC->CancelAbilitiesWithTag(FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Aim"))));
 	}
+}
+
+void UTPSInputHandler::Input_Shop()
+{
+	
+		if (UCustomASC* ASC = ResolveOwnerASC())
+		{
+		
+			ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Input.Shop")));
+		}
 }

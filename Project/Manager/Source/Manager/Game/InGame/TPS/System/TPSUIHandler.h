@@ -27,4 +27,5 @@ protected:
 	virtual void CreateHUD();
 	virtual void ShowHUD();
 	virtual void HideHUD();
+	virtual void UIToggle();
 };

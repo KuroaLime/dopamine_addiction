@@ -48,6 +48,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|TPS")
 	UInputAction* IA_Aim = nullptr;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|TPS")
+	UInputAction* IA_Shop = nullptr;
+
 protected:
 	void Input_Move(const FInputActionValue& Value);
 	void Input_Look(const FInputActionValue& Value);
@@ -56,4 +59,7 @@ protected:
 	void Input_StopFire();
 	void Input_Aim();
 	void Input_AimEnd();
+	void Input_Shop();
+
+	bool bOpenShop = false;
 };

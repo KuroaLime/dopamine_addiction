@@ -9,4 +9,5 @@ enum class EGamePhase : uint8
 {
 	TPS,
 	Card,
+	Shop
 };

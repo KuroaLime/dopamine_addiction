@@ -34,7 +34,24 @@ void UUIHandler::UIDeactivate()
 {
 	HideHUD();
 }
+void UUIHandler::UIToggle()
+{
+	FString NetMode = (GetNetMode() == NM_Client) ? TEXT("Client") : TEXT("Server");
+	UE_LOG(LogTemp, Warning, TEXT("[%s] Toggle Called!"), *NetMode);
+	
 
+
+	if (PlayerWidget->GetVisibility() == ESlateVisibility::Visible) 
+	{
+		UE_LOG(LogTemp, Warning, TEXT("Deactivate"));
+		UIDeactivate();
+	}
+	else
+	{
+		UE_LOG(LogTemp, Warning, TEXT("UIActivate"));
+		UIActivate();
+	}
+}
 void UUIHandler::CreateHUD()
 {
 	if (!OwnerController) return;

@@ -71,6 +71,10 @@ void AMainPlayerController::InitHandler()
 			UIHandlerMap.Add(Pair.Key, Handler);
 		}
 	}
+
+
+
+
 }
 
 void AMainPlayerController::SetupHandlerInput()
@@ -115,7 +119,6 @@ void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
 	{
 		UIHandlerMap[NewPhase]->UIActivate();
 	}
-
 	CurrentPhase = NewPhase;
 }
 

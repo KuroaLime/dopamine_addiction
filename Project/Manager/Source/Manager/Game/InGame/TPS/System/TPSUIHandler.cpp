@@ -38,3 +38,8 @@ void UTPSUIHandler::HideHUD()
 {
 	Super::HideHUD();
 }
+
+void UTPSUIHandler::UIToggle()
+{
+	Super::UIToggle();
+}

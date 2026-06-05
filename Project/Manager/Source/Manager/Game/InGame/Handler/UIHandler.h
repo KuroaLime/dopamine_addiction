@@ -22,12 +22,6 @@ public:
 
 	virtual void BeginPlay() override;
 
-public:
-	UFUNCTION(BlueprintCallable, Category = "UI")
-	virtual void UIActivate();
-
-	UFUNCTION(BlueprintCallable, Category = "UI")
-	virtual void UIDeactivate();
 
 protected:
 	UPROPERTY()
@@ -39,6 +33,7 @@ protected:
 	UPROPERTY(Transient)
 	UUserWidget* PlayerWidget = nullptr;
 
+	
 	virtual void CreateHUD();
 	virtual void ShowHUD();
 	virtual void HideHUD();
@@ -46,4 +41,17 @@ protected:
 	void SetWidgetVisibility(ESlateVisibility Visibility);
 
 	UCharacterStateComponent* ResolveOwnerCharacterState() const;
+
+public:
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	virtual void UIActivate();
+
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	virtual void UIDeactivate();
+
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	virtual void UIToggle();
+	UUserWidget* GetWidget() {
+		return PlayerWidget;
+	};
 };
