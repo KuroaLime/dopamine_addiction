@@ -129,6 +129,11 @@ void AManagerPlayerController::SwitchToLevel(FName LevelToUnload, FName LevelToL
 
 }
 
+EGamePhase AManagerPlayerController::GetCurrentPhase()
+{
+	return EGamePhase::Shop;
+}
+
 void AManagerPlayerController::SetSeotdaMode(bool bEnable)
 {
 	if (ULocalPlayer* LocalPlayer = GetLocalPlayer())

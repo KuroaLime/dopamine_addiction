@@ -23,8 +23,6 @@ void UCustomAbility::InitializeAbility(UCustomASC* InASC)
 	{
 		AvatarActor = OwnerASC->GetOwner();
 		OwnerCharacter = Cast<ACharacter>(AvatarActor);
-
-		//GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Owner Check!"));
 	}
 }
 
@@ -67,12 +65,8 @@ const FGameplayTagContainer& UCustomAbility::GetAbilityTags() const
 bool UCustomAbility::CanExecute() const
 {
 	if (!OwnerASC) {
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Execute Failed!"));
 		return false;
 	}
-
-	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Execute!"));
-
 	return true;
 }
 

@@ -21,6 +21,7 @@ class MANAGER_API AMainPlayerController : public APlayerController,
 public:
 	virtual void SwitchMode(EGamePhase NewPhase) override;
 	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) override;
+	virtual EGamePhase GetCurrentPhase() override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -53,6 +54,9 @@ private:
 public:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_SwitchMode(EGamePhase NewPhase);
+
+	UFUNCTION(Server, Reliable)
+	void Server_SwitchMode(EGamePhase NewPhase);
 
 	void ApplySwitchMode(EGamePhase NewPhase);
 

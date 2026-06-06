@@ -10,7 +10,7 @@ void UTPSPhaseStrategy::OnPhaseStart()
 		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("TPS Phase Started"));
 	}
 
-	PhaseDuration = 3;
+	PhaseDuration = 300;
 
 	LoadStage();
 	StartPhaseTimer();

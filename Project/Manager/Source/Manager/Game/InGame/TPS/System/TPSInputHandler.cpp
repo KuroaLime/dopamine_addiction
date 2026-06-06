@@ -158,10 +158,8 @@ void UTPSInputHandler::Input_AimEnd()
 
 void UTPSInputHandler::Input_Shop()
 {
-	
-		if (UCustomASC* ASC = ResolveOwnerASC())
-		{
-		
-			ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Input.Shop")));
-		}
+	if (UCustomASC* ASC = ResolveOwnerASC())
+	{		
+		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Input.Shop")));
+	}
 }

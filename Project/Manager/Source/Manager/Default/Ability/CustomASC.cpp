@@ -56,32 +56,18 @@ bool UCustomASC::TryActivateAbilityByTag(FGameplayTag AbilityTag)
 {
 
 	FString TargetTagName = AbilityTag.ToString();
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Cyan,
-			FString::Printf(TEXT("[Target] Search Tag: %s"), *TargetTagName));
-	}
 
 	for (UCustomAbility* Ability : ActivatableAbilities)
 	{
-		FString CurrentTagName = Ability->GetAbilityTags().ToString();
-		GEngine->AddOnScreenDebugMessage(-1, 5.0f, FColor::Yellow,
-			FString::Printf(TEXT("   [Check] Checking Tag: %s"), *CurrentTagName));
-
 		if (Ability)
 		{
 			if (Ability->GetAbilityTags().HasTag(AbilityTag))
 			{
-				GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Find Tag!"));
 				return Ability->TryActivateAbility();
 			}
 		}
-
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Find Ability.."));
 	}
-
-	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Failed Find Tag!"));
-	return false; // 못 찾았거나 실행 실패
+	return false; 
 }
 
 // [3] 태그 관리 구현

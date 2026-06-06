@@ -31,19 +31,31 @@ void AMainPlayerController::SetupInputComponent()
 
 void AMainPlayerController::SwitchMode(EGamePhase NewPhase)
 {
+	if (GEngine)
+	{
+		const FString PhaseString = UEnum::GetValueAsString(NewPhase);
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta,
+			FString::Printf(TEXT("SwitchMode Called! EGamePhase : %s"), *PhaseString));
+	}
+
 	if (HasAuthority())
 	{
 		Multicast_SwitchMode(NewPhase);
 	}
 	else
 	{
-		ApplySwitchMode(NewPhase);
+		Server_SwitchMode(NewPhase);
 	}
 }
 
 void AMainPlayerController::SwitchToLevel(FName LevelToUnload, FName LevelToLoad)
 {
 	Server_SwitchToLevel(LevelToUnload, LevelToLoad);
+}
+
+EGamePhase AMainPlayerController::GetCurrentPhase()
+{
+	return CurrentPhase;
 }
 
 void AMainPlayerController::InitHandler()
@@ -71,10 +83,6 @@ void AMainPlayerController::InitHandler()
 			UIHandlerMap.Add(Pair.Key, Handler);
 		}
 	}
-
-
-
-
 }
 
 void AMainPlayerController::SetupHandlerInput()
@@ -97,11 +105,31 @@ void AMainPlayerController::SetupHandlerInput()
 // Networked Level Streaming
 void AMainPlayerController::Multicast_SwitchMode_Implementation(EGamePhase NewPhase)
 {
+	if (GEngine)
+	{
+		const FString PhaseString = UEnum::GetValueAsString(NewPhase);
+
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta,
+			FString::Printf(TEXT("Multicast_SwitchMode_Implementation Called! EGamePhase : %s"), *PhaseString));
+	}
 	ApplySwitchMode(NewPhase);
+}
+
+void AMainPlayerController::Server_SwitchMode_Implementation(EGamePhase NewPhase)
+{
+	// 서버에서 받아서 모든 클라이언트에 전파
+	Multicast_SwitchMode(NewPhase);
 }
 
 void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
 {
+	if (GEngine)
+	{
+		const FString PhaseString = UEnum::GetValueAsString(NewPhase);
+		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta,
+			FString::Printf(TEXT("ApplySwitchMode Called! EGamePhase : %s"), *PhaseString));
+	}
+
 	if (InputHandlerMap.Contains(CurrentPhase))
 	{
 		InputHandlerMap[CurrentPhase]->InputDeactivate();
