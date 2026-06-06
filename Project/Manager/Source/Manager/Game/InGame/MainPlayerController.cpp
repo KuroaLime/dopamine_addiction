@@ -31,13 +31,6 @@ void AMainPlayerController::SetupInputComponent()
 
 void AMainPlayerController::SwitchMode(EGamePhase NewPhase)
 {
-	if (GEngine)
-	{
-		const FString PhaseString = UEnum::GetValueAsString(NewPhase);
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta,
-			FString::Printf(TEXT("SwitchMode Called! EGamePhase : %s"), *PhaseString));
-	}
-
 	if (HasAuthority())
 	{
 		Multicast_SwitchMode(NewPhase);
@@ -121,13 +114,6 @@ void AMainPlayerController::SetupHandlerInput()
 // Networked Level Streaming
 void AMainPlayerController::Multicast_SwitchMode_Implementation(EGamePhase NewPhase)
 {
-	if (GEngine)
-	{
-		const FString PhaseString = UEnum::GetValueAsString(NewPhase);
-
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta,
-			FString::Printf(TEXT("Multicast_SwitchMode_Implementation Called! EGamePhase : %s"), *PhaseString));
-	}
 	ApplySwitchMode(NewPhase);
 }
 
@@ -139,20 +125,19 @@ void AMainPlayerController::Server_SwitchMode_Implementation(EGamePhase NewPhase
 
 void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
 {
-	if (GEngine)
+	for (auto& Pair : InputHandlerMap)
 	{
-		const FString PhaseString = UEnum::GetValueAsString(NewPhase);
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta,
-			FString::Printf(TEXT("ApplySwitchMode Called! EGamePhase : %s"), *PhaseString));
+		if (Pair.Value)
+		{
+			Pair.Value->InputDeactivate();
+		}
 	}
-
-	if (InputHandlerMap.Contains(CurrentPhase))
+	for (auto& Pair : UIHandlerMap)
 	{
-		InputHandlerMap[CurrentPhase]->InputDeactivate();
-	}
-	if (UIHandlerMap.Contains(CurrentPhase))
-	{
-		UIHandlerMap[CurrentPhase]->UIDeactivate();
+		if (Pair.Value)
+		{
+			Pair.Value->UIDeactivate();
+		}
 	}
 
 	if (InputHandlerMap.Contains(NewPhase))

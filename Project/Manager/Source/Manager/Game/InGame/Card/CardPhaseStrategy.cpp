@@ -5,11 +5,6 @@
 
 void UCardPhaseStrategy::OnPhaseStart()
 {
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("Card Phase Started"));
-	}
-
 	PhaseDuration = 3;
 
 	LoadStage();
@@ -35,10 +30,6 @@ void UCardPhaseStrategy::OnTimerTick()
 	GS->SetRemainingTime(NewTime);
 	GS->BroadcastTimeUpdated(NewTime);
 
-	if (GEngine)
-		GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Yellow,
-			FString::Printf(TEXT("Remaining Time: %d"), NewTime));
-
 	if (NewTime <= 0)
 	{
 		if (UWorld* World = GetWorld())
@@ -63,11 +54,6 @@ void UCardPhaseStrategy::LoadStage()
 
 void UCardPhaseStrategy::UnloadStage()
 {
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Unloading Card Level..."));
-	}
-
 	if (IPhaseGameModeInterface* GM = GetPhaseGameMode())
 	{
 		GM->BroadcastSwitchMode(EGamePhase::TPS);
@@ -100,11 +86,6 @@ void UCardPhaseStrategy::StartPhaseTimer()
 
 void UCardPhaseStrategy::OnPhaseTimeout()
 {
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta, TEXT("Ending Card..."));
-	}
-
 	if (IPhaseGameModeInterface* GM = GetPhaseGameMode())
 		GM->ChangePhase(EGamePhase::TPS);
 }

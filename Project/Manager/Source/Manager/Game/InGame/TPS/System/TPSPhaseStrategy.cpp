@@ -5,12 +5,7 @@
 
 void UTPSPhaseStrategy::OnPhaseStart()
 {
-	if(GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("TPS Phase Started"));
-	}
-
-	PhaseDuration = 300;
+	PhaseDuration = 10;
 
 	LoadStage();
 	StartPhaseTimer();
@@ -63,11 +58,6 @@ void UTPSPhaseStrategy::LoadStage()
 
 void UTPSPhaseStrategy::UnloadStage()
 {
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Unloading TPS Level..."));
-	}
-
 	if (IPhaseGameModeInterface* GM = GetPhaseGameMode())
 	{
 		GM->BroadcastSwitchMode(EGamePhase::Card);
@@ -100,11 +90,6 @@ void UTPSPhaseStrategy::StartPhaseTimer()
 
 void UTPSPhaseStrategy::OnPhaseTimeout()
 {
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Magenta, TEXT("Ending Battle Royale..."));
-	}
-
 	if (IPhaseGameModeInterface* GM = GetPhaseGameMode())
 		GM->ChangePhase(EGamePhase::Card);
 }
