@@ -45,6 +45,8 @@ public:
 	virtual void SwitchMode(EGamePhase NewPhase) override;
 	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) override;
 	virtual EGamePhase GetCurrentPhase() override;
+	virtual void PushMode(EGamePhase NewPhase) override;
+	virtual void PopMode() override;
 
 protected:
 	bool bSelectedCards[3] = { false, false, false };

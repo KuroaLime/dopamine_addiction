@@ -26,9 +26,11 @@ class MANAGER_API IPhasePlayerControllerInterface
 public:
 	virtual void SwitchMode(EGamePhase NewPhase) = 0;
 
-	virtual void 
-
 	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) = 0;
+
+	virtual void PushMode(EGamePhase NewPhase) = 0;
+
+	virtual void PopMode() = 0;
 
 	virtual EGamePhase GetCurrentPhase() = 0;
 };

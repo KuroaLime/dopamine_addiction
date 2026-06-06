@@ -21,6 +21,8 @@ class MANAGER_API AMainPlayerController : public APlayerController,
 public:
 	virtual void SwitchMode(EGamePhase NewPhase) override;
 	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) override;
+	virtual void PushMode(EGamePhase NewPhase) override;
+	virtual void PopMode() override;
 	virtual EGamePhase GetCurrentPhase() override;
 
 protected:
@@ -47,6 +49,8 @@ protected:
 	UPROPERTY()
 	TMap<EGamePhase, TObjectPtr<UUIHandler>> UIHandlerMap;
 
+	TArray<EGamePhase> PhaseStack;
+
 private:
 	void InitHandler();
 	void SetupHandlerInput();
@@ -65,4 +69,16 @@ public:
 
 	UFUNCTION(Client, Reliable)
 	void Client_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
+
+	UFUNCTION(Server, Reliable)
+	void Server_PushMode(EGamePhase NewPhase);
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PushMode(EGamePhase NewPhase);
+
+	UFUNCTION(Server, Reliable)
+	void Server_PopMode();
+
+	UFUNCTION(NetMulticast, Reliable)
+	void Multicast_PopMode();
 };

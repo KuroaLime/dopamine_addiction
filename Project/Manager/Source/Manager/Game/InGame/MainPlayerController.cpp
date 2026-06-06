@@ -58,6 +58,22 @@ EGamePhase AMainPlayerController::GetCurrentPhase()
 	return CurrentPhase;
 }
 
+void AMainPlayerController::PushMode(EGamePhase NewPhase)
+{
+	if (HasAuthority())
+		Multicast_PushMode(NewPhase);
+	else
+		Server_PushMode(NewPhase);
+}
+
+void AMainPlayerController::PopMode()
+{
+	if (HasAuthority())
+		Multicast_PopMode();
+	else
+		Server_PopMode();
+}
+
 void AMainPlayerController::InitHandler()
 {
 	for (auto& Pair : InputHandlerClassMap)
@@ -173,4 +189,46 @@ void AMainPlayerController::Client_SwitchToLevel_Implementation(FName LevelToUnl
 		FLatentActionInfo LoadInfo(2, 2, TEXT(""), this);
 		UGameplayStatics::LoadStreamLevel(GetWorld(), LevelToLoad, true, false, LoadInfo);
 	}
+}
+
+void AMainPlayerController::Server_PushMode_Implementation(EGamePhase NewPhase)
+{
+	Multicast_PushMode(NewPhase);
+}
+
+void AMainPlayerController::Multicast_PushMode_Implementation(EGamePhase NewPhase)
+{
+	if (InputHandlerMap.Contains(CurrentPhase))
+		InputHandlerMap[CurrentPhase]->InputDeactivate();
+
+	PhaseStack.Push(CurrentPhase);
+
+	if (InputHandlerMap.Contains(NewPhase))
+		InputHandlerMap[NewPhase]->InputActivate();
+	if (UIHandlerMap.Contains(NewPhase))
+		UIHandlerMap[NewPhase]->UIActivate();
+
+	CurrentPhase = NewPhase;
+}
+
+void AMainPlayerController::Server_PopMode_Implementation()
+{
+	Multicast_PopMode();
+}
+
+void AMainPlayerController::Multicast_PopMode_Implementation()
+{
+	if (PhaseStack.IsEmpty()) return;
+
+	if (InputHandlerMap.Contains(CurrentPhase))
+		InputHandlerMap[CurrentPhase]->InputDeactivate();
+	if (UIHandlerMap.Contains(CurrentPhase))
+		UIHandlerMap[CurrentPhase]->UIDeactivate();
+
+	EGamePhase PrevPhase = PhaseStack.Pop();
+
+	if (InputHandlerMap.Contains(PrevPhase))
+		InputHandlerMap[PrevPhase]->InputActivate();
+
+	CurrentPhase = PrevPhase;
 }

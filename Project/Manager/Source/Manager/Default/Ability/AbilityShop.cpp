@@ -24,10 +24,10 @@ void UAbilityShop::ActivateAbility()
             switch (CurrentPhase)
             {
             case EGamePhase::TPS:
-                PC->SwitchMode(EGamePhase::Shop);
+                PC->PushMode(EGamePhase::Shop);
                 break;
             case EGamePhase::Shop:  
-                PC->SwitchMode(EGamePhase::TPS);
+                PC->PopMode();
                 break;
             default: break;
             }

@@ -134,6 +134,16 @@ EGamePhase AManagerPlayerController::GetCurrentPhase()
 	return EGamePhase::Shop;
 }
 
+void AManagerPlayerController::PushMode(EGamePhase NewPhase)
+{
+
+}
+
+void AManagerPlayerController::PopMode()
+{
+
+}
+
 void AManagerPlayerController::SetSeotdaMode(bool bEnable)
 {
 	if (ULocalPlayer* LocalPlayer = GetLocalPlayer())
