@@ -60,7 +60,9 @@ protected:
 	FGameplayTagContainer OwnedTags;
 
 public:
-	// 클라이언트가 서버에 타격 정보를 보내는 통로
 	UFUNCTION(Server, Reliable, WithValidation)
-	void ServerRPC_ProcessHit(const FHitResult& HitResult);
+	void ServerRPC_SendGameplayEvent(FGameplayTag EventTag, const FCustomGameplayEventData& Payload);
+
+	UFUNCTION(Client, Reliable)
+	void ClientRPC_ReceiveGameplayEvent(FGameplayTag EventTag, const FCustomGameplayEventData& Payload);
 };

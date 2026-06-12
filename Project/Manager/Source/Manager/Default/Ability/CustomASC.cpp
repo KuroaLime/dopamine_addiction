@@ -119,33 +119,17 @@ bool UCustomASC::HandleGameplayEvent(FGameplayTag EventTag, const FCustomGamepla
 	return false;
 }
 
-void UCustomASC::ServerRPC_ProcessHit_Implementation(const FHitResult& HitResult)
+void UCustomASC::ServerRPC_SendGameplayEvent_Implementation(FGameplayTag EventTag, const FCustomGameplayEventData& Payload)
 {
-	// 1. 타격 대상 확인
-	AActor* HitActor = HitResult.GetActor();
-	if (!HitActor) return;
-
-	// 2. 데미지를 주는 주체(나 자신) 가져오기
-	// UActorComponent를 상속받았다면 GetOwner()는 무조건 작동합니다.
-	AActor* MyCharacter = GetOwner();
-
-	// 3. 실제 데미지 적용
-	UGameplayStatics::ApplyDamage(
-		HitActor,
-		20.0f,
-		nullptr,
-		MyCharacter, // 'OwnerASC'가 아니라 'MyCharacter'를 넣어야 합니다.
-		nullptr
-	);
-
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("Server: Hit Confirmed!"));
-	}
+	HandleGameplayEvent(EventTag, Payload);
 }
 
-// Validation 함수도 잊지 마세요.
-bool UCustomASC::ServerRPC_ProcessHit_Validate(const FHitResult& HitResult)
+bool UCustomASC::ServerRPC_SendGameplayEvent_Validate(FGameplayTag EventTag, const FCustomGameplayEventData& Payload)
 {
 	return true;
+}
+
+void UCustomASC::ClientRPC_ReceiveGameplayEvent_Implementation(FGameplayTag EventTag, const FCustomGameplayEventData& Payload)
+{
+	HandleGameplayEvent(EventTag, Payload);
 }

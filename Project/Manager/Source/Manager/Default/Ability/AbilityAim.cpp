@@ -15,10 +15,9 @@ UAbilityAim::UAbilityAim()
 
 void UAbilityAim::ActivateAbility()
 {
-    IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
+    IAbilityOwnerInterface* Owner = GetOwnerInterface();
     if (!Owner) return;
 
-    // 로직은 어빌리티가 소유, 캐릭터 내부 구조는 모름
     Owner->GetCameraStateComponent()->SmoothZoom(true);
     OwnerCharacter->GetCharacterMovement()->bOrientRotationToMovement = false;
     OwnerCharacter->bUseControllerRotationYaw = true;
@@ -28,7 +27,7 @@ void UAbilityAim::EndAbility(bool bWasCancelled)
 {
     Super::EndAbility(bWasCancelled);
 
-    IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
+    IAbilityOwnerInterface* Owner = GetOwnerInterface();
     if (!Owner) return;
 
     Owner->GetCameraStateComponent()->SmoothZoom(false);

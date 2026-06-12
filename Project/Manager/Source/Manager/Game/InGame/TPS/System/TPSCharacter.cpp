@@ -13,6 +13,10 @@
 #include "PlayerManager.h"
 #include "Default/Ability/CustomASC.h"
 #include "Default/Ability/CustomAbility.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "Game/InGame/Interface/PhasePlayerStateInterface.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/GameStateBase.h"
 
 #include "Default/Data/CharacterStateComponent.h"
 #include "Components/WidgetComponent.h"
@@ -149,6 +153,34 @@ void ATPSCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 	Super::EndPlay(EndPlayReason);
 }
 
+void ATPSCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	InitPlayerData();
+}
+
+void ATPSCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	InitPlayerData();
+}
+
+void ATPSCharacter::InitPlayerData()
+{
+	APlayerState* CurrentPS = GetPlayerState();
+	if (!CurrentPS) return;
+
+	if (IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(CurrentPS))
+	{
+		if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
+		{
+			PS_Interface->SetWeaponID(GS->GetWeaponID());
+		}
+	}
+}
+
 // Called to bind functionality to input
 void ATPSCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
@@ -162,6 +194,11 @@ bool ATPSCharacter::IsCharacterAiming() const
 		return AbilitySystemComponent->HasAnyMatchingGameplayTags(FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("State.Movement.Aiming"))));
 	}
 	return false;
+}
+
+void ATPSCharacter::EquipWeapon(EWeaponType NewWeaponID)
+{
+	if (!HasAuthority()) return;
 }
 
 void ATPSCharacter::Move(const FInputActionValue& Value)

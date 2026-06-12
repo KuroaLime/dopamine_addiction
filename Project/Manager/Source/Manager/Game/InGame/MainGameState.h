@@ -5,7 +5,6 @@
 #include "CoreMinimal.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/GameStateBase.h"
-#include "Game/Protocol_Client/Protocol_InGame.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "MainGameState.generated.h"
 
@@ -37,6 +36,9 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnTimeUpdatedDelegate_EX OnTimeUpdated;
 
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Round Data")
+	EWeaponType CurrentRoundWeapon;
+
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingTime)
 	int32 RemainingTime;
 
@@ -50,6 +52,10 @@ public:
 		if (OnTimeUpdated.IsBound())
 			OnTimeUpdated.Broadcast(NewTime);
 	}
+
+	virtual void SetRoundWeapon(EWeaponType InWeaponID) override;
+	virtual EWeaponType GetWeaponID() const override;
+	virtual int32 GetWeaponBaseData(EWeaponType WeaponID, EWeaponBaseStatType StatType) const override;
 
 protected:
 	virtual void BeginPlay() override;

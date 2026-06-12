@@ -8,6 +8,7 @@
 #include "Default/Ability/Interface/AbilityCheckInterface.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Default/Ability/Interface/AbilitySystemInterface.h"
+#include "Game/InGame/Interface/PhaseCharacterInterface.h"
 #include "TPSCharacter.generated.h"
 
 // =============================================================================
@@ -28,7 +29,8 @@ UCLASS(Abstract)
 class MANAGER_API ATPSCharacter : public ACharacter, 
 	public IAbilityCheckInterface,
 	public IAbilityOwnerInterface,
-	public IAbilitySystemInterface
+	public IAbilitySystemInterface,
+	public IPhaseCharacterInterface
 {
 	GENERATED_BODY()
 
@@ -45,11 +47,14 @@ public:
 	virtual AActor* GetEquippedWeapon() const override { return m_pEquippedGun; }
 	virtual UCustomASC* GetCustomASC() const override { return AbilitySystemComponent; }
 	virtual UCharacterStateComponent* GetCharacterState() const override { return CharacterState; }
+	virtual void EquipWeapon(EWeaponType NewWeaponID) override;
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-
+	virtual void PossessedBy(AController* NewController) override;
+	virtual void OnRep_PlayerState() override;
+	void InitPlayerData();
 public:
 	UPROPERTY(VisibleAnywhere, Category = State)
 	UCharacterStateComponent* CharacterState;

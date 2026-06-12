@@ -3,8 +3,8 @@
 
 #include "Default/Ability/AbilityShop.h"
 #include "Game/InGame/TPS/System/TPSUIHandler.h"
-#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "GameFramework/Character.h" 
+#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 
 UAbilityShop::UAbilityShop()
 {
@@ -14,23 +14,19 @@ UAbilityShop::UAbilityShop()
 
 void UAbilityShop::ActivateAbility()
 {
-    if (OwnerCharacter)
+    if (IPhasePlayerControllerInterface* PC = GetPCInterface())
     {
-        AController* Ctrl = OwnerCharacter->GetController();
+        EGamePhase CurrentPhase = PC->GetCurrentPhase();
 
-        if (IPhasePlayerControllerInterface* PC = Cast<IPhasePlayerControllerInterface>(Ctrl))
+        switch (CurrentPhase)
         {
-            EGamePhase CurrentPhase = PC->GetCurrentPhase();
-            switch (CurrentPhase)
-            {
-            case EGamePhase::TPS:
-                PC->PushMode(EGamePhase::Shop);
-                break;
-            case EGamePhase::Shop:  
-                PC->PopMode();
-                break;
-            default: break;
-            }
+        case EGamePhase::TPS:
+            PC->PushMode(EGamePhase::Shop);
+            break;
+        case EGamePhase::Shop:
+            PC->PopMode();
+            break;
+        default: break;
         }
     }
 

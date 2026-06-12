@@ -18,4 +18,9 @@ public:
 
 protected:
 	virtual void ActivateAbility() override;
+	virtual bool TryActivateAbilityWithEvent(const FCustomGameplayEventData& Payload) override;
+
+	// 레벨에 따른 능력치 계산
+	float CalculateDamage(const int32& Base, const int32& Level);
+	float CalculateRange(const int32& Base, const int32& Level);
 };

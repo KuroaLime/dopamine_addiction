@@ -1,11 +1,17 @@
 
 #include "Default/Ability/AbilityFire.h"
-#include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Default/Ability/CustomASC.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
+#include "Kismet/GameplayStatics.h"
 #include "GameFramework/Character.h"
-#include "Camera/CameraComponent.h" // [추가] 카메라 컴포넌트 헤더 추가
+#include "Camera/CameraComponent.h" 
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/GameStateBase.h"
+#include "Default/Ability/Interface/AbilityOwnerInterface.h"
+#include "Game/InGame/Interface/PhasePlayerStateInterface.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 
 UAbilityFire::UAbilityFire()
 {
@@ -19,17 +25,29 @@ UAbilityFire::UAbilityFire()
 
 void UAbilityFire::ActivateAbility()
 {
-    IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
-    if (!Owner) return;
+    IAbilityOwnerInterface* Owner = GetOwnerInterface();
+    IPhasePlayerStateInterface* PS_Interface = GetPSInterface();
+    IPhaseGameStateInterface* GS_Interface = GetGSInterface();
+    if (!Owner || !PS_Interface || !GS_Interface) return;
+
+    int32 BaseRange = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::Range);
+    int32 RangeUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Range);
+    float FinalRange = CalculateRange(BaseRange, RangeUpgradeLevel);
+
+    if (GEngine)
+    {
+        FString Msg = FString::Printf(TEXT("Fire attempt - WeaponID: %d | BaseRange: %d | UpgradeLV: %d | Result Range: %f"),
+            static_cast<int32>(PS_Interface->GetWeaponID()), BaseRange, RangeUpgradeLevel, FinalRange);
+        GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow, Msg);
+    }
 
     AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
     UCameraComponent* FollowCamera = Owner->GetFollowCameraComponent();
     if (!EquippedGun || !FollowCamera) return;
 
-    // 카메라 기준 레이캐스트
     FVector CamStart = FollowCamera->GetComponentLocation();
     FRotator CamRot = FollowCamera->GetComponentRotation();
-    FVector CamEnd = CamStart + (CamRot.Vector() * 10000.f);
+    FVector CamEnd = CamStart + (CamRot.Vector() * FinalRange);
 
     FHitResult CamHit;
     FCollisionQueryParams Params;
@@ -38,14 +56,12 @@ void UAbilityFire::ActivateAbility()
     bool bCamHit = GetWorld()->LineTraceSingleByChannel(CamHit, CamStart, CamEnd, ECC_Pawn, Params);
     FVector TargetPoint = bCamHit ? CamHit.ImpactPoint : CamEnd;
 
-    // 총구 위치
     FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
 
-    // 근거리/원거리 분기
     float Distance = FVector::Dist(MuzzleLoc, TargetPoint);
     if (Distance < 200.0f)
     {
-        FVector FinalEnd = MuzzleLoc + (EquippedGun->GetActorForwardVector() * 10000.f);
+        FVector FinalEnd = MuzzleLoc + (EquippedGun->GetActorForwardVector() * FinalRange);
         EquippedGun->Setting->Fire(MuzzleLoc, FinalEnd);
     }
     else
@@ -55,8 +71,52 @@ void UAbilityFire::ActivateAbility()
 
     if (bCamHit && OwnerCharacter->IsLocallyControlled())
     {
-        OwnerASC->ServerRPC_ProcessHit(CamHit);
+        FCustomGameplayEventData Payload;
+        Payload.Instigator = OwnerCharacter;
+        Payload.TargetObject = CamHit.GetActor();
+
+        static const FGameplayTag HitTag = FGameplayTag::RequestGameplayTag(FName("Event.Weapon.Hit"));
+        OwnerASC->ServerRPC_SendGameplayEvent(HitTag, Payload);
     }
 
     EndAbility(false);
+}
+
+bool UAbilityFire::TryActivateAbilityWithEvent(const FCustomGameplayEventData& Payload)
+{
+    AActor* HitActor = Payload.TargetObject;
+    if (!HitActor) return false;
+
+    IPhasePlayerStateInterface* PS_Interface = GetPSInterface();
+    IPhaseGameStateInterface* GS_Interface = GetGSInterface();
+
+    if (PS_Interface && GS_Interface)
+    {
+        int32 BaseDamage = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::Damage);
+        int32 DamageUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Damage);
+
+        float FinalDamage = CalculateDamage(BaseDamage, DamageUpgradeLevel);
+
+        UGameplayStatics::ApplyDamage(
+            HitActor,
+            FinalDamage,
+            OwnerCharacter->GetController(),
+            OwnerCharacter,
+            nullptr
+        );
+        return true;
+    }
+
+    return false;
+}
+
+float UAbilityFire::CalculateDamage(const int32& Base, const int32& Level)
+{
+    return static_cast<float>(Base) + (Level * 5.0f);
+}
+
+float UAbilityFire::CalculateRange(const int32& Base, const int32& Level)
+{
+    float range = static_cast<float>(Base);
+    return range + (range * (Level * 0.1f));
 }

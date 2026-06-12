@@ -3,7 +3,6 @@
 
 #include "Game/InGame/MainGameState.h"
 #include "UObject/ConstructorHelpers.h"
-//#include "Net/UnrealNetwork.h"
 
 AMainGameState::AMainGameState()
 {
@@ -34,6 +33,38 @@ void AMainGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
 	DOREPLIFETIME(AMainGameState, RemainingTime);
+	DOREPLIFETIME(AMainGameState, CurrentRoundWeapon);
+}
+
+void AMainGameState::SetRoundWeapon(EWeaponType InWeaponID)
+{
+	if (HasAuthority())
+	{
+		CurrentRoundWeapon = InWeaponID;
+	}
+}
+
+EWeaponType AMainGameState::GetWeaponID() const
+{
+	return CurrentRoundWeapon;
+}
+
+int32 AMainGameState::GetWeaponBaseData(EWeaponType WeaponID, EWeaponBaseStatType StatType) const
+{
+	if (const FWeaponDataTable* FoundData = WeaponDataMap.Find(WeaponID))
+	{
+		switch (StatType)
+		{
+		case EWeaponBaseStatType::None:             return 0;
+		case EWeaponBaseStatType::Damage:           return FoundData->BaseDamage;
+		case EWeaponBaseStatType::FireRate:         return FoundData->BaseFireRate;
+		case EWeaponBaseStatType::Range:            return FoundData->BaseRange;
+		case EWeaponBaseStatType::MagazineCapacity: return FoundData->BaseMagazineCapacity;
+		case EWeaponBaseStatType::ReloadTime:       return FoundData->BaseReloadTime;
+		default:                                    return 0;
+		}
+	}
+	return 0;
 }
 
 void AMainGameState::OnRep_RemainingTime() {
@@ -70,32 +101,6 @@ void AMainGameState::InitializeMasterData()
 		for (FCardDataTable* Row : Rows)
 		{
 			if (Row) CardDataMap.Add(Row->cardID, *Row);
-		}
-
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Cyan,
-				FString::Printf(TEXT("Load Card Count: %d"), CardDataMap.Num()));
-
-			// TMap을 순회하는 가장 안전한 Iterator 방식
-			for (auto It = CardDataMap.CreateConstIterator(); It; ++It)
-			{
-				// It.Key(), It.Value() 함수를 통해 데이터를 꺼냅니다.
-				ECardID CardID = It.Key();
-				const FCardDataTable& CardData = It.Value();
-
-				int32 ID_Num = static_cast<int32>(CardID);
-				int32 Month_Num = static_cast<int32>(CardData.cardMonth);
-
-				FString TypeName = UEnum::GetValueAsString(CardData.cardType);
-				TypeName.Split(TEXT("::"), nullptr, &TypeName);
-
-				FString DebugMsg = FString::Printf(TEXT("ID: %02d | %2d Month | Type: %s"),
-					ID_Num, Month_Num, *TypeName);
-
-				GEngine->AddOnScreenDebugMessage(-1, 15.0f, FColor::Yellow, DebugMsg);
-				UE_LOG(LogTemp, Log, TEXT("[CardData] %s"), *DebugMsg);
-			}
 		}
 	}
 

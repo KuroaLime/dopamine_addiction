@@ -4,6 +4,14 @@
 #include "Default/Ability/CustomAbility.h"
 #include "Default/Ability/CustomASC.h"
 #include "GameFramework/Character.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/GameStateBase.h"
+#include "GameFramework/Controller.h"
+
+#include "Default/Ability/Interface/AbilityOwnerInterface.h"
+#include "Game/InGame/Interface/PhasePlayerStateInterface.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 
 
 /////////////////////////////////////////////////////////////////////////////
@@ -59,6 +67,14 @@ const FGameplayTagContainer& UCustomAbility::GetAbilityTags() const
 	return AbilityTags;
 }
 
+void UCustomAbility::ClearInterfaceCache()
+{
+	CachedPSInterface = nullptr;
+	CachedGSInterface = nullptr;
+	CachedOwnerInterface = nullptr;
+	CachedPCInterface = nullptr;
+}
+
 /////////////////////////////////////////////////////////////////////////////
 // Ability Private 함수
 
@@ -92,25 +108,68 @@ void UCustomAbility::ActivateAbilityWithEvent(const FCustomGameplayEventData& Pa
 {
 	ActivateAbility();
 }
-// 이벤트(Payload 데이터 포함)를 통해 어빌리티 실행 시도
+
 bool UCustomAbility::TryActivateAbilityWithEvent(const FCustomGameplayEventData& Payload)
 {
-	// 실행 조건 체크
 	if (!CanExecute()) return false;
 
-	// 실행 중 태그 부여
 	if (OwnerASC)
 	{
 		OwnerASC->AddGameplayTags(ActivationOwnedTags);
 	}
 
-	// 자원 소모 및 쿨타임 적용 (구현해두신 Commit)
 	CommitAbility();
 
-	// ★ 핵심: 일반 ActivateAbility() 대신, 데이터를 넘겨주는 함수를 호출합니다!
 	ActivateAbilityWithEvent(Payload);
 
 	return true;
 }
 
 // 자식 클래스에서 덮어쓸 가상 함수 (기본적으로는 일반 ActivateAbility를 부르도록 함)
+
+/////////////////////////////////////////////////////////////////////////////
+// 인터페이스 캐싱
+IPhasePlayerStateInterface* UCustomAbility::GetPSInterface()
+{
+	if (CachedPSInterface) return CachedPSInterface;
+
+	if (OwnerCharacter && OwnerCharacter->GetPlayerState())
+	{
+		CachedPSInterface = Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
+	}
+	return CachedPSInterface;
+}
+
+IPhaseGameStateInterface* UCustomAbility::GetGSInterface()
+{
+	if (CachedGSInterface) return CachedGSInterface;
+
+	if (GetWorld() && GetWorld()->GetGameState())
+	{
+		CachedGSInterface = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState());
+	}
+	return CachedGSInterface;
+}
+
+IAbilityOwnerInterface* UCustomAbility::GetOwnerInterface()
+{
+	if (CachedOwnerInterface) return CachedOwnerInterface;
+
+	if (OwnerCharacter)
+	{
+		CachedOwnerInterface = Cast<IAbilityOwnerInterface>(OwnerCharacter);
+	}
+	return CachedOwnerInterface;
+}
+
+IPhasePlayerControllerInterface* UCustomAbility::GetPCInterface()
+{
+	if (CachedPCInterface) return CachedPCInterface;
+
+	if (OwnerCharacter && OwnerCharacter->GetController())
+	{
+		CachedPCInterface = Cast<IPhasePlayerControllerInterface>(OwnerCharacter->GetController());
+	}
+
+	return CachedPCInterface;
+}

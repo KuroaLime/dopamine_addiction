@@ -2,6 +2,11 @@
 
 
 #include "Game/InGame/TPS/System/TPSPhaseStrategy.h"
+#include "Game/InGame/Interface/PhasePlayerStateInterface.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "Game/InGame/Interface/PhaseCharacterInterface.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/GameStateBase.h"
 
 void UTPSPhaseStrategy::OnPhaseStart()
 {
@@ -50,9 +55,37 @@ void UTPSPhaseStrategy::OnPlayerAction(AActor* Executor, FName ActionName)
 
 void UTPSPhaseStrategy::LoadStage()
 {
+	if (!GetWorld() || !GetWorld()->GetAuthGameMode()) return;
+
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Blue, TEXT("Loading TPS Level..."));
+	}
+
+	EWeaponType RoundWeapon = EWeaponType::SMG;
+	if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
+	{
+		GS->SetRoundWeapon(RoundWeapon);
+	}
+
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		if (PC && PC->PlayerState)
+		{
+			if (IPhasePlayerStateInterface* PS = Cast<IPhasePlayerStateInterface>(PC->PlayerState))
+			{
+				PS->SetWeaponID(RoundWeapon);
+			}
+
+			if (APawn* PlayerPawn = PC->GetPawn())
+			{
+				if (IPhaseCharacterInterface* IC = Cast<IPhaseCharacterInterface>(PlayerPawn))
+				{
+					IC->EquipWeapon(RoundWeapon);
+				}
+			}
+		}
 	}
 }
 

@@ -4,7 +4,6 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Object.h"
-
 #include "GameplayTagContainer.h"
 #include "CustomAbility.generated.h"
 
@@ -16,6 +15,11 @@ class UCustomASC;
 class AActor;
 class ACharacter;
 struct FCustomGameplayEventData;
+
+class IPhasePlayerStateInterface;
+class IPhaseGameStateInterface;
+class IAbilityOwnerInterface;
+class IPhasePlayerControllerInterface;
 
 UCLASS(Blueprintable, BlueprintType)
 class MANAGER_API UCustomAbility : public UObject
@@ -80,10 +84,23 @@ public:
 	virtual void CancelAbility();
 
 	const FGameplayTagContainer& GetAbilityTags() const;
+
+	virtual void ClearInterfaceCache();
 protected:
 	virtual bool CanExecute() const;
 	virtual void ActivateAbility();
 	virtual void CommitAbility();
 	virtual void EndAbility(bool bWasCancelled);
 
+protected:
+	IPhasePlayerStateInterface* GetPSInterface();
+	IPhaseGameStateInterface* GetGSInterface();
+	IAbilityOwnerInterface* GetOwnerInterface();
+	IPhasePlayerControllerInterface* GetPCInterface();
+
+private:
+	IPhasePlayerStateInterface* CachedPSInterface = nullptr;
+	IPhaseGameStateInterface* CachedGSInterface = nullptr;
+	IAbilityOwnerInterface* CachedOwnerInterface = nullptr;
+	IPhasePlayerControllerInterface* CachedPCInterface = nullptr;
 };

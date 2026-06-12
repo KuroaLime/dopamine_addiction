@@ -66,15 +66,15 @@ struct FWeaponData
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadWrite)
-    int32 lvDamage;
+    int32 LvDamage;
     UPROPERTY(BlueprintReadWrite)
-    int32 lvFireRate;
+    int32 LvFireRate;
     UPROPERTY(BlueprintReadWrite)
-    int32 lvRange;
+    int32 LvRange;
     UPROPERTY(BlueprintReadWrite)
-    int32 lvMagazineCapacity;
+    int32 LvMagazineCapacity;
     UPROPERTY(BlueprintReadWrite)
-    int32 lvReloadTime;
+    int32 LvReloadTime;
     UPROPERTY(BlueprintReadWrite)
     EBulletType bulletID;
     UPROPERTY(BlueprintReadWrite)
@@ -87,11 +87,11 @@ struct FPlayerData
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadWrite)
-    int32 lvMovementSpeed;
+    int32 LvMovementSpeed;
     UPROPERTY(BlueprintReadWrite)
-    int32 lvHealth;
+    int32 LvHealth;
     UPROPERTY(BlueprintReadWrite)
-    int32 lvHealthRegeneration;
+    int32 LvHealthRegeneration;
 };
 
 //////////////////////////////////////////////////////////
@@ -117,9 +117,15 @@ struct FWeaponDataTable : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     EBulletType bulletID;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 baseDamage;
+    int32 BaseDamage;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 baseRange;
+    int32 BaseFireRate;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 BaseRange;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 BaseMagazineCapacity;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 BaseReloadTime;
 };
 
 USTRUCT(BlueprintType)
