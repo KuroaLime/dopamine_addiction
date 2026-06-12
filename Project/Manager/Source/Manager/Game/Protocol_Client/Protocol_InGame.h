@@ -27,11 +27,35 @@ enum class EBulletType : uint8
 };
 
 UENUM(BlueprintType)
-enum class ECardMonth_ex : uint8
+enum class ECardID : uint8
+{
+    None        = 0,
+    Jan_Gwang   = 1,    Jan_Pi  = 2,
+    Feb_Yul     = 3,    Feb_Ddi = 4,
+    Mar_Gwang   = 5,    Mar_Ddi = 6,
+    Apr_Yul     = 7,    Apr_Pi  = 8,
+    May_Yul     = 9,    May_Ddi = 10,
+    Jun_Yul     = 11,   Jun_Ddi = 12,
+    Jul_Yul     = 13,   Jul_Ddi = 14,
+    Aug_Gwang   = 15,   Aug_Yul = 16,
+    Sep_Yul     = 17,   Sep_Ddi = 18,
+    Oct_Gwang   = 19,   Oct_Yul = 20,
+};
+
+UENUM(BlueprintType)
+enum class ECardMonthData : uint8
 {
     None = 0,
     Jan = 1, Feb = 2, Mar = 3, Apr = 4, May = 5,
     Jun = 6, Jul = 7, Aug = 8, Sep = 9, Oct = 10
+};
+
+UENUM(BlueprintType)
+enum class ECardTypeData : uint8
+{
+    None = 0,
+    Pi  = 1, Ddi    = 2,
+    Yul = 3, Gwang  = 4,
 };
 
 //////////////////////////////////////////////////////////
@@ -99,6 +123,19 @@ struct FWeaponDataTable : public FTableRowBase
 };
 
 USTRUCT(BlueprintType)
+struct FCardDataTable : public FTableRowBase
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ECardID cardID;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ECardMonthData cardMonth;
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    ECardTypeData cardType;
+};
+
+USTRUCT(BlueprintType)
 struct FPlayerDataTable : public FTableRowBase
 {
     GENERATED_BODY()
@@ -109,17 +146,4 @@ struct FPlayerDataTable : public FTableRowBase
     int32 baseHealth;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int32 baseHealthRegeneration;
-};
-
-USTRUCT(BlueprintType)
-struct FCardDataTable : public FTableRowBase
-{
-    GENERATED_BODY()
-
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 cardID;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    ECardMonth_ex month;
-    UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    bool bIsKwang;
 };

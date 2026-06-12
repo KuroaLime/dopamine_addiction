@@ -19,7 +19,7 @@ protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 public:
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player Data")
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Weapon Data")
 	FWeaponData weaponLV;
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player Data")
 	FPlayerData playerLV;
