@@ -34,6 +34,7 @@ void ALobbyController::BeginPlay() {
 			}
 		}
 		ToggleLobbyUI(true, ELobbyState::RoomList);
+		UpdateRoom();
 	}
 }
 
@@ -141,6 +142,11 @@ void ALobbyController::LeaveRoom()
 void ALobbyController::CreateRoom(const FString& RoomName)
 {
 	GetGameInstance<UUManagerGameInstance>()->SendCreateRoom(RoomName);
+}
+
+void ALobbyController::UpdateRoom()
+{
+	GetGameInstance<UUManagerGameInstance>()->SendRoomListReq();
 }
 
 void ALobbyController::Client_GetRoomList(TArray<RoomInfoView> RoomList)

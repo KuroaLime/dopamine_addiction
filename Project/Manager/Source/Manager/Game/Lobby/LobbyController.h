@@ -65,6 +65,7 @@ public:
 	void JoinRoomSelected(uint32_t RoomId);
 	void LeaveRoom();
 
+	void UpdateRoom();
 	void CreateRoom(const FString& RoomName);
 	void Client_GetRoomList(TArray<RoomInfoView> RoomList);
 
