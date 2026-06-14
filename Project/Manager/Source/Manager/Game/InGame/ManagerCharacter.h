@@ -10,10 +10,8 @@
 #include "Default/Ability/Interface/AbilitySystemInterface.h"
 #include "ManagerCharacter.generated.h"
 
-class UCustomASC;
-class UCustomAbility;
-class ABaseItem;
-class ASkillItem;
+class UPFGASC;
+class UPFGAbility;
 
 class USpringArmComponent;
 class UCameraComponent;
@@ -60,7 +58,7 @@ public:
 	virtual UCameraStateComponent* GetCameraStateComponent() const override { return CameraState; }
 	virtual UCameraComponent* GetFollowCameraComponent() const override { return FollowCamera; }
 	virtual AActor* GetEquippedWeapon() const override { return m_pEquippedGun; }
-	virtual UCustomASC* GetCustomASC() const override { return AbilitySystemComponent; }
+	virtual UPFGASC* GetASC() const override { return AbilitySystemComponent; }
 	virtual UCharacterStateComponent* GetCharacterState() const override { return CharacterState; }
 
 public:
@@ -74,25 +72,9 @@ public:
 public:
 	//UCustomASC에서 관리하도록 옮기자
 	UPROPERTY(VisibleAnywhere, Category = "GAS")
-	UCustomASC* AbilitySystemComponent;
+	UPFGASC* AbilitySystemComponent;
 	UPROPERTY(EditAnywhere, Category = "GAS")
-	TArray<TSubclassOf<UCustomAbility>> DefaultAbilities;
-
-public:
-	//인벤토리 컴포넌트 하나 만들어서 분리
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory")
-	TArray<ABaseItem*> Inventory;
-	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "Inventory")
-	TArray<ASkillItem*> SkillInventory;
-
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	void AddItemToInventory(class ABaseItem* NewItem);
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	void AddSkillToInventory(class ASkillItem* NewSkill);
-	UFUNCTION(BlueprintCallable, Category = "Inventory")
-	void DropLastItem();
-	/////////////////////////
-
+	TArray<TSubclassOf<UPFGAbility>> DefaultAbilities;
 
 protected:
 	//필요한가?

@@ -75,7 +75,7 @@ void UInputHandler::ClearAllMappingContexts()
 	}
 }
 
-UCustomASC* UInputHandler::ResolveOwnerASC() const
+UPFGASC* UInputHandler::ResolveOwnerASC() const
 {
 	if (!OwnerController) return nullptr;
 
@@ -85,5 +85,5 @@ UCustomASC* UInputHandler::ResolveOwnerASC() const
 	IAbilitySystemInterface* ASCInterface = Cast<IAbilitySystemInterface>(OwnerPawn);
 	if (!ASCInterface) return nullptr;
 
-	return ASCInterface->GetCustomASC();
+	return ASCInterface->GetASC();
 }

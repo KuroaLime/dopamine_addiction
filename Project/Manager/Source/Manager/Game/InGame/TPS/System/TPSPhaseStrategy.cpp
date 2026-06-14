@@ -10,7 +10,7 @@
 
 void UTPSPhaseStrategy::OnPhaseStart()
 {
-	PhaseDuration = 10;
+	PhaseDuration = 10'000'000;
 
 	LoadStage();
 	StartPhaseTimer();

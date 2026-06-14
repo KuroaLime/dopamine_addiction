@@ -4,9 +4,12 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
+#include "Net/UnrealNetwork.h"
 #include "Game/InGame/Interface/InterfaceInfo.h"
 #include "Game/Protocol_Client/Protocol_InGame.h"
 #include "PhaseGameStateInterface.generated.h"
+
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTimeUpdated, int32, NewTime);
 
 UENUM(BlueprintType)
 enum class EWeaponBaseStatType : uint8
@@ -36,6 +39,7 @@ class MANAGER_API IPhaseGameStateInterface
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
 	virtual int32 GetRemainingTime() const = 0;
+	virtual FOnTimeUpdated& GetOnTimeUpdated() = 0;
 	virtual void SetRemainingTime(int32 NewTime) = 0;
 	virtual void BroadcastTimeUpdated(int32 NewTime) = 0;
 

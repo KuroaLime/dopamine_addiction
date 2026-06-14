@@ -50,5 +50,5 @@ protected:
 	void RemoveMappingContext(UInputMappingContext* Context);
 	void ClearAllMappingContexts();
 
-	UCustomASC* ResolveOwnerASC() const;
+	UPFGASC* ResolveOwnerASC() const;
 };

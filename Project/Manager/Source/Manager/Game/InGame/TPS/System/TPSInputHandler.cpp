@@ -5,7 +5,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
-#include "Default/Ability/CustomASC.h"
+#include "Default/Ability/GAS/PFGASC.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 
@@ -108,7 +108,7 @@ void UTPSInputHandler::Input_Look(const FInputActionValue& Value)
 
 void UTPSInputHandler::Input_Jump()
 {
-	if (UCustomASC* ASC = ResolveOwnerASC())
+	if (UPFGASC* ASC = ResolveOwnerASC())
 	{
 		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Jump")));
 	}
@@ -142,23 +142,25 @@ void UTPSInputHandler::Input_StopFire()
 
 void UTPSInputHandler::Input_Aim()
 {
-	if (UCustomASC* ASC = ResolveOwnerASC())
+	if (UPFGASC* ASC = ResolveOwnerASC())
 	{
-		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Aim")));
+		ASC->TryActivateAbilityByTag(
+			FGameplayTag::RequestGameplayTag(FName("Ability.Action.Aim")));
 	}
 }
 
 void UTPSInputHandler::Input_AimEnd()
 {
-	if (UCustomASC* ASC = ResolveOwnerASC())
+	if (UPFGASC* ASC = ResolveOwnerASC())
 	{
-		ASC->CancelAbilitiesWithTag(FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Aim"))));
+		ASC->CancelAbilitiesWithTag(
+			FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Aim"))));
 	}
 }
 
 void UTPSInputHandler::Input_Shop()
 {
-	if (UCustomASC* ASC = ResolveOwnerASC())
+	if (UPFGASC* ASC = ResolveOwnerASC())
 	{		
 		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Input.Shop")));
 	}

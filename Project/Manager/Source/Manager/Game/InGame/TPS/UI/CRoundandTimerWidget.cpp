@@ -5,14 +5,17 @@
 #include "Default/Data/CharacterStateComponent.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
-#include "Game/InGame/ManagerGameState.h"
+#include "GameFramework/GameStateBase.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
 
 void UCRoundandTimerWidget::BindCharacterState(UCharacterStateComponent* NewCharacterState) {
 
-	AManagerGameState* GameState = GetWorld()->GetGameState<AManagerGameState>();
-	if (GameState) {
-		GameState->OnTimeUpdated.AddDynamic(this, &UCRoundandTimerWidget::UpdateTimer_TextImage);
-		UpdateTimer_TextImage(GameState->RemainingTime);
+	AGameStateBase* GS = GetWorld()->GetGameState();
+	if (GS && GS->Implements<UPhaseGameStateInterface>())
+	{
+		IPhaseGameStateInterface* TimeProvider = Cast<IPhaseGameStateInterface>(GS);
+		TimeProvider->GetOnTimeUpdated().AddDynamic(this, &UCRoundandTimerWidget::UpdateTimer_TextImage);
+		UpdateTimer_TextImage(TimeProvider->GetRemainingTime());
 	}
 }
 
@@ -33,9 +36,10 @@ void UCRoundandTimerWidget::NativeDestruct()
 {
 	if (UWorld* World = GetWorld())
 	{
-		if (AManagerGameState* GameState = World->GetGameState<AManagerGameState>())
+		AGameStateBase* GS = World->GetGameState();
+		if (GS && GS->Implements<UPhaseGameStateInterface>())
 		{
-			GameState->OnTimeUpdated.RemoveDynamic(this, &UCRoundandTimerWidget::UpdateTimer_TextImage);
+			Cast<IPhaseGameStateInterface>(GS)->GetOnTimeUpdated().RemoveDynamic(this, &UCRoundandTimerWidget::UpdateTimer_TextImage);
 		}
 	}
 	Super::NativeDestruct();

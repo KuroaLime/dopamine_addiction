@@ -34,13 +34,6 @@ void UAbilityFire::ActivateAbility()
     int32 RangeUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Range);
     float FinalRange = CalculateRange(BaseRange, RangeUpgradeLevel);
 
-    if (GEngine)
-    {
-        FString Msg = FString::Printf(TEXT("Fire attempt - WeaponID: %d | BaseRange: %d | UpgradeLV: %d | Result Range: %f"),
-            static_cast<int32>(PS_Interface->GetWeaponID()), BaseRange, RangeUpgradeLevel, FinalRange);
-        GEngine->AddOnScreenDebugMessage(-1, 3.0f, FColor::Yellow, Msg);
-    }
-
     AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
     UCameraComponent* FollowCamera = Owner->GetFollowCameraComponent();
     if (!EquippedGun || !FollowCamera) return;
@@ -55,10 +48,19 @@ void UAbilityFire::ActivateAbility()
 
     bool bCamHit = GetWorld()->LineTraceSingleByChannel(CamHit, CamStart, CamEnd, ECC_Pawn, Params);
     FVector TargetPoint = bCamHit ? CamHit.ImpactPoint : CamEnd;
-
     FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
+    DrawDebugLine(GetWorld(), MuzzleLoc, TargetPoint, FColor::Red, false, 1.0f, 0, 1.0f);
 
-    float Distance = FVector::Dist(MuzzleLoc, TargetPoint);
+    if (bCamHit)
+    {
+        AActor* HitActor = CamHit.GetActor();
+        if (HitActor)
+        {
+            DrawDebugBox(GetWorld(), CamHit.ImpactPoint, FVector(7, 7, 7), FColor::Green, false, 1.0f);
+        }
+    }
+
+    /*float Distance = FVector::Dist(MuzzleLoc, TargetPoint);
     if (Distance < 200.0f)
     {
         FVector FinalEnd = MuzzleLoc + (EquippedGun->GetActorForwardVector() * FinalRange);
@@ -67,7 +69,10 @@ void UAbilityFire::ActivateAbility()
     else
     {
         EquippedGun->Setting->Fire(MuzzleLoc, TargetPoint);
-    }
+    }*/
+
+    // 무조건 총기 발사 애니메이션 및 소리 나게 함
+    EquippedGun->Setting->Fire(MuzzleLoc, TargetPoint);
 
     if (bCamHit && OwnerCharacter->IsLocallyControlled())
     {

@@ -2,7 +2,6 @@
 
 
 #include "Default/Animation/PlayerAnimInstance.h"
-#include "Default/Ability/CustomASC.h"
 #include "KismetAnimationLibrary.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -11,7 +10,6 @@
 void UPlayerAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();
-
 
 	if (APawn* PlayerPawn = TryGetPawnOwner()) {
 		OwnerCharacter = Cast<ACharacter>(PlayerPawn);
@@ -35,7 +33,6 @@ void UPlayerAnimInstance::UpdateAnimProperties(float DeltaTime)
 	Speed = Vel.Size2D();
 
 	bIsInAir = MoveComp->IsFalling();
-
 
 	bIsAccelerating = MoveComp->GetCurrentAcceleration().SizeSquared() > KINDA_SMALL_NUMBER;
 

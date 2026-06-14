@@ -4,7 +4,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
-#include "Default/Ability/CustomASC.h"
+#include "Default/Ability/GAS/PFGASC.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 
 UShopInputHandler::UShopInputHandler()
@@ -73,7 +73,7 @@ void UShopInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputCompone
 
 void UShopInputHandler::Input_Out()
 {
-	if (UCustomASC* ASC = ResolveOwnerASC())
+	if (UPFGASC* ASC = ResolveOwnerASC())
 	{
 		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Input.Shop")));
 	}

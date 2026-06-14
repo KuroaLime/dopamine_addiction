@@ -2,7 +2,6 @@
 
 #pragma once
 
-#include "Game/InGame/ManagerPlayerController.h"
 #include "CoreMinimal.h"
 #include "SeotdaTypes.generated.h"
 
@@ -131,8 +130,6 @@ public:
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite)
 	FString LastActionStatus = TEXT("-");
-
-	AManagerPlayerController* PC;
 
 public:
 	void ResetForNewRound()

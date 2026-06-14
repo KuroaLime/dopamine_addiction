@@ -1,50 +1,43 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Fill out your copyright notice in the Description page of Project Settings.
 
-#include "Game/InGame/ManagerCharacter.h"
-#include "Engine/LocalPlayer.h"
+
+#include "Game/InGame/MainCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/Controller.h"
-#include "EnhancedInputComponent.h"
-#include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "Manager.h"
 
 #include "PlayerManager.h"
 #include "Default/Ability/GAS/PFGASC.h"
 #include "Default/Ability/GAS/PFGAbility.h"
-#include "Default/Ability/AbilityFire.h"
-#include "Default/Ability/AbilityAim.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "Game/InGame/Interface/PhasePlayerStateInterface.h"
+#include "GameFramework/PlayerState.h"
+#include "GameFramework/GameStateBase.h"
 
 #include "Default/Data/CharacterStateComponent.h"
 #include "Components/WidgetComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "Game/InGame/TPS/UI/TpsCharacterWidget.h" 
 //#include "Game/InGame/TPS/UI/TpsPlayerMainHUD.h"
-#include "Game/InGame/Card/UI/CardPlayerMainHUD.h"
 #include "Default/Component/Player/InteractionComponent.h"
 #include "Default/Data/CameraStateComponent.h"
 
-DEFINE_LOG_CATEGORY(LogTemplateCharacter);
-
-AManagerCharacter::AManagerCharacter()
+// Sets default values
+AMainCharacter::AMainCharacter()
 {
-	// Set size for collision capsule
 	GetCapsuleComponent()->InitCapsuleSize(42.f, 96.0f);
 
-	// Don't rotate when the controller rotates. Let that just affect the camera.
 	bUseControllerRotationPitch = false;
 	bUseControllerRotationYaw = false;
 	bUseControllerRotationRoll = false;
 
-	// Configure character movement
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 
-	// Note: For faster iteration times these variables, and many more, can be tweaked in the Character Blueprint
-	// instead of recompiling to adjust them
 	GetCharacterMovement()->JumpZVelocity = 500.f;
 	GetCharacterMovement()->AirControl = 0.35f;
 	GetCharacterMovement()->MaxWalkSpeed = 500.f;
@@ -52,14 +45,12 @@ AManagerCharacter::AManagerCharacter()
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
 
-	// Create a camera boom (pulls in towards the player if there is a collision)
 	CameraBoom = CreateDefaultSubobject<USpringArmComponent>(TEXT("CameraBoom"));
 	CameraBoom->SetupAttachment(RootComponent);
 	CameraBoom->TargetArmLength = 400.0f;
 	CameraBoom->SocketOffset = FVector(0.0f, 75.0f, 50.0f);
 	CameraBoom->bUsePawnControlRotation = true;
 
-	// Create a follow camera
 	FollowCamera = CreateDefaultSubobject<UCameraComponent>(TEXT("FollowCamera"));
 	FollowCamera->SetupAttachment(CameraBoom, USpringArmComponent::SocketName);
 	FollowCamera->FieldOfView = 90.0f;
@@ -67,17 +58,10 @@ AManagerCharacter::AManagerCharacter()
 
 	AbilitySystemComponent = CreateDefaultSubobject<UPFGASC>(TEXT("AbilitySystemComponent"));
 	PrimaryActorTick.bCanEverTick = true;
-	// Note: The skeletal mesh and anim blueprint references on the Mesh component (inherited from Character) 
-	// are set in the derived blueprint asset named TshirdPersonCharacter (to avoid direct content references in C++)
 
-
-	//데이터 컴포넌트 초기화
 	CharacterState = CreateDefaultSubobject<UCharacterStateComponent>(TEXT("CHARACTERSTATE"));
-	//카메라 상태 컴포넌트 초기화
 	CameraState = CreateDefaultSubobject<UCameraStateComponent>(TEXT("CAMERASTATE"));
 
-
-	//캐릭터 위 HPBar
 	HPBarWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("HPBARWIDGET"));
 	HPBarWidget->SetupAttachment(RootComponent);
 	HPBarWidget->SetRelativeLocation(FVector(0.0f, 0.0f, 180.0f));
@@ -90,23 +74,19 @@ AManagerCharacter::AManagerCharacter()
 	HPBarWidget->SetDrawAtDesiredSize(true);
 	HPBarWidget->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	HPBarWidget->SetOwnerNoSee(true);
-	
 
-	//플레이어 디폴트 UI
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
-	
 }
 
-void AManagerCharacter::BeginPlay()
+// Called when the game starts or when spawned
+void AMainCharacter::BeginPlay()
 {
-
 	Super::BeginPlay();
 	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
 	{
 		Manager->RequestRegister(this);
 	}
 
-	//사용 가능 어빌리티 등록
 	if (AbilitySystemComponent)
 	{
 		for (TSubclassOf<UPFGAbility> AbilityClass : DefaultAbilities)
@@ -118,19 +98,16 @@ void AManagerCharacter::BeginPlay()
 		}
 	}
 
-
 	if (m_cGun)
 	{
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.Owner = this;
 		SpawnParams.Instigator = GetInstigator();
 
-		// 1. 무기 액터 생성
 		m_pEquippedGun = GetWorld()->SpawnActor<AWeapon>(m_cGun, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
-		
+
 		if (m_pEquippedGun)
 		{
-			// 2. 캐릭터 손 소켓에 부착 (소켓 이름 확인 필수)
 			const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
 			m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
 			m_pEquippedGun->SetActorRelativeRotation(FRotator(0.f, 180.f, 0.f));
@@ -140,46 +117,14 @@ void AManagerCharacter::BeginPlay()
 	CharacterState->OnHPIsZero.AddLambda([this]()->void {
 		SetActorEnableCollision(false);
 		});
-	//
+
 	auto CharacterWidget = Cast<UTpsCharacterWidget>(HPBarWidget->GetUserWidgetObject());
 	if (nullptr != CharacterWidget)
 		CharacterWidget->BindCharacterState(CharacterState);
-
 }
 
-void AManagerCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
-{
-
-	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
-	{
-		Manager->RequestUnregister(this);
-	}
-
-	Super::EndPlay(EndPlayReason);
-}
-
-void AManagerCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
-{
-	//// Set up action bindings
-	//if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
-	//	// Moving
-	//	EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AManagerCharacter::Move);
-	//	EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AManagerCharacter::Look);
-
-	//	// Looking
-	//	EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AManagerCharacter::Look);
-
-	//	UE_LOG(LogTemp, Warning, TEXT("IA_Skill00 = %s"),
-	//		IA_Skill00 ? *IA_Skill00->GetName() : TEXT("NULL"));
-	//}
-	//else
-	//{
-	//	UE_LOG(LogManager, Error, 
-	//		TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
-	//}
-}
-
-void AManagerCharacter::Tick(float DeltaTime)
+// Called every frame
+void AMainCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
@@ -195,68 +140,104 @@ void AManagerCharacter::Tick(float DeltaTime)
 
 	FRotator StickerRotation = FRotationMatrix::MakeFromXZ(-CamForward, CamUp).Rotator();
 	HPBarWidget->SetWorldRotation(StickerRotation);
-
-
 }
 
-bool AManagerCharacter::IsCharacterAiming() const
+void AMainCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
+{
+
+	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
+	{
+		Manager->RequestUnregister(this);
+	}
+
+	Super::EndPlay(EndPlayReason);
+}
+
+void AMainCharacter::PossessedBy(AController* NewController)
+{
+	Super::PossessedBy(NewController);
+
+	InitPlayerData();
+}
+
+void AMainCharacter::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	InitPlayerData();
+}
+
+void AMainCharacter::InitPlayerData()
+{
+	APlayerState* CurrentPS = GetPlayerState();
+	if (!CurrentPS) return;
+
+	if (IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(CurrentPS))
+	{
+		if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
+		{
+			PS_Interface->SetWeaponID(GS->GetWeaponID());
+		}
+	}
+}
+
+// Called to bind functionality to input
+void AMainCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
+{
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+}
+
+bool AMainCharacter::IsCharacterAiming() const
 {
 	if (AbilitySystemComponent)
 	{
-		return AbilitySystemComponent->HasAnyMatchingGameplayTags(FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("State.Movement.Aiming"))));
+		return AbilitySystemComponent->HasAnyMatchingGameplayTags(
+			FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("State.Movement.Aiming"))));
 	}
 	return false;
 }
 
-void AManagerCharacter::Move(const FInputActionValue& Value)
+void AMainCharacter::EquipWeapon(EWeaponType NewWeaponID)
 {
-	// input is a Vector2D
-	FVector2D MovementVector = Value.Get<FVector2D>();
+	if (!HasAuthority()) return;
+}
 
-	// route the input
+void AMainCharacter::Move(const FInputActionValue& Value)
+{
+	FVector2D MovementVector = Value.Get<FVector2D>();
 	DoMove(MovementVector.X, MovementVector.Y);
 }
 
-void AManagerCharacter::Look(const FInputActionValue& Value)
+void AMainCharacter::Look(const FInputActionValue& Value)
 {
-	// input is a Vector2D
 	FVector2D LookAxisVector = Value.Get<FVector2D>();
-
-	// route the input
 	DoLook(LookAxisVector.X, LookAxisVector.Y);
 }
 
-void AManagerCharacter::DoMove(float Right, float Forward)
+void AMainCharacter::DoMove(float Right, float Forward)
 {
 	if (GetController() != nullptr)
 	{
-		// find out which way is forward
 		const FRotator Rotation = GetController()->GetControlRotation();
 		const FRotator YawRotation(0, Rotation.Yaw, 0);
-
-		// get forward vector
 		const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
-
-		// get right vector 
 		const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
 
-		// add movement 
 		AddMovementInput(ForwardDirection, Forward);
 		AddMovementInput(RightDirection, Right);
 	}
 }
 
-void AManagerCharacter::DoLook(float Yaw, float Pitch)
+void AMainCharacter::DoLook(float Yaw, float Pitch)
 {
 	if (GetController() != nullptr)
 	{
-		// add yaw and pitch input to controller
 		AddControllerYawInput(Yaw);
 		AddControllerPitchInput(Pitch);
 	}
 }
 
-float AManagerCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
+float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
 {
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
@@ -272,3 +253,4 @@ float AManagerCharacter::TakeDamage(float DamageAmount, struct FDamageEvent cons
 
 	return ActualDamage;
 }
+

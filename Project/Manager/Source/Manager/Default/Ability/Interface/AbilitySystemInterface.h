@@ -4,7 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "Default/Ability/CustomASC.h"
+#include "Default/Ability/GAS/PFGASC.h"
 #include "AbilitySystemInterface.generated.h"
 
 // This class does not need to be modified.
@@ -23,5 +23,5 @@ class MANAGER_API IAbilitySystemInterface
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
-	virtual UCustomASC* GetCustomASC() const = 0;
+	virtual UPFGASC* GetASC() const = 0;
 };

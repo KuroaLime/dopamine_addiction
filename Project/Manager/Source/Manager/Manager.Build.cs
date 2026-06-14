@@ -13,6 +13,7 @@ public class Manager : ModuleRules
 			"CoreUObject",
 			"Engine",
 			"InputCore",
+			"NetCore",
 			"EnhancedInput",
 			"AIModule",
 			"StateTreeModule",

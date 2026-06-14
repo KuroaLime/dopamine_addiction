@@ -3,12 +3,10 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "Net/UnrealNetwork.h"
 #include "GameFramework/GameStateBase.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "MainGameState.generated.h"
 
-DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTimeUpdatedDelegate_EX, int32, NewTime);
 /**
  * 
  */
@@ -34,7 +32,7 @@ public:
 	FPlayerDataTable BasePlayerData;
 
 	UPROPERTY(BlueprintAssignable, Category = "Events")
-	FOnTimeUpdatedDelegate_EX OnTimeUpdated;
+	FOnTimeUpdated OnTimeUpdated;
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Round Data")
 	EWeaponType CurrentRoundWeapon;
@@ -46,6 +44,7 @@ public:
 
 public:
 	virtual int32 GetRemainingTime() const override { return RemainingTime; }
+	virtual FOnTimeUpdated& GetOnTimeUpdated() override { return OnTimeUpdated; }
 	virtual void SetRemainingTime(int32 NewTime) override { RemainingTime = NewTime; }
 	virtual void BroadcastTimeUpdated(int32 NewTime) override
 	{
