@@ -115,14 +115,7 @@ void UPFGASC::OnRep_TagStacks()
 {
 	// RebuildTagCountMap은 FastArray Pre/PostReplicated 콜백에서 이미 호출됨.
 	// 여기서는 변경분(Added/Removed) 델리게이트만 발행.
-
-	FString DebugMsg = FString::Printf(TEXT("OnRep_TagStacks(rebuilt): TagCount=%d"), TagStacks.TagCountMap.Num());
-	for (const auto& Pair : TagStacks.TagCountMap)
-	{
-		DebugMsg += FString::Printf(TEXT(" [%s=%d]"), *Pair.Key.ToString(), Pair.Value);
-	}
-	GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Cyan, DebugMsg);
-
+	TagStacks.RebuildTagCountMap();
 	BroadcastTagStackDelta();
 }
 

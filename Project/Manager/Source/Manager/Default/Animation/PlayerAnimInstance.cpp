@@ -42,6 +42,7 @@ void UPlayerAnimInstance::UpdateAnimProperties(float DeltaTime)
 	if (IAbilityCheckInterface* AimInterface = Cast<IAbilityCheckInterface>(OwnerCharacter))
 	{
 		bIsAiming = AimInterface->IsCharacterAiming();
+
 	}
 	else
 	{

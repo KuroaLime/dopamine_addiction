@@ -70,7 +70,7 @@ void UTPSInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputComponen
 	if (IA_Fire) EnhancedInputComponent->BindAction(IA_Fire, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_StopFire);
 	if (IA_Aim)
 	{
-		EnhancedInputComponent->BindAction(IA_Aim, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_Aim);
+		EnhancedInputComponent->BindAction(IA_Aim, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Aim);
 		EnhancedInputComponent->BindAction(IA_Aim, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_AimEnd);
 	}
 	if (IA_Shop)
