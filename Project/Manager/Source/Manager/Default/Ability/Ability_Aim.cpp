@@ -54,6 +54,12 @@ void UAbility_Aim::ActivateAbility()
 	// TryActivateAbility -> AddGameplayTags에서 자동 부여됨.
 	// 지속형이므로 EndAbilityNow를 호출하지 않는다.
 	// 에임 해제는 CancelAbilitiesWithTag -> CancelAbility -> EndAbility 경로로 온다.
+
+	if (OwnerCharacter)
+	{
+		OwnerCharacter->bUseControllerRotationYaw = true;
+		OwnerCharacter->GetCharacterMovement()->bOrientRotationToMovement = false;
+	}
 }
 
 void UAbility_Aim::EndAbility(bool bWasCancelled)

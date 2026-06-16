@@ -13,10 +13,6 @@ bool FPFGGameplayTagStackContainer::ApplyTagCountDelta(FGameplayTag Tag, int32 D
 	const int32 OldCount = GetTagCount(Tag);
 	const int32 NewCount = FMath::Max(0, OldCount + Delta);
 
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow,
-		FString::Printf(TEXT("TagDelta: %s D=%d Old=%d New=%d"), *Tag.ToString(), Delta, OldCount, NewCount));
-
-
 	if (OldCount == NewCount)
 	{
 		return false;
