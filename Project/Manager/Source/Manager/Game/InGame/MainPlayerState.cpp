@@ -87,7 +87,7 @@ void AMainPlayerState::ApplyDamage(float ActualDamage)
 {
     if (!HasAuthority())
         return;
-    CurPlayerData.CurrentHP -= ActualDamage;
+    CurPlayerData.CurrentHP = FMath::Max(0, CurPlayerData.CurrentHP - static_cast<int32>(ActualDamage));
     //OnRep_CurPlayerData();
     ForceNetUpdate();
 }

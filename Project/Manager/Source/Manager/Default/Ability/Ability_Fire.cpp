@@ -13,13 +13,13 @@
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/GameStateBase.h"
 #include "Kismet/GameplayStatics.h"
+#include "Game/InGame/MainGameMode.h"
 
 UAbility_Fire::UAbility_Fire()
 {
 	AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire")));
 
 	// TriggerTags: HandleGameplayEvent("Event.Weapon.Hit")로 데미지 어빌리티가 발동됨
-	TriggerTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Event.Weapon.Hit")));
 
 	CooldownDuration = 0.5f;
 	CooldownTags.AddTag(FGameplayTag::RequestGameplayTag(FName("State.Cooldown.Fire")));
@@ -49,79 +49,76 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 	// 발사 이펙트/사운드 재생
 	EquippedGun->Setting->Fire(MuzzleLoc);
 
-	if (UPFGASC* ASC = Cast<UPFGASC>(Character->GetComponentByClass(UPFGASC::StaticClass())))
-	{
-		FPFGGameplayEventData Payload;
-		Payload.Instigator = Character;
-		Payload.TargetObject = nullptr;
-
-		static const FGameplayTag HitTag = FGameplayTag::RequestGameplayTag(FName("Event.Weapon.Hit"));
-		ASC->ServerRPC_SendGameplayEvent(HitTag, Payload);
-	}
 }
 
 void UAbility_Fire::ActivateAbility()
 {
-	// 서버: 실제 발사 로직은 클라이언트의 LocalActivateWithOwner에서 처리.
-	// 여기서는 쿨다운/ActivationOwnedTags가 TryActivateAbility에서 자동 처리되므로
-	// 즉시 종료만 한다.
-	EndAbilityNow();
+    if (!OwnerCharacter || !OwnerCharacter->HasAuthority())
+    {
+        EndAbilityNow();
+        return;
+    }
+
+    UWorld* World = OwnerCharacter->GetWorld();
+    AMainGameMode* GM = World ? World->GetAuthGameMode<AMainGameMode>() : nullptr;
+    if (!GM || !GM->IsBattleRoyalePhase())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireRejected Reason=InvalidPhase Owner=%s"), *OwnerCharacter->GetName());
+        EndAbilityNow();
+        return;
+    }
+
+    IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
+    IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
+    IPhaseGameStateInterface* GS_Interface = World ? Cast<IPhaseGameStateInterface>(World->GetGameState()) : nullptr;
+
+    if (!Owner || !PS_Interface || !GS_Interface)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireRejected Reason=MissingInterface Owner=%s"), *OwnerCharacter->GetName());
+        EndAbilityNow();
+        return;
+    }
+
+    AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
+    if (!EquippedGun || !EquippedGun->Setting)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireRejected Reason=NoWeapon Owner=%s"), *OwnerCharacter->GetName());
+        EndAbilityNow();
+        return;
+    }
+
+    int32 BaseRange = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::Range);
+    int32 RangeUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Range);
+    float FinalRange = CalculateRange(BaseRange, RangeUpgradeLevel);
+
+    int32 BaseDamage = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::Damage);
+    int32 DamageUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Damage);
+    float FinalDamage = CalculateDamage(BaseDamage, DamageUpgradeLevel);
+
+    FVector ViewLocation = OwnerCharacter->GetActorLocation();
+    FRotator ViewRotation = OwnerCharacter->GetActorRotation();
+    if (AController* Controller = OwnerCharacter->GetController())
+    {
+        Controller->GetPlayerViewPoint(ViewLocation, ViewRotation);
+    }
+
+    FVector TargetPoint = ViewLocation + (ViewRotation.Vector() * FinalRange);
+    FVector MuzzleLoc = EquippedGun->m_pMesh ? EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle")) : OwnerCharacter->GetActorLocation();
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireAccepted Owner=%s WeaponID=%d Damage=%.2f Range=%.2f"),
+        *OwnerCharacter->GetName(),
+        static_cast<int32>(PS_Interface->GetWeaponID()),
+        FinalDamage,
+        FinalRange);
+
+    EquippedGun->Setting->Fire(MuzzleLoc, TargetPoint, FinalDamage);
+
+    EndAbilityNow();
 }
 
 bool UAbility_Fire::TryActivateAbilityWithEvent(const FPFGGameplayEventData& Payload)
 {
-	if (OwnerCharacter && !OwnerCharacter->HasAuthority())
-	{
-		return false;
-	}
-
-	ACharacter* Character = Cast<ACharacter>(Payload.Instigator);
-	if (!Character) return false;
-
-	IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(Character);
-	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
-	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
-
-	if (!Owner || !PS_Interface || !GS_Interface) return false;
-
-	UCameraComponent* FollowCamera = Owner->GetFollowCameraComponent();
-	if (!FollowCamera) return false;
-
-	int32 BaseRange = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::Range);
-	int32 RangeUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Range);
-	float FinalRange = CalculateRange(BaseRange, RangeUpgradeLevel);
-
-	FVector CamStart = FollowCamera->GetComponentLocation();
-	FRotator CamRot = FollowCamera->GetComponentRotation();
-	FVector CamEnd = CamStart + (CamRot.Vector() * FinalRange);
-
-	FHitResult CamHit;
-	FCollisionQueryParams Params;
-	Params.AddIgnoredActor(Character);
-
-	UWorld* World = Character->GetWorld();
-	bool bCamHit = World->LineTraceSingleByChannel(CamHit, CamStart, CamEnd, ECC_Pawn, Params);
-
-	int32 BaseDamage = GS_Interface->GetWeaponBaseData(
-		PS_Interface->GetWeaponID(), EWeaponBaseStatType::Damage);
-	int32 DamageUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Damage);
-	float FinalDamage = CalculateDamage(BaseDamage, DamageUpgradeLevel);
-
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Red,
-			TEXT("[Server] Hit Calculate"));
-	}
-
-	UGameplayStatics::ApplyDamage(
-		CamHit.GetActor(),
-		FinalDamage,
-		OwnerCharacter ? OwnerCharacter->GetController() : nullptr,
-		OwnerCharacter,
-		nullptr
-	);
-
-	return true;
+    return false;
 }
 
 float UAbility_Fire::CalculateDamage(int32 Base, int32 Level) const

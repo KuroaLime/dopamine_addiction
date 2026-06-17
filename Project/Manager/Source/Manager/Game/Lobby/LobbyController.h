@@ -64,6 +64,7 @@ public:
 
 	void JoinRoomSelected(uint32_t RoomId);
 	void LeaveRoom();
+	void StartRoom();
 
 	void UpdateRoom();
 	void CreateRoom(const FString& RoomName);

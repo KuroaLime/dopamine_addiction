@@ -247,16 +247,39 @@ void AMainCharacter::DoLook(float Yaw, float Pitch)
 
 float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
 {
-	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+    if (!HasAuthority())
+    {
+        return 0.0f;
+    }
 
-	if (HasAuthority()) {
-		AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
-		if (PS) {
-			PS->ApplyDamage(ActualDamage);
-		}
-	}
+    float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
+    AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+    const float OldHP = PS ? PS->CurPlayerData.CurrentHP : 0.0f;
 
-	return ActualDamage;
+    if (PS)
+    {
+        PS->ApplyDamage(ActualDamage);
+        const float NewHP = PS->CurPlayerData.CurrentHP;
+
+        UE_LOG(LogTemp, Warning, TEXT("[DS] TPS Damage Target=%s Damage=%.2f HP=%.2f->%.2f"),
+            *GetName(),
+            ActualDamage,
+            OldHP,
+            NewHP);
+
+        if (OldHP > 0.0f && NewHP <= 0.0f)
+        {
+            const FString KillerName = EventInstigator && EventInstigator->GetPawn()
+                ? EventInstigator->GetPawn()->GetName()
+                : FString(TEXT("<NULL>"));
+
+            UE_LOG(LogTemp, Warning, TEXT("[DS] TPS Death Victim=%s Killer=%s"),
+                *GetName(),
+                *KillerName);
+        }
+    }
+
+    return ActualDamage;
 }
 

@@ -79,6 +79,8 @@ public:
 	bool SendJoinRoom(uint32_t roomId);
 	bool SendLeaveRoom();
 	bool SendReady(bool ready);
+	bool SendRoomStart();
+	uint32_t GetSessionId() const { return m_sessionId; }
 
 	UPROPERTY(BlueprintAssignable)
 	FOnRoomMemberListUpdated OnRoomMemberListUpdated;

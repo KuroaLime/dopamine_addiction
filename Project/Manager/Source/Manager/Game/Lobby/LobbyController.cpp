@@ -136,7 +136,13 @@ void ALobbyController::JoinRoomSelected(uint32_t RoomId)
 
 void ALobbyController::LeaveRoom()
 {
+	bReady = false;
 	GetGameInstance<UUManagerGameInstance>()->SendLeaveRoom();
+}
+
+void ALobbyController::StartRoom()
+{
+	GetGameInstance<UUManagerGameInstance>()->SendRoomStart();
 }
 
 void ALobbyController::CreateRoom(const FString& RoomName)
