@@ -4,6 +4,8 @@
 #include "Game/InGame/Card/CardInputHandler.h"
 #include "EnhancedInputComponent.h"
 #include "GameFramework/PlayerController.h"
+#include "Game/InGame/MainPlayerController.h"
+#include "Game/InGame/Card/Actor/CardDropActor.h"
 
 UCardInputHandler::UCardInputHandler()
 {
@@ -113,5 +115,28 @@ void UCardInputHandler::Input_SelectCard3()
 
 void UCardInputHandler::Input_ConfirmSelection()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("[Card] ConfirmSelection"));
+    if (!OwnerController)
+    {
+        return;
+    }
+
+    FHitResult Hit;
+    OwnerController->GetHitResultUnderCursor(ECC_Visibility, false, Hit);
+
+    ACardDropActor* TargetCard = Cast<ACardDropActor>(Hit.GetActor());
+    if (!TargetCard)
+    {
+        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("[Card] No target card"));
+        return;
+    }
+
+    AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController);
+    if (!MainPC)
+    {
+        return;
+    }
+
+    MainPC->Server_RequestPickupCard(TargetCard);
+
+    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("[Card] Pickup request"));
 }

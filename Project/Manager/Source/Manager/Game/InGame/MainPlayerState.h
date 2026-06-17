@@ -9,6 +9,7 @@
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnGoldChangedNative, float NewGold);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnHPChangedNative, float NewHP);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnOwnedCardsChangedNative, const TArray<FOwnedCardInfo>&);
 
 UCLASS()
 class MANAGER_API AMainPlayerState : public APlayerState,
@@ -44,6 +45,21 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_CurPlayerData, BlueprintReadOnly, Category = "Current Player Data")
 	FCurPlayerData CurPlayerData;
 
+	UPROPERTY(ReplicatedUsing = OnRep_OwnedCards, BlueprintReadOnly, Category = "Card Data")
+	TArray<FOwnedCardInfo> OwnedCards;
+
+	UPROPERTY(ReplicatedUsing = OnRep_PublicCardCount, BlueprintReadOnly, Category = "Card Data")
+	int32 PublicCardCount = 0;
+
+	UFUNCTION(BlueprintPure, Category = "Card")
+	TArray<FOwnedCardInfo> GetOwnedCards() const;
+
+	UFUNCTION(BlueprintPure, Category = "Card")
+	bool HasOwnedCardInstance(int32 CardInstanceId) const;
+
+	void AddOwnedCard(const FOwnedCardInfo& CardInfo);
+	bool RemoveOwnedCardByInstanceId(int32 CardInstanceId, FOwnedCardInfo& OutRemovedCard);
+	FOnOwnedCardsChangedNative OnOwnedCardsChangedNative;
 
 	void AddGold(float Amount);
 	FOnGoldChangedNative OnGoldChnageNative;
@@ -54,4 +70,10 @@ public:
 protected:
 	UFUNCTION()
 	void OnRep_CurPlayerData(FCurPlayerData OldCurPlayerData);
+
+	UFUNCTION()
+	void OnRep_OwnedCards();
+
+	UFUNCTION()
+	void OnRep_PublicCardCount();
 };

@@ -152,6 +152,29 @@ struct FCardDataTable : public FTableRowBase
     ECardTypeData cardType = ECardTypeData::None;
 };
 
+
+UENUM(BlueprintType)
+enum class ECardRuntimeState : uint8
+{
+    None = 0,
+    WorldDrop = 1,
+    Owned = 2,
+    Used = 3,
+    Removed = 4,
+};
+
+USTRUCT(BlueprintType)
+struct FOwnedCardInfo
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly)
+    int32 CardInstanceId = 0;
+
+    UPROPERTY(BlueprintReadOnly)
+    ECardID CardID = ECardID::None;
+};
+
 USTRUCT(BlueprintType)
 struct FPlayerDataTable : public FTableRowBase
 {

@@ -9,6 +9,7 @@
 
 class UInputHandler;
 class UUIHandler;
+class ACardDropActor;
 /**
  * 
  */
@@ -84,4 +85,8 @@ public:
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestUpgrade(int32 ItemID);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestPickupCard(ACardDropActor* TargetCard);
+
 };

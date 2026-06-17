@@ -3,11 +3,15 @@
 #include "CoreMinimal.h"
 #include "GameFramework/GameModeBase.h"
 #include "Game/InGame/Interface/PhaseGameModeInterface.h"
+#include "Game/Protocol_Client/Protocol_InGame.h"
 #include "MainGameMode.generated.h"
 
 class UPhaseStrategy;
 class APlayerController;
 class AController;
+class AMainPlayerController;
+class AMainPlayerState;
+class ACardDropActor;
 
 enum class EDediServerPhase : uint8
 {
@@ -55,6 +59,7 @@ public:
 public:
     void OnPlayerAction(AActor* Executor, FName ActionName);
     bool IsBattleRoyalePhase() const;
+    bool TryPickupCard(AMainPlayerController* RequestingPC, ACardDropActor* TargetCard);
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "GameMode|Setup")
@@ -114,6 +119,22 @@ protected:
     UPROPERTY(BlueprintReadOnly, Category = "Phase|State")
     int32 RemainingPhaseSeconds = 0;
 
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Server")
+    TSubclassOf<ACardDropActor> CardDropActorClass;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Server")
+    float CardPickupRange = 350.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Debug")
+    int32 DebugCardDropCount = 3;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Debug")
+    FVector DebugCardDropCenter = FVector(0.0f, 0.0f, 180.0f);
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Debug")
+    FVector2D DebugCardDropExtent = FVector2D(400.0f, 250.0f);
+
     UPROPERTY()
     TMap<EGamePhase, TObjectPtr<UPhaseStrategy>> StrategyMap;
 
@@ -124,6 +145,22 @@ private:
     FTimerHandle PhaseTimerHandle;
     EDediServerPhase CurrentServerPhase = EDediServerPhase::None;
     bool bGameEndReached = false;
+
+    struct FServerCardRecord
+    {
+        int32 CardInstanceId = 0;
+        ECardID CardID = ECardID::None;
+        ECardRuntimeState State = ECardRuntimeState::None;
+        TWeakObjectPtr<AMainPlayerState> OwnerPlayerState;
+        TWeakObjectPtr<ACardDropActor> DropActor;
+        int32 CreatedRound = 0;
+    };
+
+    int32 NextCardInstanceId = 1;
+    TMap<int32, FServerCardRecord> ServerCardRecords;
+
+    UPROPERTY()
+    TArray<TObjectPtr<ACardDropActor>> ActiveCardDrops;
 
 private:
     void InitStrategy();
@@ -146,6 +183,13 @@ private:
     void FinishCurrentServerPhase(const TCHAR* Reason);
     void ClearServerPhaseTimer();
     void SetServerRemainingTime(int32 NewTime);
+
+    ECardID GetRandomCardID() const;
+    int32 CreateCardInstance(ECardID CardID);
+    ACardDropActor* SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation);
+    void SpawnDebugCardDropsForCardPhase();
+    void ClearCardDrops();
+    bool IsCardPickupAllowed() const;
 
     int32 GetReadyDuration() const;
     int32 GetBattleRoyaleDuration() const;

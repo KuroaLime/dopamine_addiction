@@ -1,6 +1,10 @@
 #include "Game/InGame/MainGameMode.h"
 
 #include "Game/InGame/PhaseStrategy.h"
+#include "Game/InGame/MainPlayerController.h"
+#include "Game/InGame/MainPlayerState.h"
+#include "Game/InGame/MainGameState.h"
+#include "Game/InGame/Card/Actor/CardDropActor.h"
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "GameFramework/PlayerController.h"
@@ -375,6 +379,7 @@ void AMainGameMode::StartCardGamePhase()
 
     ClearPlayerPawnMovementBases(TEXT("CardGame"));
     BroadcastSwitchMode(EGamePhase::Card);
+    SpawnDebugCardDropsForCardPhase();
     StartTimedServerPhase(EDediServerPhase::CardGame, GetCardGameDuration());
     BeginPhase(EGamePhase::Card);
 }
@@ -403,6 +408,7 @@ void AMainGameMode::StartTransitionToBattlePhase()
         return;
     }
 
+    ClearCardDrops();
     ClearPlayerPawnMovementBases(TEXT("TransitionToBattle"));
     BroadcastSwitchLevel(TEXT("Card_Game_Stage"), TEXT("TPS_Game_Stage"));
     StartTimedServerPhase(EDediServerPhase::TransitionToBattle, GetTransitionDuration());
@@ -419,6 +425,7 @@ void AMainGameMode::StartGameEndPhase()
     bGameEndReached = true;
     bGameStarted = false;
     EndPhase();
+    ClearCardDrops();
     ClearServerPhaseTimer();
     CurrentServerPhase = EDediServerPhase::GameEnd;
     RemainingPhaseSeconds = 0;
@@ -433,6 +440,248 @@ void AMainGameMode::StartGameEndPhase()
         TEXT("Pending"));
 }
 
+
+bool AMainGameMode::TryPickupCard(AMainPlayerController* RequestingPC, ACardDropActor* TargetCard)
+{
+    if (!HasAuthority())
+    {
+        return false;
+    }
+
+    if (!RequestingPC || !TargetCard)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=InvalidRequest"));
+        return false;
+    }
+
+    if (!IsCardPickupAllowed())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=InvalidPhase Player=%s Phase=%s"),
+            *RequestingPC->GetName(),
+            GetServerPhaseName(CurrentServerPhase));
+        return false;
+    }
+
+    if (TargetCard->IsPickedUp())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=AlreadyPicked Player=%s Instance=%d"),
+            *RequestingPC->GetName(),
+            TargetCard->GetCardInstanceId());
+        return false;
+    }
+
+    APawn* Pawn = RequestingPC->GetPawn();
+    AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
+    if (!Pawn || !PS)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=MissingPawnOrPS Player=%s"), *RequestingPC->GetName());
+        return false;
+    }
+
+    const float Distance = FVector::Dist(Pawn->GetActorLocation(), TargetCard->GetActorLocation());
+    if (Distance > CardPickupRange)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=Distance Player=%s Instance=%d Distance=%.2f Range=%.2f"),
+            *RequestingPC->GetName(),
+            TargetCard->GetCardInstanceId(),
+            Distance,
+            CardPickupRange);
+        return false;
+    }
+
+    FServerCardRecord* Record = ServerCardRecords.Find(TargetCard->GetCardInstanceId());
+    if (!Record)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=NoRecord Player=%s Instance=%d"),
+            *RequestingPC->GetName(),
+            TargetCard->GetCardInstanceId());
+        return false;
+    }
+
+    if (Record->State != ECardRuntimeState::WorldDrop || Record->DropActor.Get() != TargetCard)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=StateMismatch Player=%s Instance=%d State=%d"),
+            *RequestingPC->GetName(),
+            Record->CardInstanceId,
+            static_cast<int32>(Record->State));
+        return false;
+    }
+
+    FOwnedCardInfo CardInfo;
+    CardInfo.CardInstanceId = Record->CardInstanceId;
+    CardInfo.CardID = Record->CardID;
+
+    PS->AddOwnedCard(CardInfo);
+
+    Record->State = ECardRuntimeState::Owned;
+    Record->OwnerPlayerState = PS;
+    Record->DropActor = nullptr;
+
+    TargetCard->MarkPickedUp();
+    ActiveCardDrops.RemoveAll([TargetCard](const TObjectPtr<ACardDropActor>& CardActor)
+    {
+        return CardActor.Get() == TargetCard;
+    });
+    TargetCard->Destroy();
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupOK Player=%s Instance=%d Card=%d OwnedCount=%d"),
+        *PS->GetPlayerName(),
+        CardInfo.CardInstanceId,
+        static_cast<int32>(CardInfo.CardID),
+        PS->PublicCardCount);
+
+    return true;
+}
+
+ECardID AMainGameMode::GetRandomCardID() const
+{
+    if (AMainGameState* GS = GetGameState<AMainGameState>())
+    {
+        TArray<ECardID> CardIDs;
+        GS->CardDataMap.GetKeys(CardIDs);
+        CardIDs.Remove(ECardID::None);
+
+        if (CardIDs.Num() > 0)
+        {
+            return CardIDs[FMath::RandRange(0, CardIDs.Num() - 1)];
+        }
+    }
+
+    return static_cast<ECardID>(FMath::RandRange(static_cast<int32>(ECardID::Jan_Gwang), static_cast<int32>(ECardID::Oct_Yul)));
+}
+
+int32 AMainGameMode::CreateCardInstance(ECardID CardID)
+{
+    if (CardID == ECardID::None)
+    {
+        return 0;
+    }
+
+    const int32 NewInstanceId = NextCardInstanceId++;
+
+    FServerCardRecord Record;
+    Record.CardInstanceId = NewInstanceId;
+    Record.CardID = CardID;
+    Record.State = ECardRuntimeState::Removed;
+    Record.CreatedRound = CurrentRound;
+
+    ServerCardRecords.Add(NewInstanceId, Record);
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Create Instance=%d Card=%d Round=%d"),
+        NewInstanceId,
+        static_cast<int32>(CardID),
+        CurrentRound);
+
+    return NewInstanceId;
+}
+
+ACardDropActor* AMainGameMode::SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation)
+{
+    if (!HasAuthority() || !GetWorld() || CardID == ECardID::None)
+    {
+        return nullptr;
+    }
+
+    TSubclassOf<ACardDropActor> SpawnClass = CardDropActorClass ? CardDropActorClass : ACardDropActor::StaticClass();
+
+    FActorSpawnParameters Params;
+    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    ACardDropActor* CardActor = GetWorld()->SpawnActor<ACardDropActor>(SpawnClass, SpawnLocation, FRotator::ZeroRotator, Params);
+    if (!CardActor)
+    {
+        return nullptr;
+    }
+
+    const int32 InstanceId = CreateCardInstance(CardID);
+    if (InstanceId <= 0)
+    {
+        CardActor->Destroy();
+        return nullptr;
+    }
+
+    CardActor->InitCardDrop(InstanceId, CardID);
+    ActiveCardDrops.Add(CardActor);
+
+    FServerCardRecord* Record = ServerCardRecords.Find(InstanceId);
+    if (Record)
+    {
+        Record->State = ECardRuntimeState::WorldDrop;
+        Record->DropActor = CardActor;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Drop Instance=%d Card=%d Actor=%s Location=%s Round=%d"),
+        InstanceId,
+        static_cast<int32>(CardID),
+        *CardActor->GetName(),
+        *SpawnLocation.ToString(),
+        CurrentRound);
+
+    return CardActor;
+}
+
+void AMainGameMode::SpawnDebugCardDropsForCardPhase()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    ClearCardDrops();
+
+    const int32 SpawnCount = FMath::Max(0, DebugCardDropCount);
+    for (int32 Index = 0; Index < SpawnCount; ++Index)
+    {
+        const FVector SpawnLocation(
+            DebugCardDropCenter.X + FMath::FRandRange(-DebugCardDropExtent.X, DebugCardDropExtent.X),
+            DebugCardDropCenter.Y + FMath::FRandRange(-DebugCardDropExtent.Y, DebugCardDropExtent.Y),
+            DebugCardDropCenter.Z + (Index * 30.0f));
+
+        SpawnCardDrop(GetRandomCardID(), SpawnLocation);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card DropDebugComplete Count=%d Round=%d"),
+        ActiveCardDrops.Num(),
+        CurrentRound);
+}
+
+void AMainGameMode::ClearCardDrops()
+{
+    int32 ClearCount = 0;
+
+    for (TObjectPtr<ACardDropActor> CardActorPtr : ActiveCardDrops)
+    {
+        ACardDropActor* CardActor = CardActorPtr.Get();
+        if (!IsValid(CardActor))
+        {
+            continue;
+        }
+
+        if (FServerCardRecord* Record = ServerCardRecords.Find(CardActor->GetCardInstanceId()))
+        {
+            if (Record->State == ECardRuntimeState::WorldDrop)
+            {
+                Record->State = ECardRuntimeState::Removed;
+                Record->DropActor = nullptr;
+            }
+        }
+
+        CardActor->Destroy();
+        ClearCount++;
+    }
+
+    ActiveCardDrops.Empty();
+
+    if (ClearCount > 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card ClearDrops Count=%d Round=%d"), ClearCount, CurrentRound);
+    }
+}
+
+bool AMainGameMode::IsCardPickupAllowed() const
+{
+    return CurrentServerPhase == EDediServerPhase::BattleRoyale || CurrentServerPhase == EDediServerPhase::CardGame;
+}
 
 void AMainGameMode::SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context)
 {

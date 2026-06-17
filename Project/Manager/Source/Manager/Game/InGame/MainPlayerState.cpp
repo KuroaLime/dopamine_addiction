@@ -17,6 +17,8 @@ void AMainPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
     DOREPLIFETIME(AMainPlayerState, WeaponData);
     DOREPLIFETIME(AMainPlayerState, PlayerData);
     DOREPLIFETIME(AMainPlayerState, CurPlayerData);
+    DOREPLIFETIME_CONDITION(AMainPlayerState, OwnedCards, COND_OwnerOnly);
+    DOREPLIFETIME(AMainPlayerState, PublicCardCount);
 
 }
 
@@ -74,6 +76,62 @@ void AMainPlayerState::SetWeaponID(EWeaponType WeaponID)
     ForceNetUpdate();
 }
 
+TArray<FOwnedCardInfo> AMainPlayerState::GetOwnedCards() const
+{
+    return OwnedCards;
+}
+
+bool AMainPlayerState::HasOwnedCardInstance(int32 CardInstanceId) const
+{
+    return OwnedCards.ContainsByPredicate([CardInstanceId](const FOwnedCardInfo& CardInfo)
+    {
+        return CardInfo.CardInstanceId == CardInstanceId;
+    });
+}
+
+void AMainPlayerState::AddOwnedCard(const FOwnedCardInfo& CardInfo)
+{
+    if (!HasAuthority() || CardInfo.CardInstanceId <= 0 || CardInfo.CardID == ECardID::None)
+    {
+        return;
+    }
+
+    if (HasOwnedCardInstance(CardInfo.CardInstanceId))
+    {
+        return;
+    }
+
+    OwnedCards.Add(CardInfo);
+    PublicCardCount = OwnedCards.Num();
+    OnOwnedCardsChangedNative.Broadcast(OwnedCards);
+    ForceNetUpdate();
+}
+
+bool AMainPlayerState::RemoveOwnedCardByInstanceId(int32 CardInstanceId, FOwnedCardInfo& OutRemovedCard)
+{
+    if (!HasAuthority())
+    {
+        return false;
+    }
+
+    const int32 Index = OwnedCards.IndexOfByPredicate([CardInstanceId](const FOwnedCardInfo& CardInfo)
+    {
+        return CardInfo.CardInstanceId == CardInstanceId;
+    });
+
+    if (Index == INDEX_NONE)
+    {
+        return false;
+    }
+
+    OutRemovedCard = OwnedCards[Index];
+    OwnedCards.RemoveAt(Index);
+    PublicCardCount = OwnedCards.Num();
+    OnOwnedCardsChangedNative.Broadcast(OwnedCards);
+    ForceNetUpdate();
+    return true;
+}
+
 void AMainPlayerState::AddGold(float Amount)
 {
     if (!HasAuthority())
@@ -101,4 +159,13 @@ void AMainPlayerState::OnRep_CurPlayerData(FCurPlayerData OldCurPlayerData)
         OnHPChnageNative.Broadcast(CurPlayerData.CurrentHP);
     }
     
+}
+
+void AMainPlayerState::OnRep_OwnedCards()
+{
+    OnOwnedCardsChangedNative.Broadcast(OwnedCards);
+}
+
+void AMainPlayerState::OnRep_PublicCardCount()
+{
 }
