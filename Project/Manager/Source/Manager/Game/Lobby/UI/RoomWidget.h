@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
+#include "Game/Protocol_Client/Protocol_D.h"
 #include "RoomWidget.generated.h"
 
 /**
@@ -21,11 +22,20 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	class UButton* ReadyButton;
 
+	bool bIsHost = false;
+
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 private:
 	UFUNCTION()
 	void OnLobbyButtonClicked();	
 
 	UFUNCTION()
 	void OnReadyButtonClicked();
+
+	UFUNCTION()
+	void UpdateRoomMemberState(const TArray<FRoomMemberInfoView>& Members);
+
+	void ApplyHostState(bool bNewIsHost);
+	void SetReadyButtonLabel(const FText& NewText);
 };

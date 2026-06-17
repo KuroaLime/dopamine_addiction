@@ -66,19 +66,19 @@ struct FWeaponData
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadWrite)
-    int32 LvDamage;
+    int32 LvDamage = 0;
     UPROPERTY(BlueprintReadWrite)
-    int32 LvFireRate;
+    int32 LvFireRate = 0;
     UPROPERTY(BlueprintReadWrite)
-    int32 LvRange;
+    int32 LvRange = 0;
     UPROPERTY(BlueprintReadWrite)
-    int32 LvMagazineCapacity;
+    int32 LvMagazineCapacity = 0;
     UPROPERTY(BlueprintReadWrite)
-    int32 LvReloadTime;
+    int32 LvReloadTime = 0;
     UPROPERTY(BlueprintReadWrite)
-    EBulletType bulletID;
+    EBulletType bulletID = EBulletType::None;
     UPROPERTY(BlueprintReadWrite)
-    EWeaponType weaponID;
+    EWeaponType weaponID = EWeaponType::None;
 };
 
 USTRUCT(BlueprintType)
@@ -87,11 +87,11 @@ struct FPlayerData
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadWrite)
-    int32 LvMovementSpeed;
+    int32 LvMovementSpeed = 0;
     UPROPERTY(BlueprintReadWrite)
-    int32 LvHealth;
+    int32 LvHealth = 0;
     UPROPERTY(BlueprintReadWrite)
-    int32 LvHealthRegeneration;
+    int32 LvHealthRegeneration = 0;
 };
 //////////////////////////////////////////////////////////
 // 실시간 플레이어 데이터
@@ -101,9 +101,9 @@ struct FCurPlayerData
     GENERATED_BODY()
 
     UPROPERTY(BlueprintReadWrite)
-    int32 CurrentHP;
+    int32 CurrentHP = 0;
     UPROPERTY(BlueprintReadWrite)
-    int32 HoldingGold;
+    int32 HoldingGold = 0;
 };
 //////////////////////////////////////////////////////////
 // GameState Data
@@ -113,9 +113,9 @@ struct FBulletDataTable : public FTableRowBase
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    EBulletType bulletID;
+    EBulletType bulletID = EBulletType::None;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 baseDamage;
+    int32 baseDamage = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -124,19 +124,19 @@ struct FWeaponDataTable : public FTableRowBase
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    EWeaponType weaponID;
+    EWeaponType weaponID = EWeaponType::None;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    EBulletType bulletID;
+    EBulletType bulletID = EBulletType::None;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 BaseDamage;
+    int32 BaseDamage = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 BaseFireRate;
+    int32 BaseFireRate = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 BaseRange;
+    int32 BaseRange = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 BaseMagazineCapacity;
+    int32 BaseMagazineCapacity = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 BaseReloadTime;
+    int32 BaseReloadTime = 0;
 };
 
 USTRUCT(BlueprintType)
@@ -145,11 +145,11 @@ struct FCardDataTable : public FTableRowBase
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    ECardID cardID;
+    ECardID cardID = ECardID::None;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    ECardMonthData cardMonth;
+    ECardMonthData cardMonth = ECardMonthData::None;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    ECardTypeData cardType;
+    ECardTypeData cardType = ECardTypeData::None;
 };
 
 USTRUCT(BlueprintType)
@@ -158,9 +158,9 @@ struct FPlayerDataTable : public FTableRowBase
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 baseMovementSpeed;
+    int32 baseMovementSpeed = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 baseHealth;
+    int32 baseHealth = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 baseHealthRegeneration;
+    int32 baseHealthRegeneration = 0;
 };

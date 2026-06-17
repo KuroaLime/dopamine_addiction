@@ -22,13 +22,6 @@ ACoinRegulator::ACoinRegulator()
 	HavingCoin->SetupAttachment(RootComponent);
 	HavingCoin->SetRelativeLocation(FVector(0.0f, 0.0f, 180.0f));
 	HavingCoin->SetWidgetSpace(EWidgetSpace::World);
-	static ConstructorHelpers::FClassFinder<UUserWidget> UI_HUD(TEXT("/Game/Actor/Card/CoinRegulatorWidget.CoinRegulatorWidget_C"));
-	
-	if (UI_HUD.Succeeded()) {
-		UE_LOG(LogTemp, Warning, TEXT("--- [CoinRegulator] BeginPlay Start ---"));
-		HavingCoin->SetWidgetClass(UI_HUD.Class);
-		//HavingCoin->SetDrawSize(FVector2D(150.0f, 50.0f));
-	}
 	HavingCoin->SetDrawAtDesiredSize(true);
 	HavingCoin->SetCollisionEnabled(ECollisionEnabled::NoCollision);
 	HavingCoin->SetOwnerNoSee(false);
@@ -37,14 +30,10 @@ ACoinRegulator::ACoinRegulator()
 // Called when the game starts or when spawned
 void ACoinRegulator::BeginPlay()
 {
-	//if (CoinWidgetClass)
-	//{
-	//	HavingCoin->SetWidgetClass(CoinWidgetClass);
-	//}
-	//else
-	//{
-	//	UE_LOG(LogTemp, Error, TEXT("CoinWidgetClass is NULL! Please set it in Blueprint Editor."));
-	//}
+	if (CoinWidgetClass)
+	{
+		HavingCoin->SetWidgetClass(CoinWidgetClass);
+	}
 
 	Super::BeginPlay();
 	

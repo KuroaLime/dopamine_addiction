@@ -7,6 +7,8 @@
 #include "GameplayTagContainer.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
+#include "GameFramework/Actor.h"
+#include "GameFramework/Pawn.h"
 
 // Sets default values for this component's properties
 UWeaponComponent::UWeaponComponent()
@@ -36,15 +38,50 @@ void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 
 }
 
-void UWeaponComponent::Fire(const FVector& MuzzleLocation) {
-	AActor* Owner = GetOwner();
-	if (!Owner) return;
+void UWeaponComponent::Fire(const FVector& MuzzleLocation, const FVector& TargetLocation, float InDamage) {
+    AActor* Owner = GetOwner();
+    if (!Owner) return;
 
-	// 기존에 정의된 사운드 재생 로직
-	if (m_FireSound)
-	{
-		UGameplayStatics::PlaySoundAtLocation(this, m_FireSound, MuzzleLocation);
-	}
+    if (m_FireSound)
+    {
+        UGameplayStatics::PlaySoundAtLocation(this, m_FireSound, MuzzleLocation);
+    }
+
+    if (!Owner->HasAuthority() || InDamage < 0.0f || TargetLocation.IsNearlyZero())
+    {
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World) return;
+
+    FCollisionQueryParams Params;
+    Params.AddIgnoredActor(Owner);
+    if (AActor* WeaponOwner = Owner->GetOwner())
+    {
+        Params.AddIgnoredActor(WeaponOwner);
+    }
+
+    FHitResult Hit;
+    const bool bHit = World->LineTraceSingleByChannel(Hit, MuzzleLocation, TargetLocation, ECC_Visibility, Params);
+
+    if (bHit && Hit.GetActor())
+    {
+        AActor* TargetActor = Hit.GetActor();
+        if (Cast<APawn>(TargetActor))
+        {
+            UGameplayStatics::ApplyDamage(TargetActor, InDamage, nullptr, Owner, nullptr);
+            UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireHit Weapon=%s Target=%s Damage=%.2f"), *Owner->GetName(), *TargetActor->GetName(), InDamage);
+        }
+        else
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireWorldHit Weapon=%s Target=%s Damage=%.2f"), *Owner->GetName(), *TargetActor->GetName(), InDamage);
+        }
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireMiss Weapon=%s Damage=%.2f"), *Owner->GetName(), InDamage);
+    }
 }
 
 void UWeaponComponent::FireOnce() {
