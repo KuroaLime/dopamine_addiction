@@ -15,8 +15,6 @@
 #include "PlayerManager.h"
 #include "Default/Ability/GAS/PFGASC.h"
 #include "Default/Ability/GAS/PFGAbility.h"
-#include "Default/Ability/AbilityFire.h"
-#include "Default/Ability/AbilityAim.h"
 
 #include "Default/Data/CharacterStateComponent.h"
 #include "Components/WidgetComponent.h"

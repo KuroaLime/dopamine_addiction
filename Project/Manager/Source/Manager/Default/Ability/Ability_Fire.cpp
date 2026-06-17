@@ -38,54 +38,25 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 	if (!Character->IsLocallyControlled()) return;
 
 	IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(Character);
-	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
-	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
 
-	if (!Owner || !PS_Interface || !GS_Interface) return;
-
-	int32 BaseRange = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::Range);
-	int32 RangeUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Range);
-	float FinalRange = CalculateRange(BaseRange, RangeUpgradeLevel);
+	if (!Owner) return;
 
 	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
-	UCameraComponent* FollowCamera = Owner->GetFollowCameraComponent();
-	if (!EquippedGun || !FollowCamera) return;
+	if (!EquippedGun) return;
 
-	FVector CamStart = FollowCamera->GetComponentLocation();
-	FRotator CamRot = FollowCamera->GetComponentRotation();
-	FVector CamEnd = CamStart + (CamRot.Vector() * FinalRange);
-
-	FHitResult CamHit;
-	FCollisionQueryParams Params;
-	Params.AddIgnoredActor(Character);
-
-	UWorld* World = Character->GetWorld();
-	bool bCamHit = World->LineTraceSingleByChannel(CamHit, CamStart, CamEnd, ECC_Pawn, Params);
-	FVector TargetPoint = bCamHit ? CamHit.ImpactPoint : CamEnd;
 	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
 
-	DrawDebugLine(World, MuzzleLoc, TargetPoint, FColor::Red, false, 1.0f, 0, 1.0f);
-
-	if (bCamHit && CamHit.GetActor())
-	{
-		DrawDebugBox(World, CamHit.ImpactPoint, FVector(7, 7, 7), FColor::Green, false, 1.0f);
-	}
-
 	// 발사 이펙트/사운드 재생
-	EquippedGun->Setting->Fire(MuzzleLoc, TargetPoint);
+	EquippedGun->Setting->Fire(MuzzleLoc);
 
-	// 히트 발생 시 서버에 이벤트 전송 -> 서버가 데미지를 적용
-	if (bCamHit && CamHit.GetActor())
+	if (UPFGASC* ASC = Cast<UPFGASC>(Character->GetComponentByClass(UPFGASC::StaticClass())))
 	{
-		if (UPFGASC* ASC = Cast<UPFGASC>(Character->GetComponentByClass(UPFGASC::StaticClass())))
-		{
-			FPFGGameplayEventData Payload;
-			Payload.Instigator = Character;
-			Payload.TargetObject = CamHit.GetActor();
+		FPFGGameplayEventData Payload;
+		Payload.Instigator = Character;
+		Payload.TargetObject = nullptr;
 
-			static const FGameplayTag HitTag = FGameplayTag::RequestGameplayTag(FName("Event.Weapon.Hit"));
-			ASC->ServerRPC_SendGameplayEvent(HitTag, Payload);
-		}
+		static const FGameplayTag HitTag = FGameplayTag::RequestGameplayTag(FName("Event.Weapon.Hit"));
+		ASC->ServerRPC_SendGameplayEvent(HitTag, Payload);
 	}
 }
 
@@ -99,22 +70,51 @@ void UAbility_Fire::ActivateAbility()
 
 bool UAbility_Fire::TryActivateAbilityWithEvent(const FPFGGameplayEventData& Payload)
 {
-	// 서버 전용: ServerRPC_SendGameplayEvent("Event.Weapon.Hit")를 받아 실제 데미지 적용.
-	// CanExecute(쿨다운/BlockedTags)는 HandleGameplayEvent에서 이미 통과한 상태.
-	AActor* HitActor = Payload.TargetObject;
-	if (!HitActor) return false;
+	if (OwnerCharacter && !OwnerCharacter->HasAuthority())
+	{
+		return false;
+	}
 
-	IPhasePlayerStateInterface* PS_Interface = GetPSInterface();
-	IPhaseGameStateInterface* GS_Interface = GetGSInterface();
-	if (!PS_Interface || !GS_Interface) return false;
+	ACharacter* Character = Cast<ACharacter>(Payload.Instigator);
+	if (!Character) return false;
+
+	IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(Character);
+	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
+	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
+
+	if (!Owner || !PS_Interface || !GS_Interface) return false;
+
+	UCameraComponent* FollowCamera = Owner->GetFollowCameraComponent();
+	if (!FollowCamera) return false;
+
+	int32 BaseRange = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::Range);
+	int32 RangeUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Range);
+	float FinalRange = CalculateRange(BaseRange, RangeUpgradeLevel);
+
+	FVector CamStart = FollowCamera->GetComponentLocation();
+	FRotator CamRot = FollowCamera->GetComponentRotation();
+	FVector CamEnd = CamStart + (CamRot.Vector() * FinalRange);
+
+	FHitResult CamHit;
+	FCollisionQueryParams Params;
+	Params.AddIgnoredActor(Character);
+
+	UWorld* World = Character->GetWorld();
+	bool bCamHit = World->LineTraceSingleByChannel(CamHit, CamStart, CamEnd, ECC_Pawn, Params);
 
 	int32 BaseDamage = GS_Interface->GetWeaponBaseData(
 		PS_Interface->GetWeaponID(), EWeaponBaseStatType::Damage);
 	int32 DamageUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Damage);
 	float FinalDamage = CalculateDamage(BaseDamage, DamageUpgradeLevel);
 
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Red,
+			TEXT("[Server] Hit Calculate"));
+	}
+
 	UGameplayStatics::ApplyDamage(
-		HitActor,
+		CamHit.GetActor(),
 		FinalDamage,
 		OwnerCharacter ? OwnerCharacter->GetController() : nullptr,
 		OwnerCharacter,
