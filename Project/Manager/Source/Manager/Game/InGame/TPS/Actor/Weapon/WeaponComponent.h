@@ -30,7 +30,7 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	virtual void Fire(const FVector& MuzzleLocation, const FVector& ShotDirection);
+	virtual void Fire(const FVector& MuzzleLocation);
 	virtual void FireOnce();
 	virtual void StartLoopFire();
 	virtual void StopLoopFire();

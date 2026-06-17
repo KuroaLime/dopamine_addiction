@@ -36,39 +36,11 @@ void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
 
 }
 
-void UWeaponComponent::Fire(const FVector& MuzzleLocation, const FVector& ShotDirection) {
+void UWeaponComponent::Fire(const FVector& MuzzleLocation) {
 	AActor* Owner = GetOwner();
 	if (!Owner) return;
 
-	// 1. 라인트레이스 목적지 계산
-	//FVector End = MuzzleLocation + (ShotDirection * MaxRange);
-
-	//FVector End = ShotDirection;
-
-	//FHitResult Hit;
-	//FCollisionQueryParams Params;
-	//Params.AddIgnoredActor(Owner);       // 총 자신 제외
-	//Params.AddIgnoredActor(Owner->GetOwner()); // 캐릭터 제외
-
-	//// 2. 라인트레이스 실행
-	//bool bHit = GetWorld()->LineTraceSingleByChannel(Hit, MuzzleLocation, End, ECC_Visibility, Params);
-
-	//// 디버그 라인 출력
-	//DrawDebugLine(GetWorld(), MuzzleLocation, End, FColor::Red, false, 1.0f, 0, 1.0f);
-
-	//if (bHit)
-	//{
-	//	GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Hitttttttttt!"));
-	//	AActor* HitActor = Hit.GetActor();
-	//	if (HitActor)
-	//	{
-	//		// 데미지 적용
-	//		UGameplayStatics::ApplyDamage(HitActor, Damage, nullptr, Owner, nullptr);
-	//		DrawDebugBox(GetWorld(), Hit.ImpactPoint, FVector(5, 5, 5), FColor::Green, false, 1.0f);
-	//	}
-	//}
-
-	// 3. 기존에 정의된 사운드 재생 로직
+	// 기존에 정의된 사운드 재생 로직
 	if (m_FireSound)
 	{
 		UGameplayStatics::PlaySoundAtLocation(this, m_FireSound, MuzzleLocation);
