@@ -10,31 +10,19 @@
 #include <winsock2.h>
 #endif
 
-#include <thread>
-#include <chrono>
-
 
 // ===========================================================================
 // Dedicated Server Settings
 // ===========================================================================
 
 static const char* DEDI_EXE_PATH =
-"S:\\UE\\UE_5.7_Source\\Engine\\Binaries\\Win64\\UnrealEditor.exe";
-
-static const char* DEDI_PROJECT_PATH =
-"X:\\Project\\Manager\\Manager.uproject";
-
-static const char* DEDI_WORKING_DIR =
-"X:\\Project\\Manager";
+"../Binaries/Win64/ManagerServer.exe";
 
 static const char* DEDI_MAP_PATH =
-"/Game/InGame/System/Main_Game_World";
+"/Game/Lobby/Lobby_Stage";
 
 static const char* DEDI_PUBLIC_IP =
 "127.0.0.1";
-
-static constexpr size_t MIN_PLAYERS_TO_START = 1;
-static constexpr int DEDI_GAME_START_DELAY_SECONDS = 15;
 
 
 // ===========================================================================
@@ -140,24 +128,15 @@ void LobbyService::FreePort(uint16_t port)
 // Dedicated Server Launch
 // ===========================================================================
 
-bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_t requiredPlayers)
+bool LobbyService::LaunchDedicatedServer(uint16_t port)
 {
-    char mapWithOptions[512]{};
-    sprintf_s(
-        mapWithOptions,
-        "%s?RoomId=%u?RequiredPlayers=%u",
-        DEDI_MAP_PATH,
-        roomId,
-        static_cast<unsigned>(requiredPlayers)
-    );
-
     char cmdLine[1024]{};
+
     sprintf_s(
         cmdLine,
-        "\"%s\" \"%s\" \"%s\" -server -log -port=%u -NullRHI -NoLiveCoding -Unattended",
+        "\"%s\" %s -log -port=%u",
         DEDI_EXE_PATH,
-        DEDI_PROJECT_PATH,
-        mapWithOptions,
+        DEDI_MAP_PATH,
         port
     );
 
@@ -174,7 +153,7 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_
         FALSE,
         CREATE_NEW_CONSOLE,
         nullptr,
-        DEDI_WORKING_DIR,
+        nullptr,
         &si,
         &pi
     );
@@ -183,9 +162,7 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_
     {
         DWORD err = GetLastError();
 
-        printf("[DEDI] Launch failed. roomId=%u requiredPlayers=%u port=%u err=%lu cmd=%s\n",
-            roomId,
-            static_cast<unsigned>(requiredPlayers),
+        printf("[DEDI] Launch failed. port=%u err=%lu cmd=%s\n",
             port,
             err,
             cmdLine);
@@ -193,9 +170,7 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_
         return false;
     }
 
-    printf("[DEDI] Launch success. roomId=%u requiredPlayers=%u port=%u pid=%lu cmd=%s\n",
-        roomId,
-        static_cast<unsigned>(requiredPlayers),
+    printf("[DEDI] Launch success. port=%u pid=%lu cmd=%s\n",
         port,
         pi.dwProcessId,
         cmdLine);
@@ -603,7 +578,7 @@ void LobbyService::HandleLoginReq(ClientContext* c, const char* payload, uint16_
                     port);
 
                 m_net.SendLoginRes(c, LoginResult::OK_RECONNECT);
-                m_net.SendGameStart(c, DEDI_PUBLIC_IP, port, oldSid);
+                m_net.SendGameStart(c, DEDI_PUBLIC_IP, port, 0);
                 return;
             }
         }
@@ -1062,7 +1037,7 @@ void LobbyService::HandleRoomStartReq(ClientContext* c)
         return;
     }
 
-    if (r.members.size() < MIN_PLAYERS_TO_START)
+    if (r.members.size() < 2)
     {
         size_t memberCount = r.members.size();
 
@@ -1118,9 +1093,7 @@ void LobbyService::HandleRoomStartReq(ClientContext* c)
 
     ReleaseSRWLockExclusive(&m_lock);
 
-    uint16_t requiredPlayers = static_cast<uint16_t>(membersCopy.size());
-
-    if (!LaunchDedicatedServer(port, rid, requiredPlayers))
+    if (!LaunchDedicatedServer(port))
     {
         AcquireSRWLockExclusive(&m_lock);
 
@@ -1155,35 +1128,25 @@ void LobbyService::HandleRoomStartReq(ClientContext* c)
 
     m_net.SendRoomStartRes(c, RoomResult::OK);
 
-    printf("[ROOM] GAME_START_DELAY rid=%u port=%u seconds=%d\n",
-        rid,
-        port,
-        DEDI_GAME_START_DELAY_SECONDS);
+    AcquireSRWLockShared(&m_lock);
 
-    std::thread([this, rid, port, membersCopy]()
+    for (uint32_t mSid : membersCopy)
+    {
+        auto itCtx = m_ctxBySession.find(mSid);
+
+        if (itCtx != m_ctxBySession.end())
         {
-            std::this_thread::sleep_for(std::chrono::seconds(DEDI_GAME_START_DELAY_SECONDS));
+            printf("[ROOM] GAME_START rid=%u sid=%u ip=%s port=%u\n",
+                rid,
+                mSid,
+                DEDI_PUBLIC_IP,
+                port);
 
-            AcquireSRWLockShared(&m_lock);
+            m_net.SendGameStart(itCtx->second, DEDI_PUBLIC_IP, port, 0);
+        }
+    }
 
-            for (uint32_t mSid : membersCopy)
-            {
-                auto itCtx = m_ctxBySession.find(mSid);
-
-                if (itCtx != m_ctxBySession.end())
-                {
-                    printf("[ROOM] GAME_START rid=%u sid=%u ip=%s port=%u\n",
-                        rid,
-                        mSid,
-                        DEDI_PUBLIC_IP,
-                        port);
-
-                    m_net.SendGameStart(itCtx->second, DEDI_PUBLIC_IP, port, mSid);
-                }
-            }
-
-            ReleaseSRWLockShared(&m_lock);
-        }).detach();
+    ReleaseSRWLockShared(&m_lock);
 
     BroadcastRoomList();
     BroadcastRoomMemberList(rid);
@@ -1350,18 +1313,12 @@ RoomResult LobbyService::LeaveRoomInternal_Unsafe(uint32_t sid, bool& shouldBroa
             r.dedicatedPort = 0;
         }
 
-        m_roomOrder.erase(
-            std::remove(m_roomOrder.begin(), m_roomOrder.end(), rid),
-            m_roomOrder.end());
+        r.state = RoomState::WAITING;
 
-        m_rooms.erase(itRoom);
-
-        printf("[ROOM] EMPTY_DELETE rid=%u freePort=%u\n",
+        printf("[ROOM] EMPTY rid=%u freePort=%u state=%s\n",
             rid,
-            oldPort);
-
-        shouldBroadcast = true;
-        return RoomResult::OK;
+            oldPort,
+            RoomStateToString(RoomState::WAITING));
     }
 
     shouldBroadcast = true;

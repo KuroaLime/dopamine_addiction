@@ -3,8 +3,6 @@
 #include "Default/System/UManagerGameInstance.h"
 
 #include "Kismet/GameplayStatics.h"
-#include "Misc/CommandLine.h"
-#include "Misc/Parse.h"
 
 #define UE_ASYNC_GUARD if (!IsValid(this) || !GetWorld()) return;
 
@@ -20,14 +18,6 @@ UUManagerGameInstance::UUManagerGameInstance() {
 
 void UUManagerGameInstance::Init() {
 	
-    Super::Init();
-
-    const bool bServerProcess = IsRunningDedicatedServer() || FParse::Param(FCommandLine::Get(), TEXT("server"));
-    if (bServerProcess)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[IOCP] Server process. Skip lobby TCP connect."));
-        return;
-    }
 
     const FString ip = "127.0.0.1";
     const uint16_t port = 9000;
@@ -46,6 +36,7 @@ void UUManagerGameInstance::Init() {
             GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Failed to connect to login server"));
         }
     }
+    Super::Init();
 }
 
 void UUManagerGameInstance::OnStart() {
@@ -370,69 +361,6 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
         break;
     }
 
-    case PacketType::S2C_ROOM_START_RES:
-    {
-        uint8_t r = 0;
-        if (ReadU8(payload, payloadLen, off, r))
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[IOCP] RoomStart result=%d"), static_cast<int32>(r));
-        }
-        break;
-    }
-
-    case PacketType::S2C_GAME_START:
-    {
-        uint8_t ipLen = 0;
-        uint32_t ticket = 0;
-        uint16_t port = 0;
-
-        if (!ReadU8(payload, payloadLen, off, ipLen))
-        {
-            break;
-        }
-
-        std::string ipUtf8 = ReadString(payload, payloadLen, off, ipLen);
-        if (ipUtf8.size() != ipLen)
-        {
-            break;
-        }
-
-        if (!ReadU32(payload, payloadLen, off, ticket))
-        {
-            break;
-        }
-
-        if (!ReadU16(payload, payloadLen, off, port))
-        {
-            break;
-        }
-
-        const FString TargetIp = UTF8_TO_TCHAR(ipUtf8.c_str());
-        const uint32_t TravelTicket = ticket != 0 ? ticket : m_sessionId;
-        const FString InGameMapPath = TEXT("/Game/InGame/System/Main_Game_World");
-        const FString URL = FString::Printf(
-            TEXT("%s:%d%s?ticket=%u"),
-            *TargetIp,
-            static_cast<int32>(port),
-            *InGameMapPath,
-            TravelTicket
-        );
-
-        AsyncTask(ENamedThreads::GameThread, [this, URL]()
-            {
-                UE_ASYNC_GUARD
-
-                UE_LOG(LogTemp, Warning, TEXT("[IOCP] GameStart received. ClientTravel URL=%s"), *URL);
-
-                APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-                if (PC)
-                {
-                    PC->ClientTravel(URL, TRAVEL_Absolute);
-                }
-            });
-        break;
-    }
-
     case PacketType::S2C_ROOM_READY_BRD:
     {
         uint32_t sid = 0;
@@ -573,11 +501,6 @@ bool UUManagerGameInstance::SendReady(bool ready)
 {
     uint8_t v = ready ? 1 : 0;
     return SendPacket(PacketType::C2S_ROOM_READY_REQ, &v, 1);
-}
-
-bool UUManagerGameInstance::SendRoomStart()
-{
-    return SendPacket(PacketType::C2S_ROOM_START_REQ, nullptr, 0);
 }
 
 

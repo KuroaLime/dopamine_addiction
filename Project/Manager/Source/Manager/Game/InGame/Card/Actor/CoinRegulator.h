@@ -37,6 +37,6 @@ public:
 	UPROPERTY(VisibleAnywhere, Category = UI)
 	class UWidgetComponent* HavingCoin;
 
-	UPROPERTY(EditDefaultsOnly, Category = "UI")
-	TSubclassOf<class UUserWidget> CoinWidgetClass;
+	//UPROPERTY(EditDefaultsOnly, Category = "UI")
+	//TSubclassOf<class UUserWidget> CoinWidgetClass;
 };

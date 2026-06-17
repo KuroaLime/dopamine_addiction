@@ -91,7 +91,7 @@ private:
     uint16_t AllocPort();
     void     FreePort(uint16_t port);
 
-    bool     LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_t requiredPlayers);
+    bool     LaunchDedicatedServer(uint16_t port);
 
     void     BroadcastRoomList();
     void     BroadcastRoomMemberList(uint32_t roomId);

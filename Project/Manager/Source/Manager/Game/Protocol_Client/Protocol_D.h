@@ -414,7 +414,3 @@ namespace
         return true;
     }
 }
-
-#ifdef GetObject
-#undef GetObject
-#endif
