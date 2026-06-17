@@ -63,6 +63,7 @@ private:
 	UFUNCTION()
 	void OnCreateRoomClicked();
 
+	UFUNCTION()
 	void UpdateRoomDisplay();
 
 public:
