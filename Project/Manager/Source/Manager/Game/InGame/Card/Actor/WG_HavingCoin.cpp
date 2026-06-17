@@ -9,14 +9,14 @@ void UWG_HavingCoin::BindCharacterState(UCharacterStateComponent* NewCharacterSt
 	
 	CurrentCharacterState = NewCharacterState;
 	NewCharacterState->OnGoldChanged.AddUObject(this, &UWG_HavingCoin::UpdateHavingCoinWidget);
-	UpdateHavingCoinWidget();
+	//UpdateHavingCoinWidget();
 }
 
 void UWG_HavingCoin::NativeConstruct() {
 	Super::NativeConstruct();
 
 	HavingCoinText = Cast<UTextBlock>(GetWidgetFromName(TEXT("CoinFront")));
-	UpdateHavingCoinWidget();
+	//UpdateHavingCoinWidget();
 }
 void UWG_HavingCoin::NativeDestruct()
 {
@@ -27,9 +27,9 @@ void UWG_HavingCoin::NativeDestruct()
 	}
 }
 
-void UWG_HavingCoin::UpdateHavingCoinWidget() {
+void UWG_HavingCoin::UpdateHavingCoinWidget(float NewGold) {
 	
 	if (CurrentCharacterState.IsValid()) {
-		if (nullptr != HavingCoinText) HavingCoinText->SetText(FText::AsNumber(CurrentCharacterState->GetGold()));
+		if (nullptr != HavingCoinText) HavingCoinText->SetText(FText::AsNumber(NewGold));
 	}
 }

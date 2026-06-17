@@ -21,7 +21,7 @@ protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;
 protected:
-	void UpdateHavingCoinWidget();
+	void UpdateHavingCoinWidget(float NewGold);
 
 private:
 	UPROPERTY()

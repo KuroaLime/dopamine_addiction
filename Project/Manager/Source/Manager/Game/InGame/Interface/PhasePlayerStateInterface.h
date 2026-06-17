@@ -27,6 +27,14 @@ enum class EPlayerStatType : uint8
 	HealthRegeneration = 3,
 };
 
+UENUM(BlueprintType)
+enum class ECurPlayerStatType : uint8
+{
+	None = 0,
+	CurrentHP = 1,
+	HoldingGold = 2,
+};
+
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
 class UPhasePlayerStateInterface : public UInterface
@@ -44,6 +52,8 @@ class MANAGER_API IPhasePlayerStateInterface
 public:
 	virtual int32 GetWeaponStatLV(EWeaponStatType StatType) const = 0;
 	virtual int32 GetPlayerStatLV(EPlayerStatType StatType) const = 0;
+	virtual int32 GetCurPlayerStatLV(ECurPlayerStatType StatType) const = 0;
+
 	virtual EBulletType GetBulletID() const = 0;
 	virtual EWeaponType GetWeaponID() const = 0;
 

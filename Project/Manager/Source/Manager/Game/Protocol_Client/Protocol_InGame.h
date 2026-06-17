@@ -93,7 +93,18 @@ struct FPlayerData
     UPROPERTY(BlueprintReadWrite)
     int32 LvHealthRegeneration;
 };
+//////////////////////////////////////////////////////////
+// 실시간 플레이어 데이터
+USTRUCT(BlueprintType)
+struct FCurPlayerData
+{
+    GENERATED_BODY()
 
+    UPROPERTY(BlueprintReadWrite)
+    int32 CurrentHP;
+    UPROPERTY(BlueprintReadWrite)
+    int32 HoldingGold;
+};
 //////////////////////////////////////////////////////////
 // GameState Data
 USTRUCT(BlueprintType)

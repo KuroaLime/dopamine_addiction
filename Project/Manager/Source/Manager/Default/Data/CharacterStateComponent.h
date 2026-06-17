@@ -6,27 +6,31 @@
 #include "Components/ActorComponent.h"
 #include "CharacterStateComponent.generated.h"
 
+#define MAX_GOLD 10000
 //PLAYER IMAGE
 DECLARE_MULTICAST_DELEGATE(FOnPlayerImageChangedDelegate);
 //HP
 DECLARE_MULTICAST_DELEGATE(FOnHPChangedDelegate);
 DECLARE_MULTICAST_DELEGATE(FOnHPISZeroDelegate);
+
 //LEVEL
 DECLARE_MULTICAST_DELEGATE(FOnLEVELChangedDelegate);
 //NAME
 DECLARE_MULTICAST_DELEGATE(FOnNameChangedDelegate);
+
 //SKILL
 DECLARE_MULTICAST_DELEGATE(FOnSkillStateChangedDelegate);
+
 //WEAPON IMAGE
 DECLARE_MULTICAST_DELEGATE(FOnWeaponStateChangedDelegate);
 //WEAPON COUNT
 DECLARE_MULTICAST_DELEGATE(FOnWeaponCountChangedDelegate);
-//EXP
-DECLARE_MULTICAST_DELEGATE(FOnEXPChangedDelegate);
+
+
 //Compass
 DECLARE_MULTICAST_DELEGATE(FOnComapassChangedDelegate);
 //Gold
-DECLARE_MULTICAST_DELEGATE(FOnGoldChangeDelegate);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnGoldChangeDelegate, float New);
 
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
@@ -48,14 +52,10 @@ public:
 
 public:
 	void SetNewLevel(int32 NewLevel);
-	void SetDamage(float NewDamage);
-
-	void SetHP(float NewHP);
 
 	float GetHPRatio();
 	float GetMaxHP();
 	float GetCurrentHP();
-	float GetGold();
 	float GetAttack();
 
 	int GetLevel();
@@ -75,8 +75,7 @@ public:
 	FOnWeaponStateChangedDelegate OnWeaponStateChanged;
 	//WEAPON COUNT
 	FOnWeaponCountChangedDelegate OnWeaponCountChanged;
-	//EXP
-	FOnEXPChangedDelegate OnEXPChanged;
+
 	//Compass
 	FOnComapassChangedDelegate OnCompassChanged;
 	//Gold
@@ -90,11 +89,8 @@ private:
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 protected:
-	//HP
-	UPROPERTY(ReplicatedUsing = OnRep_CurrentHP, Transient, VisibleInstanceOnly, Category = State, Meta = (AllowPrivateAccess = true))
-	float CurrentHP;
-	UFUNCTION()
-	void OnRep_CurrentHP();
+	
+
 
 	//Level
 	UPROPERTY(ReplicatedUsing = OnRep_Level, EditInstanceOnly, Category = State, Meta = (AllowPrivateAccess = true))
@@ -103,10 +99,14 @@ protected:
 	void OnRep_Level();
 
 	//Gold
-	UPROPERTY(ReplicatedUsing = OnRep_HoldingGold, Transient, VisibleInstanceOnly, Category = State, Meta = (AllowPrivateAccess = true))
-	float HoldingGold;
+	//UPROPERTY(ReplicatedUsing = OnRep_HoldingGold, Transient, VisibleInstanceOnly, Category = State, Meta = (AllowPrivateAccess = true))
+	//float HoldingGold;
 	UFUNCTION()
-	void OnRep_HoldingGold();
+	void OnRep_HoldingGold(float NewGold);
 
-	
+	UFUNCTION()
+	void OnRep_ChangeCurrentHP(float NewHP);
+public:
+	UFUNCTION()
+	void BindToPlayerState(class AMainPlayerState* PS);
 };

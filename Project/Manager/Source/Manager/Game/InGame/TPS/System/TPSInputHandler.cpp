@@ -8,6 +8,7 @@
 #include "Default/Ability/GAS/PFGASC.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
+#include "Game/InGame/MainPlayerState.h"
 
 UTPSInputHandler::UTPSInputHandler()
 {
@@ -125,6 +126,9 @@ void UTPSInputHandler::Input_StartFire()
 	if (!EquippedGun || !EquippedGun->Setting) return;
 
 	EquippedGun->Setting->StartLoopFire();
+
+
+
 }
 
 void UTPSInputHandler::Input_StopFire()

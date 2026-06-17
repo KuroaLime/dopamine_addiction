@@ -39,7 +39,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnSelectionFinished OnSelectionFinishedEvent;
 
-	void SetCardID(int32 NewID);
+	void SetCardID();
 
 	virtual void BindCharacterState(class UCharacterStateComponent* NewCharacterState) override;
 

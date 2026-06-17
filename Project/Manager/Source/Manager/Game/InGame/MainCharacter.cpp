@@ -24,6 +24,7 @@
 #include "Game/InGame/TPS/UI/TpsCharacterWidget.h" 
 //#include "Game/InGame/TPS/UI/TpsPlayerMainHUD.h"
 #include "Default/Component/Player/InteractionComponent.h"
+#include "Game/InGame/MainPlayerState.h"
 #include "Default/Data/CameraStateComponent.h"
 
 // Sets default values
@@ -179,6 +180,13 @@ void AMainCharacter::InitPlayerData()
 			PS_Interface->SetWeaponID(GS->GetWeaponID());
 		}
 	}
+
+	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>())
+	{
+		if (CharacterState){
+			CharacterState->BindToPlayerState(PS);
+		}
+	}
 }
 
 // Called to bind functionality to input
@@ -241,15 +249,13 @@ float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& 
 {
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-	if (CharacterState)
-	{
-		CharacterState->SetDamage(ActualDamage);
+	if (HasAuthority()) {
+		AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+		if (PS) {
+			PS->ApplyDamage(ActualDamage);
+		}
 	}
 
-	if (CharacterState->GetCurrentHP() <= 0) { GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Dieeeeeeeeeeeeeeeeeeeeeeeeeeee!")); }
-	else {
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Damageddddd!"));
-	}
 
 	return ActualDamage;
 }

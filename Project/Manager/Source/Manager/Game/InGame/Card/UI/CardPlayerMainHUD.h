@@ -23,7 +23,7 @@ protected:
 	virtual void StaticUI() override;
 protected:
 	void UpdateGoldBackgroundImage();
-	void UpdateHoldingGoldText();
+	void UpdateHoldingGoldText(float NewGold);
 
 	void UpdateCPlayers_State_UI();
 	void UpdateCRoundandTimer_UI();

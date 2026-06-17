@@ -11,14 +11,13 @@ void UCardPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharact
 
 	CurrentCharacterState = NewCharacterState;
 	//NewCharacterState->OnHPChanged.AddUObject(this, &UTpsPlayerMainHUD::UpdateHPWidget);
-	//NewCharacterState->OnLEVELChanged.AddUObject(this, &UTpsPlayerMainHUD::UpdateLevelWidget);
+	CurrentCharacterState->OnGoldChanged.AddUObject(this, &UCardPlayerMainHUD::UpdateHoldingGoldText);
 
 	if (CRoundandTimer_UI)
 	{
 		CRoundandTimer_UI->BindCharacterState(NewCharacterState);
 	}
 	StaticUI();
-	UpdateHoldingGoldText();
 	UpdateCPlayers_State_UI();
 	UpdateCRoundandTimer_UI();
 }
@@ -44,10 +43,10 @@ void UCardPlayerMainHUD::UpdateGoldBackgroundImage() {
 		if (nullptr != GoldBackgroundImage) GoldBackgroundImage->SetBrushFromTexture(GoldBackground_Image);
 	}
 }
-void UCardPlayerMainHUD::UpdateHoldingGoldText() {
+void UCardPlayerMainHUD::UpdateHoldingGoldText(float NewGold) {
 	if (CurrentCharacterState.IsValid()) {
 		if (nullptr != HoldingGoldText) {
-			HoldingGoldText->SetText(FText::AsNumber(CurrentCharacterState->GetGold()));
+			HoldingGoldText->SetText(FText::AsNumber(NewGold));
 		}
 	}
 }

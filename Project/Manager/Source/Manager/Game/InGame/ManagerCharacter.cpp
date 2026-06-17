@@ -262,13 +262,13 @@ float AManagerCharacter::TakeDamage(float DamageAmount, struct FDamageEvent cons
 
 	if (CharacterState)
 	{
-		CharacterState->SetDamage(ActualDamage);
+		//CharacterState->SetDamage(ActualDamage);
 	}
 
-	if (CharacterState->GetCurrentHP() <= 0) { GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Dieeeeeeeeeeeeeeeeeeeeeeeeeeee!")); }
+	/*if (CharacterState->GetCurrentHP() <= 0) { GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Dieeeeeeeeeeeeeeeeeeeeeeeeeeee!")); }
 	else {
 		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Damageddddd!"));
-	}
+	}*/
 
 	return ActualDamage;
 }

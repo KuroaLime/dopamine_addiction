@@ -59,8 +59,10 @@ void ACoinRegulator::BeginPlay()
 	}
 
 	auto CharacterWidget = Cast<UWG_HavingCoin>(HavingCoin->GetUserWidgetObject());
+
 	if (nullptr != CharacterWidget && nullptr != TargetPS)
 	{
+		//if(AMainPlayerState* PS = Cast<AMainPlayerState>(HavingCoin->GetUserWidgetObject()))
 		CharacterWidget->BindCharacterState(TargetPS);
 	}
 

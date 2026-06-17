@@ -7,7 +7,7 @@
 #include "Game/InGame/Handler/InputHandler.h"
 #include "Game/InGame/Interface/InterfaceInfo.h"
 #include "Kismet/GameplayStatics.h"
-
+#include "Game/InGame/MainPlayerState.h"
 
 void AMainPlayerController::BeginPlay()
 {
@@ -216,4 +216,24 @@ void AMainPlayerController::Multicast_PopMode_Implementation()
 		InputHandlerMap[PrevPhase]->InputActivate();
 
 	CurrentPhase = PrevPhase;
+}
+
+//상점에서 아이템 구매후 반영
+//캐릭터 고정 state 업그레이드
+bool AMainPlayerController::Server_RequestUpgrade_Validate(int32 ItemID)
+{
+	if (ItemID < 0) return false;
+	return true;
+}
+void AMainPlayerController::Server_RequestUpgrade_Implementation(int32 ItemID)
+{
+	//AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	int32 Price=0;// = GetItemPrice(ItemID);
+	//if (PS->GetGold() >= Price)
+	//{
+	//	/*PS->AddGold(-Price);
+	//	 PS->ApplyUpgrade(ItemID);*/
+	//}
+
+
 }

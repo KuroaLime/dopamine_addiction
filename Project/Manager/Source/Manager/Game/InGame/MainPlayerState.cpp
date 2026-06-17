@@ -6,7 +6,8 @@
 
 AMainPlayerState::AMainPlayerState()
 {
-    
+    CurPlayerData.HoldingGold = 10;
+    CurPlayerData.CurrentHP = 150;
 }
 
 void AMainPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -15,7 +16,10 @@ void AMainPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 
     DOREPLIFETIME(AMainPlayerState, WeaponData);
     DOREPLIFETIME(AMainPlayerState, PlayerData);
+    DOREPLIFETIME(AMainPlayerState, CurPlayerData);
+
 }
+
 
 int32 AMainPlayerState::GetWeaponStatLV(EWeaponStatType StatType) const
 {
@@ -43,6 +47,17 @@ int32 AMainPlayerState::GetPlayerStatLV(EPlayerStatType StatType) const
     }
 }
 
+int32 AMainPlayerState::GetCurPlayerStatLV(ECurPlayerStatType StatType) const
+{
+    switch (StatType)
+    {
+    case ECurPlayerStatType::None:              return 0;
+    case ECurPlayerStatType::CurrentHP:         return CurPlayerData.CurrentHP;
+    case ECurPlayerStatType::HoldingGold:       return CurPlayerData.HoldingGold;
+    default:                                    return 0;
+    }
+}
+
 EBulletType AMainPlayerState::GetBulletID() const
 {
     return WeaponData.bulletID;
@@ -57,4 +72,33 @@ void AMainPlayerState::SetWeaponID(EWeaponType WeaponID)
 {
     WeaponData.weaponID = WeaponID;
     ForceNetUpdate();
+}
+
+void AMainPlayerState::AddGold(float Amount)
+{
+    if (!HasAuthority())
+        return;
+    CurPlayerData.HoldingGold += Amount;
+    ForceNetUpdate();
+    //OnRep_CurPlayerData(ECurPlayerStatType::HoldingGold);
+}
+
+void AMainPlayerState::ApplyDamage(float ActualDamage)
+{
+    if (!HasAuthority())
+        return;
+    CurPlayerData.CurrentHP -= ActualDamage;
+    //OnRep_CurPlayerData();
+    ForceNetUpdate();
+}
+
+void AMainPlayerState::OnRep_CurPlayerData(FCurPlayerData OldCurPlayerData)
+{
+    if (OldCurPlayerData.HoldingGold != CurPlayerData.HoldingGold) {
+        OnGoldChnageNative.Broadcast(CurPlayerData.HoldingGold);
+    }
+    if (OldCurPlayerData.CurrentHP != CurPlayerData.CurrentHP) {
+        OnHPChnageNative.Broadcast(CurPlayerData.CurrentHP);
+    }
+    
 }

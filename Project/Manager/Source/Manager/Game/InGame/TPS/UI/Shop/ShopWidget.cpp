@@ -5,6 +5,8 @@
 #include "Game/InGame/TPS/UI/Shop/ShopButton.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Game/InGame/TPS/UI/Shop/UpgradeSelectionWidget.h"
+#include "Blueprint/WidgetTree.h"
+#include "Game/InGame/MainPlayerController.h"
 
 void UShopWidget::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
 
@@ -13,7 +15,7 @@ void UShopWidget::BindCharacterState(class UCharacterStateComponent* NewCharacte
 void UShopWidget::NativeConstruct() {
 	Super::NativeConstruct();
 
-
+	//랜덤카드
 	if (CardSelectionPanel) CardSelectionPanel->SetVisibility(ESlateVisibility::Collapsed);
 
 	if (CardSelectionPanel)
@@ -26,54 +28,57 @@ void UShopWidget::NativeConstruct() {
 		UpgradeButton00->SetItemID(0);
 		UpgradeButton00->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleUpgradePurchase);
 	}
-	if (UpgradeButton01)
-	{
-		UpgradeButton01->SetItemID(1);
-		UpgradeButton01->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleUpgradePurchase);
-	}
-	if (UpgradeButton02)
-	{
-		UpgradeButton02->SetItemID(2);
-		UpgradeButton02->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleUpgradePurchase);
-	}
+
+	Char_UpgradeButtons.Empty();
+	WidgetTree->ForEachWidget([this](UWidget* Widget)
+		{
+			if (UShopButton* FoundButton = Cast < UShopButton>(Widget)) {
+				if (FoundButton->GetName().StartsWith(TEXT("Char_UpgradeButton"))) {
+					Char_UpgradeButtons.Add(FoundButton);
+					int32 GeneratedID = Char_UpgradeButtons.Num() - 1;
+					FoundButton->SetItemID(GeneratedID);
+					FoundButton->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleUpgradePurchase);
+
+				}
+			}
+		}
+	);
+	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Total %d upgrade buttons registered."), Char_UpgradeButtons.Num()));
+	
 
 
 }
 void UShopWidget::HandleUpgradePurchase(int32 ItemID) {
-	switch (ItemID) {
-	case 0:
-		UE_LOG(LogTemp, Warning, TEXT("0번 아이템(UpgradButton00) 구매 시도!"));
-		break;
-	case 1:
-		UE_LOG(LogTemp, Warning, TEXT("1번 아이템(UpgradButton00) 구매 시도!"));
-		break;
-	case 2:
-		UE_LOG(LogTemp, Warning, TEXT("2번 아이템(UpgradButton00) 구매 시도!"));
-		break;
+	Update_UpgradeSelectionWidget();
 
-	default:
-		break;
+}
+//고정 캐릭터 스탯 업그레이드 버튼 누를시 수행
+void UShopWidget::HandleUpgradCharacterState(int32 ItemID)
+{
+	AMainPlayerController* PlayerController = Cast<AMainPlayerController>(GetOwningPlayer());
+	if (PlayerController) {
+		PlayerController->Server_RequestUpgrade(ItemID);
 	}
+}
 
+
+void UShopWidget::Update_UpgradeSelectionWidget() {
+	FSlateApplication::Get().SetAllUserFocusToGameViewport();
 	if (UpgradeButton00) UpgradeButton00->SetVisibility(ESlateVisibility::Collapsed);
-	if (UpgradeButton01) UpgradeButton01->SetVisibility(ESlateVisibility::Collapsed);
-	if (UpgradeButton02) UpgradeButton02->SetVisibility(ESlateVisibility::Collapsed);
+	for (const auto& Button : Char_UpgradeButtons)
+		Button->SetVisibility(ESlateVisibility::Collapsed);
 
 	if (CardSelectionPanel)
 	{
-		CardSelectionPanel->SetCardID(ItemID);
-		CardSelectionPanel->SetVisibility(ESlateVisibility::Visible);
+		CardSelectionPanel->SetCardID(); //고르는 카드 ID 설정(오해 ㄴㄴ염)
+		CardSelectionPanel->SetVisibility(ESlateVisibility::Visible);//보이게
 	}
-
-	FSlateApplication::Get().SetAllUserFocusToGameViewport();
 }
-void UShopWidget::UpdateWidget() {
 
-}
 void UShopWidget::ReturnToShopButtons()
 {
 	if (CardSelectionPanel) CardSelectionPanel->SetVisibility(ESlateVisibility::Collapsed);
 	if (UpgradeButton00) UpgradeButton00->SetVisibility(ESlateVisibility::Visible);
-	if (UpgradeButton01) UpgradeButton01->SetVisibility(ESlateVisibility::Visible);
-	if (UpgradeButton02) UpgradeButton02->SetVisibility(ESlateVisibility::Visible);
+	for (const auto& Button : Char_UpgradeButtons)
+		Button->SetVisibility(ESlateVisibility::Visible);
 }

@@ -4,6 +4,9 @@
 #include "Default/Data/CharacterStateComponent.h"
 #include "Default/System/UManagerGameInstance.h"
 #include "Kismet/GameplayStatics.h"
+#include "Game/InGame/MainPlayerState.h"
+#include "Game/InGame/MainPlayerController.h"
+
 #include "Net/UnrealNetwork.h"
 
 // Sets default values for this component's properties
@@ -16,7 +19,9 @@ UCharacterStateComponent::UCharacterStateComponent()
 	SetIsReplicatedByDefault(true);
 	// ...
 	Level = 1;
-	HoldingGold = 10000;
+	//HoldingGold = 10000;
+
+	
 }
 
 
@@ -27,6 +32,11 @@ void UCharacterStateComponent::BeginPlay()
 	SetNewLevel(Level);
 	// ...
 	
+	if (APawn* Pawn = Cast<APawn>(GetOwner())) {
+		if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {
+			BindToPlayerState(PS);
+		}
+	}
 }
 
 
@@ -54,8 +64,7 @@ void UCharacterStateComponent::SetNewLevel(int32 NewLevel) {
 		CurrentStateData = ABGameInstance->GetABCharacterData(NewLevel);
 		if (nullptr != CurrentStateData) {
 			Level = NewLevel;
-			SetHP(CurrentStateData->MaxHP);
-			//CurrentHP = CurrentStateData->MaxHP;
+			
 		}
 		else {
 			//ABLOG(Error, TEXT("Level (%d) data doesn't exist"), NewLevel);
@@ -66,25 +75,8 @@ void UCharacterStateComponent::SetNewLevel(int32 NewLevel) {
 
 }
 
-void UCharacterStateComponent::SetDamage(float NewDamage) {
-	//CurrentHP = FMath::Clamp<float>(CurrentHP - NewDamage, 0.0f, CurrentStateData->MaxHP);
-	//if (CurrentHP <= 0.0f) {
-	//	OnHPIsZero.Broadcast();
-	//}
-	if (CurrentStateData == nullptr) return;
-	SetHP(FMath::Clamp<float>(CurrentHP - NewDamage, 0.0f, CurrentStateData->MaxHP));
-}
 
-void UCharacterStateComponent::SetHP(float NewHP) {
-	CurrentHP = NewHP;
-	OnHPChanged.Broadcast();
-	OnLEVELChanged.Broadcast();
-	if (CurrentHP < KINDA_SMALL_NUMBER) {
-		CurrentHP = 0.0f;
-		OnHPIsZero.Broadcast();
-		OnGoldChanged.Broadcast();
-	}
-}
+
 
 float UCharacterStateComponent::GetAttack() {
 	return 10.0f;
@@ -92,17 +84,26 @@ float UCharacterStateComponent::GetAttack() {
 }
 float UCharacterStateComponent::GetHPRatio() {
 	if (CurrentStateData != nullptr) {
-		return (CurrentStateData->MaxHP < KINDA_SMALL_NUMBER) ? 0.0f : (CurrentHP / CurrentStateData->MaxHP);
+		if (APawn* Pawn = Cast<APawn>(GetOwner())) {
+			if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {
+				return (CurrentStateData->MaxHP < KINDA_SMALL_NUMBER) ? 0.0f : (PS->CurPlayerData.CurrentHP / CurrentStateData->MaxHP);
+
+			}
+		}
 		
 	}
 	return 0.0f;
 }
 float UCharacterStateComponent::GetCurrentHP() {
-	return (CurrentHP);
+	if (APawn* Pawn = Cast<APawn>(GetOwner())) {
+		if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {
+			return PS->CurPlayerData.CurrentHP;
+
+		}
+	}
+	return 0.0f;
 }
-float UCharacterStateComponent::GetGold() {
-	return (HoldingGold);
-}
+
 float UCharacterStateComponent::GetMaxHP() {
 	if (CurrentStateData == nullptr) return 100.0f;
 	return (CurrentStateData->MaxHP);
@@ -117,27 +118,38 @@ void UCharacterStateComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProper
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-	DOREPLIFETIME(UCharacterStateComponent, CurrentHP);
+	//DOREPLIFETIME(UCharacterStateComponent, CurrentHP);
 	DOREPLIFETIME(UCharacterStateComponent, Level);
 }
-void UCharacterStateComponent::OnRep_CurrentHP()
-{
-	// 클라이언트의 위젯들에게 값이 바뀌었음을 알림
-	OnHPChanged.Broadcast();
 
-	if (CurrentHP < KINDA_SMALL_NUMBER)
-	{
-		OnHPIsZero.Broadcast();
-	}
-}
 void UCharacterStateComponent::OnRep_Level()
 {
 	SetNewLevel(Level);
 	OnLEVELChanged.Broadcast();
 }
 
-void UCharacterStateComponent::OnRep_HoldingGold() {
-	if (CurrentHP < KINDA_SMALL_NUMBER) {
-		OnGoldChanged.Broadcast();
+void UCharacterStateComponent::OnRep_HoldingGold(float NewGold) {
+	if (NewGold < MAX_GOLD) {
+		OnGoldChanged.Broadcast(NewGold);
+	}
+}
+
+void UCharacterStateComponent::OnRep_ChangeCurrentHP(float NewHP)
+{
+	OnHPChanged.Broadcast();
+	if (NewHP <= 0.0f) {
+		OnHPIsZero.Broadcast();
+	}
+}
+
+void UCharacterStateComponent::BindToPlayerState(AMainPlayerState* PS)
+{
+	if (PS) {
+		PS->OnGoldChnageNative.RemoveAll(this);
+		PS->OnGoldChnageNative.AddUObject(this, &UCharacterStateComponent::OnRep_HoldingGold);
+		PS->OnHPChnageNative.AddUObject(this, &UCharacterStateComponent::OnRep_ChangeCurrentHP);
+
+		OnRep_HoldingGold(PS->CurPlayerData.HoldingGold);
+		OnRep_ChangeCurrentHP(PS->CurPlayerData.CurrentHP);
 	}
 }

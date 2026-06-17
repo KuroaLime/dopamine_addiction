@@ -81,4 +81,7 @@ public:
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PopMode();
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestUpgrade(int32 ItemID);
 };

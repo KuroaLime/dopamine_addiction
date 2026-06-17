@@ -27,7 +27,7 @@ void UUpgradeSelectionWidget::HandleCardSelected(int32 CardID) {
 }
 
 
-void UUpgradeSelectionWidget::SetCardID(int32 NewID) {
+void UUpgradeSelectionWidget::SetCardID() {
 	if (SelectionCard00) SelectionCard00->SetCardID(101);
 	if (SelectionCard01) SelectionCard01->SetCardID(102);
 	if (SelectionCard02) SelectionCard02->SetCardID(103);

@@ -17,11 +17,10 @@ private:
 	UPROPERTY(meta=(BindWidget))
 	class UShopButton* UpgradeButton00 = nullptr;
 
-	UPROPERTY(meta = (BindWidget))
-	UShopButton* UpgradeButton01 = nullptr;
 
-	UPROPERTY(meta = (BindWidget))
-	UShopButton* UpgradeButton02 = nullptr;
+	UPROPERTY()
+	TArray<class UShopButton*> Char_UpgradeButtons;
+
 
 	UPROPERTY(meta = (BindWidget))
 	class UUpgradeSelectionWidget* CardSelectionPanel = nullptr;
@@ -30,6 +29,8 @@ protected:
 	UFUNCTION()
 	void HandleUpgradePurchase(int32 ItemID);
 	UFUNCTION()
+	void HandleUpgradCharacterState(int32 ItemID);
+	UFUNCTION()
 	void ReturnToShopButtons();
 public:
 	virtual void BindCharacterState(class UCharacterStateComponent* NewCharacterState) override;
@@ -37,5 +38,6 @@ protected:
 	virtual void NativeConstruct() override;
 
 public:
-	void UpdateWidget();
+	void Update_UpgradeSelectionWidget();
+	
 };
