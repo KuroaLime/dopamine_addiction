@@ -54,4 +54,7 @@ public:
 protected:
 	UFUNCTION()
 	void OnRep_CurPlayerData(FCurPlayerData OldCurPlayerData);
+public:
+	UFUNCTION()
+	void Server_ApplyUpgrad_Implementation(EUpgradeType Type);
 };

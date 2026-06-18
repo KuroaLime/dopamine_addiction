@@ -19,7 +19,7 @@ void UCardWidget::NativeConstruct() {
 
 void UCardWidget::OnSelectCardClicked() {
 	if (OnCardSelectionEvent.IsBound())
-		OnCardSelectionEvent.Broadcast(CardID);
+		OnCardSelectionEvent.Broadcast(SelectionIndex);
 
 }
 void UCardWidget::OnSelectCardHover() {
@@ -28,6 +28,9 @@ void UCardWidget::OnSelectCardHover() {
 void UCardWidget::UpdateWidget() {
 	//물결이 차오르는 듯한 표현 추가 필요
 }
-void UCardWidget::SetCardID(int32 NewID) {
-	CardID = NewID;
+void UCardWidget::SetUpgradeType(EUpgradeType NewType, int32 Index) {
+	CurrentType = NewType;
+	SelectionIndex = Index;
+
+	//여기서 데이터테이블 연계 확인
 }

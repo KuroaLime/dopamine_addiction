@@ -4,11 +4,15 @@
 
 #include "CoreMinimal.h"
 #include "Default/UI/WidgetParent.h"
-#include "ShopWidget.generated.h"
+#include "Game/Protocol_Client/Protocol_InGame.h"
 
+#include "ShopWidget.generated.h"
 /**
  * 
  */
+
+
+
 UCLASS()
 class MANAGER_API UShopWidget : public UWidgetParent
 {
@@ -31,13 +35,18 @@ protected:
 	UFUNCTION()
 	void HandleUpgradCharacterState(int32 ItemID);
 	UFUNCTION()
+	void bRandomCardSelected(int32 CardID);
+	UFUNCTION()
 	void ReturnToShopButtons();
+
+	UFUNCTION()
+	void SendToSelectionCardID(int32 CardID);
 public:
 	virtual void BindCharacterState(class UCharacterStateComponent* NewCharacterState) override;
 protected:
 	virtual void NativeConstruct() override;
 
 public:
-	void Update_UpgradeSelectionWidget();
+	void Update_UpgradeSelectionWidget(const TArray<EUpgradeType>& Options);
 	
 };

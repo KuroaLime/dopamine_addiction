@@ -102,3 +102,58 @@ void AMainPlayerState::OnRep_CurPlayerData(FCurPlayerData OldCurPlayerData)
     }
     
 }
+
+void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
+{
+    //업그레이드 골드가 있는지 체크 ㄱㄱ
+    if (CurPlayerData.HoldingGold) {
+
+    }
+    switch (Type) {
+    case EUpgradeType::Player_Health:
+        if (PlayerData.LvHealth < Max_UpgradeLevel) {
+            PlayerData.LvHealth++;
+        }
+        break;
+    case EUpgradeType::Player_MoveSpeed:
+        if (PlayerData.LvMovementSpeed < Max_UpgradeLevel) {
+            PlayerData.LvMovementSpeed++;
+        }
+        break;
+    case EUpgradeType::Player_HealthRegeneration:
+        if (PlayerData.LvHealthRegeneration < Max_UpgradeLevel) {
+            PlayerData.LvHealthRegeneration++;
+        }
+        break;
+    case EUpgradeType::Weapon_Damage:
+        if (WeaponData.LvDamage < Max_UpgradeLevel) {
+            WeaponData.LvDamage++;
+        }
+        break;
+    case EUpgradeType::Weapon_FireRate:
+        if (WeaponData.LvFireRate < Max_UpgradeLevel) {
+            WeaponData.LvFireRate++;
+        }
+        break;
+    case EUpgradeType::Weapon_Range:
+        if (WeaponData.LvRange < Max_UpgradeLevel) {
+            WeaponData.LvRange++;
+        }
+        break;
+    case EUpgradeType::Weapon_Magazine:
+        if (WeaponData.LvMagazineCapacity < Max_UpgradeLevel) {
+            WeaponData.LvMagazineCapacity++;
+        }
+        break;
+    case EUpgradeType::Weapon_Reload:
+        if (WeaponData.LvReloadTime < Max_UpgradeLevel) {
+            WeaponData.LvReloadTime++;
+        }
+        break;
+    default:
+        break;
+    }
+
+
+    //변경되었음을 알리고 적용하도록 하는 함수
+}

@@ -20,7 +20,7 @@ void UShopWidget::NativeConstruct() {
 
 	if (CardSelectionPanel)
 	{
-		CardSelectionPanel->OnSelectionFinishedEvent.AddDynamic(this, &UShopWidget::ReturnToShopButtons);
+		CardSelectionPanel->OnSelectionFinishedEvent.AddDynamic(this, &UShopWidget::bRandomCardSelected);
 	}
 
 	if(UpgradeButton00)
@@ -49,7 +49,10 @@ void UShopWidget::NativeConstruct() {
 
 }
 void UShopWidget::HandleUpgradePurchase(int32 ItemID) {
-	Update_UpgradeSelectionWidget();
+	AMainPlayerController* PlayerController = Cast<AMainPlayerController>(GetOwningPlayer());
+	if (PlayerController) {
+		PlayerController->Server_RequestRandomUpgradeOptions();
+	}
 
 }
 //고정 캐릭터 스탯 업그레이드 버튼 누를시 수행
@@ -57,12 +60,12 @@ void UShopWidget::HandleUpgradCharacterState(int32 ItemID)
 {
 	AMainPlayerController* PlayerController = Cast<AMainPlayerController>(GetOwningPlayer());
 	if (PlayerController) {
-		PlayerController->Server_RequestUpgrade(ItemID);
+		//PlayerController->Server_RequestUpgrade(ItemID);
 	}
 }
 
 
-void UShopWidget::Update_UpgradeSelectionWidget() {
+void UShopWidget::Update_UpgradeSelectionWidget(const TArray<EUpgradeType>& Options) {
 	FSlateApplication::Get().SetAllUserFocusToGameViewport();
 	if (UpgradeButton00) UpgradeButton00->SetVisibility(ESlateVisibility::Collapsed);
 	for (const auto& Button : Char_UpgradeButtons)
@@ -70,9 +73,15 @@ void UShopWidget::Update_UpgradeSelectionWidget() {
 
 	if (CardSelectionPanel)
 	{
-		CardSelectionPanel->SetCardID(); //고르는 카드 ID 설정(오해 ㄴㄴ염)
+		CardSelectionPanel->SetCardID(Options); //고르는 카드 ID 설정(오해 ㄴㄴ염)
 		CardSelectionPanel->SetVisibility(ESlateVisibility::Visible);//보이게
 	}
+}
+
+void UShopWidget::bRandomCardSelected(int32 CardID)
+{
+	ReturnToShopButtons();
+	SendToSelectionCardID(CardID);
 }
 
 void UShopWidget::ReturnToShopButtons()
@@ -81,4 +90,12 @@ void UShopWidget::ReturnToShopButtons()
 	if (UpgradeButton00) UpgradeButton00->SetVisibility(ESlateVisibility::Visible);
 	for (const auto& Button : Char_UpgradeButtons)
 		Button->SetVisibility(ESlateVisibility::Visible);
+}
+
+void UShopWidget::SendToSelectionCardID(int32 CardID)
+{
+	AMainPlayerController* PlayerController = Cast<AMainPlayerController>(GetOwningPlayer());
+	if (PlayerController) {
+		PlayerController->Server_SelectUpgradeOption(CardID);
+	}
 }

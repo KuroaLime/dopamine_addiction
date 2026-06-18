@@ -8,6 +8,9 @@
 #include "Game/InGame/Interface/InterfaceInfo.h"
 #include "Kismet/GameplayStatics.h"
 #include "Game/InGame/MainPlayerState.h"
+//ì´ê±° ì¹˜ìš¸ë°©ë²• ì°¾ì•„ë³´ì
+#include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Game/InGame/TPS/UI/Shop/ShopWidget.h"
 
 void AMainPlayerController::BeginPlay()
 {
@@ -119,7 +122,7 @@ void AMainPlayerController::Multicast_SwitchMode_Implementation(EGamePhase NewPh
 
 void AMainPlayerController::Server_SwitchMode_Implementation(EGamePhase NewPhase)
 {
-	// ¼­¹ö¿¡¼­ ¹Ş¾Æ¼­ ¸ğµç Å¬¶óÀÌ¾ğÆ®¿¡ ÀüÆÄ
+	// ì„œë²„ì—ì„œ ë°›ì•„ì„œ ëª¨ë“  í´ë¼ì´ì–¸íŠ¸ì— ì „íŒŒ
 	Multicast_SwitchMode(NewPhase);
 }
 
@@ -218,22 +221,50 @@ void AMainPlayerController::Multicast_PopMode_Implementation()
 	CurrentPhase = PrevPhase;
 }
 
-//»óÁ¡¿¡¼­ ¾ÆÀÌÅÛ ±¸¸ÅÈÄ ¹İ¿µ
-//Ä³¸¯ÅÍ °íÁ¤ state ¾÷±×·¹ÀÌµå
-bool AMainPlayerController::Server_RequestUpgrade_Validate(int32 ItemID)
+
+void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
 {
-	if (ItemID < 0) return false;
-	return true;
+	TArray<EUpgradeType> AllTypes;
+	for (uint8 i = (uint8)EUpgradeType::Weapon_Damage; i <= (uint8)EUpgradeType::Weapon_Reload;++i) {
+		AllTypes.Add(static_cast<EUpgradeType>(i));
+	}
+
+	CurrentUpgradeOptions.Empty();
+	for (int32 i = 0; i < 3; i++) {
+		if (AllTypes.Num() == 0)break;
+		int32 RandomIdx = FMath::RandRange(0, AllTypes.Num() - 1);
+		CurrentUpgradeOptions.Add(AllTypes[RandomIdx]);
+		AllTypes.RemoveAt(RandomIdx);
+	}
+	Client_ReceiveRandomUpgradeOptions(CurrentUpgradeOptions);
 }
-void AMainPlayerController::Server_RequestUpgrade_Implementation(int32 ItemID)
+
+void AMainPlayerController::Client_ReceiveRandomUpgradeOptions_Implementation(const TArray<EUpgradeType>& Options)
 {
-	//AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
-	int32 Price=0;// = GetItemPrice(ItemID);
-	//if (PS->GetGold() >= Price)
-	//{
-	//	/*PS->AddGold(-Price);
-	//	 PS->ApplyUpgrade(ItemID);*/
-	//}
+	if (UIHandlerMap.Contains(EGamePhase::TPS))
+	{
+		UUIHandler * Handler = UIHandlerMap[EGamePhase::TPS];
 
+		TArray<UUserWidget*> FoundWidgets;
+		UWidgetBlueprintLibrary::GetAllWidgetsOfClass(GetWorld(), FoundWidgets, UShopWidget::StaticClass());
+		for (UUserWidget* Widget : FoundWidgets){
+			UShopWidget * Shop = Cast<UShopWidget>(Widget);
+			if (Shop && Shop->GetOwningPlayer() == this){
+				Shop->Update_UpgradeSelectionWidget(Options);
+				return;
+			}
+		}
+	}
+}
 
+void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 SelectedIndex)
+{
+	if (!CurrentUpgradeOptions.IsValidIndex(SelectedIndex)) return;
+
+	EUpgradeType ChosenType = CurrentUpgradeOptions[SelectedIndex];
+
+	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>()) {
+		PS->Server_ApplyUpgrad_Implementation(ChosenType);
+	}
+	CurrentUpgradeOptions.Empty();
 }

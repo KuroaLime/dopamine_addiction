@@ -82,6 +82,22 @@ public:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PopMode();
 
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestUpgrade(int32 ItemID);
+
+	//랜덤카드3장 생성하기위해서
+	//버튼 눌렀을 때 클라가 호출
+	//3개의 카드 데이터 받아오기
+	UFUNCTION(Server, Reliable)
+	void Server_RequestRandomUpgradeOptions();
+
+	//서버가 랜덤을 돌리고 클라UI에 줄때 사용
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveRandomUpgradeOptions(const TArray<EUpgradeType>&Options);
+
+	//UI에서 카드를 골랐ㅇ르 때 클라가 호출
+	UFUNCTION(Server, Reliable)
+	void Server_SelectUpgradeOption(int32 SelectedIndex);
+
+	//서버 검증용
+	UPROPERTY()
+	TArray<EUpgradeType> CurrentUpgradeOptions;
 };
