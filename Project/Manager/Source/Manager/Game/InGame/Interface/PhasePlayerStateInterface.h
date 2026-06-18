@@ -58,4 +58,5 @@ public:
 	virtual EWeaponType GetWeaponID() const = 0;
 
 	virtual void SetWeaponID(EWeaponType WeaponID) = 0;
+	virtual void ResetState() = 0;
 };

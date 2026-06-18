@@ -115,9 +115,7 @@ void AMainCharacter::BeginPlay()
 		}
 	}
 
-	CharacterState->OnHPIsZero.AddLambda([this]()->void {
-		SetActorEnableCollision(false);
-		});
+	CharacterState->OnHPIsZero.AddUObject(this, &AMainCharacter::OnCharacterDeath);
 
 	auto CharacterWidget = Cast<UTpsCharacterWidget>(HPBarWidget->GetUserWidgetObject());
 	if (nullptr != CharacterWidget)
@@ -205,6 +203,16 @@ bool AMainCharacter::IsCharacterAiming() const
 	return false;
 }
 
+bool AMainCharacter::IsCharacterDeath() const
+{
+	if (AbilitySystemComponent)
+	{
+		return AbilitySystemComponent->HasAnyMatchingGameplayTags(
+			FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("State.Movement.Death"))));
+	}
+	return false;
+}
+
 void AMainCharacter::EquipWeapon(EWeaponType NewWeaponID)
 {
 	if (!HasAuthority()) return;
@@ -259,3 +267,13 @@ float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& 
 	return ActualDamage;
 }
 
+void AMainCharacter::OnCharacterDeath()
+{
+	if(!AbilitySystemComponent->HasAnyMatchingGameplayTags(
+		FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("State.Movement.Death")))))
+	{
+		static const FGameplayTag DeathTag =
+			FGameplayTag::RequestGameplayTag(FName("Ability.Action.Death"));
+		EPFGAbilityActivationResult Result = AbilitySystemComponent->TryActivateAbilityByTag(DeathTag);
+	}
+}

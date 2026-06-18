@@ -45,7 +45,7 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 			EWeaponBaseStatType::FireRate);
 
 		// 발사 속도 하드 코딩
-		float finalFireRate = FireRate * 0.25;
+		float finalFireRate = FireRate * 0.01;
 
 		FTimerDelegate Delegate;
 		TWeakObjectPtr<AActor> WeakOwner(InOwner);
@@ -91,7 +91,7 @@ void UAbility_Fire::ActivateAbility()
 			EWeaponBaseStatType::FireRate);
 
 		// 발사 속도 하드 코딩
-		float finalFireRate = FireRate * 0.25;
+		float finalFireRate = FireRate * 0.01;
 
 		bIsServerFire = true;
 		OwnerCharacter->GetWorldTimerManager().SetTimer(
@@ -164,11 +164,7 @@ void UAbility_Fire::Server_ExecuteFire()
 	int32 DamageUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Damage);
 	float FinalDamage = CalculateDamage(BaseDamage, DamageUpgradeLevel);
 
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Red,
-			TEXT("[Server] Hit Calculate"));
-	}
+	if (!bCamHit || !CamHit.GetActor()) return;
 
 	UGameplayStatics::ApplyDamage(
 		CamHit.GetActor(),

@@ -46,6 +46,18 @@ void AMainPlayerController::SwitchToLevel(FName LevelToUnload, FName LevelToLoad
 	Server_SwitchToLevel(LevelToUnload, LevelToLoad);
 }
 
+void AMainPlayerController::SwitchState(EGamePhase NewPhase)
+{
+	if (HasAuthority())
+	{
+		Client_SwitchState(NewPhase);
+	}
+	else
+	{
+		Server_SwitchState(NewPhase);
+	}
+}
+
 EGamePhase AMainPlayerController::GetCurrentPhase()
 {
 	return CurrentPhase;
@@ -65,6 +77,14 @@ void AMainPlayerController::PopMode()
 		Multicast_PopMode();
 	else
 		Server_PopMode();
+}
+
+void AMainPlayerController::SetUITimer(int32 time)
+{
+	if (HasAuthority())
+		Client_SetUITimer(time);
+	else
+		Server_SetUITimer(time);
 }
 
 void AMainPlayerController::InitHandler()
@@ -176,6 +196,45 @@ void AMainPlayerController::Client_SwitchToLevel_Implementation(FName LevelToUnl
 	}
 }
 
+bool AMainPlayerController::Server_SwitchState_Validate(EGamePhase NewPhase)
+{
+	return true;
+}
+
+void AMainPlayerController::Server_SwitchState_Implementation(EGamePhase NewPhase)
+{
+	Client_SwitchState(NewPhase);
+}
+
+void AMainPlayerController::Client_SwitchState_Implementation(EGamePhase NewPhase)
+{
+	for (auto& Pair : InputHandlerMap)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->InputDeactivate();
+		}
+	}
+	for (auto& Pair : UIHandlerMap)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->UIDeactivate();
+		}
+	}
+
+	if (InputHandlerMap.Contains(NewPhase))
+	{
+		InputHandlerMap[NewPhase]->InputActivate();
+	}
+	if (UIHandlerMap.Contains(NewPhase))
+	{
+		UIHandlerMap[NewPhase]->UIActivate();
+		UIHandlerMap[NewPhase]->SetIsFocusable(false);
+	}
+	CurrentPhase = NewPhase;
+}
+
 void AMainPlayerController::Server_PushMode_Implementation(EGamePhase NewPhase)
 {
 	Multicast_PushMode(NewPhase);
@@ -218,6 +277,17 @@ void AMainPlayerController::Multicast_PopMode_Implementation()
 	CurrentPhase = PrevPhase;
 }
 
+void AMainPlayerController::Server_SetUITimer_Implementation(int32 time)
+{
+	Client_SetUITimer(time);
+}
+
+void AMainPlayerController::Client_SetUITimer_Implementation(int32 time)
+{
+	if (UIHandlerMap.Contains(CurrentPhase))
+		UIHandlerMap[CurrentPhase]->SetUITimer(time);
+}
+
 //상점에서 아이템 구매후 반영
 //캐릭터 고정 state 업그레이드
 bool AMainPlayerController::Server_RequestUpgrade_Validate(int32 ItemID)
@@ -234,6 +304,4 @@ void AMainPlayerController::Server_RequestUpgrade_Implementation(int32 ItemID)
 	//	/*PS->AddGold(-Price);
 	//	 PS->ApplyUpgrade(ItemID);*/
 	//}
-
-
 }

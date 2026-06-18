@@ -21,8 +21,10 @@ class MANAGER_API AMainPlayerController : public APlayerController,
 public:
 	virtual void SwitchMode(EGamePhase NewPhase) override;
 	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) override;
+	virtual void SwitchState(EGamePhase NewPhase) override;
 	virtual void PushMode(EGamePhase NewPhase) override;
 	virtual void PopMode() override;
+	virtual void SetUITimer(int32 time) override;
 	virtual EGamePhase GetCurrentPhase() override;
 
 protected:
@@ -70,6 +72,12 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
 
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SwitchState(EGamePhase NewPhase);
+
+	UFUNCTION(Client, Reliable)
+	void Client_SwitchState(EGamePhase NewPhase);
+
 	UFUNCTION(Server, Reliable)
 	void Server_PushMode(EGamePhase NewPhase);
 
@@ -81,6 +89,12 @@ public:
 
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PopMode();
+
+	UFUNCTION(Server, Reliable)
+	void Server_SetUITimer(int32 time);
+
+	UFUNCTION(Client, Reliable)
+	void Client_SetUITimer(int32 time);
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestUpgrade(int32 ItemID);

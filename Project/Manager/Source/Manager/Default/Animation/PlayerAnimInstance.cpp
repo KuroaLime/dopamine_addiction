@@ -42,10 +42,18 @@ void UPlayerAnimInstance::UpdateAnimProperties(float DeltaTime)
 	if (IAbilityCheckInterface* AimInterface = Cast<IAbilityCheckInterface>(OwnerCharacter))
 	{
 		bIsAiming = AimInterface->IsCharacterAiming();
-
 	}
 	else
 	{
 		bIsAiming = false;
+	}
+
+	if (IAbilityCheckInterface* DeathInterface = Cast<IAbilityCheckInterface>(OwnerCharacter))
+	{
+		bIsDeath = DeathInterface->IsCharacterDeath();
+	}
+	else
+	{
+		bIsDeath = false;
 	}
 }

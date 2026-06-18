@@ -4,11 +4,11 @@
 
 #include "CoreMinimal.h"
 #include "UObject/Interface.h"
-#include "AbilityCheckInterface.generated.h"
+#include "UIInterface.generated.h"
 
 // This class does not need to be modified.
 UINTERFACE(MinimalAPI)
-class UAbilityCheckInterface : public UInterface
+class UUIInterface : public UInterface
 {
 	GENERATED_BODY()
 };
@@ -16,12 +16,11 @@ class UAbilityCheckInterface : public UInterface
 /**
  * 
  */
-class MANAGER_API IAbilityCheckInterface
+class MANAGER_API IUIInterface
 {
 	GENERATED_BODY()
 
 	// Add interface functions to this class. This is the class that will be inherited to implement this interface.
 public:
-	virtual bool IsCharacterAiming() const = 0;
-	virtual bool IsCharacterDeath() const = 0;
+	virtual void UpdateTime(int32 time) const = 0;
 };

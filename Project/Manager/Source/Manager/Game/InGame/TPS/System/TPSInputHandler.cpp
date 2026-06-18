@@ -114,7 +114,9 @@ void UTPSInputHandler::Input_Jump()
 {
 	if (UPFGASC* ASC = ResolveOwnerASC())
 	{
-		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Jump")));
+		static const FGameplayTag JumpTag =
+			FGameplayTag::RequestGameplayTag(FName("Ability.Action.Jump"));
+		ASC->TryActivateAbilityByTag(JumpTag);
 	}
 }
 

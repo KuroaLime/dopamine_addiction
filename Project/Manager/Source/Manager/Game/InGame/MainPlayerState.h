@@ -29,9 +29,7 @@ public:
 	virtual EWeaponType GetWeaponID() const override;
 	
 	virtual void SetWeaponID(EWeaponType WeaponID) override;
-
-
-	
+	virtual void ResetState() override;
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
