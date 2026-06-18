@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/MainPlayerState.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "Net/UnrealNetwork.h"
 
 AMainPlayerState::AMainPlayerState()
@@ -72,6 +73,14 @@ void AMainPlayerState::SetWeaponID(EWeaponType WeaponID)
 {
     WeaponData.weaponID = WeaponID;
     ForceNetUpdate();
+}
+
+// 아직 리셋시킬 데이터에 대해 확정된 상태가 아니라 일단 HP만 리셋
+void AMainPlayerState::ResetState()
+{
+    if (!HasAuthority())
+        return;
+    CurPlayerData.CurrentHP = 150;
 }
 
 void AMainPlayerState::AddGold(float Amount)

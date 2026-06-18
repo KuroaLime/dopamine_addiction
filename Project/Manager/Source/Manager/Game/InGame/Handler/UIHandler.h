@@ -51,6 +51,13 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	virtual void UIToggle();
+
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	virtual void SetUITimer(int32 time);
+
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	virtual void SetIsFocusable(bool isFocus);
+
 	UUserWidget* GetWidget() {
 		return PlayerWidget;
 	};

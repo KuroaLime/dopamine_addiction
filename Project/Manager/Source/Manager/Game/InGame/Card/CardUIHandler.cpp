@@ -24,6 +24,11 @@ void UCardUIHandler::UIDeactivate()
 	Super::UIDeactivate();
 }
 
+void UCardUIHandler::SetUITimer(int32 time)
+{
+	Super::SetUITimer(time);
+}
+
 void UCardUIHandler::CreateHUD()
 {
 	Super::CreateHUD();

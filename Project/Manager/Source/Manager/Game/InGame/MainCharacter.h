@@ -40,6 +40,7 @@ public:
 
 public:
 	virtual bool IsCharacterAiming() const override;
+	virtual bool IsCharacterDeath() const override;
 	virtual UCameraStateComponent* GetCameraStateComponent() const override { return CameraState; }
 	virtual UCameraComponent* GetFollowCameraComponent() const override { return FollowCamera; }
 	virtual AActor* GetEquippedWeapon() const override { return m_pEquippedGun; }
@@ -80,6 +81,7 @@ public:
 	virtual void DoLook(float Yaw, float Pitch);
 
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+	void OnCharacterDeath();
 
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
@@ -101,7 +103,4 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
 	UWidgetComponent* HPBarWidget;
-
-private:
-	bool bLocalIsAiming = false;
 };

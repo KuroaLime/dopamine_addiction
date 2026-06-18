@@ -55,6 +55,7 @@ public:
 
 public:
 	virtual bool IsCharacterAiming() const override;
+	virtual bool IsCharacterDeath() const override { return true; }
 	virtual UCameraStateComponent* GetCameraStateComponent() const override { return CameraState; }
 	virtual UCameraComponent* GetFollowCameraComponent() const override { return FollowCamera; }
 	virtual AActor* GetEquippedWeapon() const override { return m_pEquippedGun; }

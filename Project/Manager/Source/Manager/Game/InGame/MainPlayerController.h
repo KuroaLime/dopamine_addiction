@@ -21,8 +21,10 @@ class MANAGER_API AMainPlayerController : public APlayerController,
 public:
 	virtual void SwitchMode(EGamePhase NewPhase) override;
 	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) override;
+	virtual void SwitchState(EGamePhase NewPhase) override;
 	virtual void PushMode(EGamePhase NewPhase) override;
 	virtual void PopMode() override;
+	virtual void SetUITimer(int32 time) override;
 	virtual EGamePhase GetCurrentPhase() override;
 
 protected:
@@ -70,6 +72,12 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
 
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SwitchState(EGamePhase NewPhase);
+
+	UFUNCTION(Client, Reliable)
+	void Client_SwitchState(EGamePhase NewPhase);
+
 	UFUNCTION(Server, Reliable)
 	void Server_PushMode(EGamePhase NewPhase);
 
@@ -83,21 +91,28 @@ public:
 	void Multicast_PopMode();
 
 
-	//·£´ýÄ«µå3Àå »ý¼ºÇÏ±âÀ§ÇØ¼­
-	//¹öÆ° ´­·¶À» ¶§ Å¬¶ó°¡ È£Ãâ
-	//3°³ÀÇ Ä«µå µ¥ÀÌÅÍ ¹Þ¾Æ¿À±â
+	//ï¿½ï¿½ï¿½ï¿½Ä«ï¿½ï¿½3ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï±ï¿½ï¿½ï¿½ï¿½Ø¼ï¿½
+	//ï¿½ï¿½Æ° ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ Å¬ï¿½ï¿½ È£ï¿½ï¿½
+	//3ï¿½ï¿½ï¿½ï¿½ Ä«ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Þ¾Æ¿ï¿½ï¿½ï¿½
 	UFUNCTION(Server, Reliable)
 	void Server_RequestRandomUpgradeOptions();
 
-	//¼­¹ö°¡ ·£´ýÀ» µ¹¸®°í Å¬¶óUI¿¡ ÁÙ¶§ »ç¿ë
+	//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Å¬ï¿½ï¿½UIï¿½ï¿½ ï¿½Ù¶ï¿½ ï¿½ï¿½ï¿½
 	UFUNCTION(Client, Reliable)
 	void Client_ReceiveRandomUpgradeOptions(const TArray<EUpgradeType>&Options);
 
-	//UI¿¡¼­ Ä«µå¸¦ °ñ¶ú¤·¸£ ¶§ Å¬¶ó°¡ È£Ãâ
+	//UIï¿½ï¿½ï¿½ï¿½ Ä«ï¿½å¸¦ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ Å¬ï¿½ï¿½ È£ï¿½ï¿½
 	UFUNCTION(Server, Reliable)
 	void Server_SelectUpgradeOption(int32 SelectedIndex);
 
-	//¼­¹ö °ËÁõ¿ë
+	//ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 	UPROPERTY()
 	TArray<EUpgradeType> CurrentUpgradeOptions;
+
+	UFUNCTION(Server, Reliable)
+	void Server_SetUITimer(int32 time);
+
+	UFUNCTION(Client, Reliable)
+	void Client_SetUITimer(int32 time);
+
 };
