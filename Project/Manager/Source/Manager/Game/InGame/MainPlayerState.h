@@ -59,6 +59,7 @@ public:
 
 	void AddOwnedCard(const FOwnedCardInfo& CardInfo);
 	bool RemoveOwnedCardByInstanceId(int32 CardInstanceId, FOwnedCardInfo& OutRemovedCard);
+	void ClearOwnedCards();
 	FOnOwnedCardsChangedNative OnOwnedCardsChangedNative;
 
 	void AddGold(float Amount);

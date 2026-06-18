@@ -349,6 +349,7 @@ void AMainGameMode::StartBattleRoyalePhase()
     }
 
     BroadcastSwitchMode(EGamePhase::TPS);
+    SpawnRoundCardBundleForBattleRoyale();
     SetPlayerPawnGameplayEnabled(true, TEXT("BattleRoyale"));
     StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
     BeginPhase(EGamePhase::TPS);
@@ -364,6 +365,7 @@ void AMainGameMode::StartTransitionToCardPhase()
 
     EndPhase();
     SetPlayerPawnGameplayEnabled(false, TEXT("TransitionToCard"));
+    ClearCardDrops();
     ClearPlayerPawnMovementBases(TEXT("TransitionToCard"));
     BroadcastSwitchLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
     StartTimedServerPhase(EDediServerPhase::TransitionToCard, GetTransitionDuration());
@@ -378,8 +380,8 @@ void AMainGameMode::StartCardGamePhase()
     }
 
     ClearPlayerPawnMovementBases(TEXT("CardGame"));
+    EnsureThreeCardsForCardGame();
     BroadcastSwitchMode(EGamePhase::Card);
-    SpawnDebugCardDropsForCardPhase();
     StartTimedServerPhase(EDediServerPhase::CardGame, GetCardGameDuration());
     BeginPhase(EGamePhase::Card);
 }
@@ -409,6 +411,7 @@ void AMainGameMode::StartTransitionToBattlePhase()
     }
 
     ClearCardDrops();
+    ClearRoundCardsForAllPlayers();
     ClearPlayerPawnMovementBases(TEXT("TransitionToBattle"));
     BroadcastSwitchLevel(TEXT("Card_Game_Stage"), TEXT("TPS_Game_Stage"));
     StartTimedServerPhase(EDediServerPhase::TransitionToBattle, GetTransitionDuration());
@@ -478,6 +481,15 @@ bool AMainGameMode::TryPickupCard(AMainPlayerController* RequestingPC, ACardDrop
         return false;
     }
 
+    if (PS->OwnedCards.Num() >= MaxCardsPerPlayerPerRound)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=CardLimit Player=%s Owned=%d Max=%d"),
+            *RequestingPC->GetName(),
+            PS->OwnedCards.Num(),
+            MaxCardsPerPlayerPerRound);
+        return false;
+    }
+
     const float Distance = FVector::Dist(Pawn->GetActorLocation(), TargetCard->GetActorLocation());
     if (Distance > CardPickupRange)
     {
@@ -533,21 +545,142 @@ bool AMainGameMode::TryPickupCard(AMainPlayerController* RequestingPC, ACardDrop
     return true;
 }
 
-ECardID AMainGameMode::GetRandomCardID() const
-{
-    if (AMainGameState* GS = GetGameState<AMainGameState>())
-    {
-        TArray<ECardID> CardIDs;
-        GS->CardDataMap.GetKeys(CardIDs);
-        CardIDs.Remove(ECardID::None);
 
-        if (CardIDs.Num() > 0)
+bool AMainGameMode::TryPickupNearestCard(AMainPlayerController* RequestingPC)
+{
+    if (!HasAuthority())
+    {
+        return false;
+    }
+
+    if (!RequestingPC)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=InvalidRequest"));
+        return false;
+    }
+
+    if (!IsCardPickupAllowed())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=InvalidPhase Player=%s Phase=%s"),
+            *RequestingPC->GetName(),
+            GetServerPhaseName(CurrentServerPhase));
+        return false;
+    }
+
+    APawn* Pawn = RequestingPC->GetPawn();
+    if (!Pawn)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=MissingPawn Player=%s"), *RequestingPC->GetName());
+        return false;
+    }
+
+    const FVector PawnLocation = Pawn->GetActorLocation();
+    const float MaxDistanceSq = FMath::Square(CardPickupRange);
+    float BestDistanceSq = MaxDistanceSq;
+    ACardDropActor* BestCard = nullptr;
+
+    for (TObjectPtr<ACardDropActor> CardActorPtr : ActiveCardDrops)
+    {
+        ACardDropActor* CardActor = CardActorPtr.Get();
+        if (!IsValid(CardActor) || CardActor->IsPickedUp())
         {
-            return CardIDs[FMath::RandRange(0, CardIDs.Num() - 1)];
+            continue;
+        }
+
+        FServerCardRecord* Record = ServerCardRecords.Find(CardActor->GetCardInstanceId());
+        if (!Record || Record->State != ECardRuntimeState::WorldDrop || Record->DropActor.Get() != CardActor)
+        {
+            continue;
+        }
+
+        const float DistanceSq = FVector::DistSquared(PawnLocation, CardActor->GetActorLocation());
+        if (DistanceSq <= BestDistanceSq)
+        {
+            BestDistanceSq = DistanceSq;
+            BestCard = CardActor;
         }
     }
 
-    return static_cast<ECardID>(FMath::RandRange(static_cast<int32>(ECardID::Jan_Gwang), static_cast<int32>(ECardID::Oct_Yul)));
+    if (!BestCard)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=NoNearbyCard Player=%s Range=%.2f"),
+            *RequestingPC->GetName(),
+            CardPickupRange);
+        return false;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearest Player=%s Instance=%d Distance=%.2f"),
+        *RequestingPC->GetName(),
+        BestCard->GetCardInstanceId(),
+        FMath::Sqrt(BestDistanceSq));
+
+    return TryPickupCard(RequestingPC, BestCard);
+}
+
+TArray<ECardID> AMainGameMode::BuildCardBundleIDs() const
+{
+    TArray<ECardID> CardIDs;
+
+    if (AMainGameState* GS = GetGameState<AMainGameState>())
+    {
+        GS->CardDataMap.GetKeys(CardIDs);
+        CardIDs.Remove(ECardID::None);
+    }
+
+    if (CardIDs.Num() == 0)
+    {
+        for (int32 CardValue = static_cast<int32>(ECardID::Jan_Gwang); CardValue <= static_cast<int32>(ECardID::Oct_Yul); ++CardValue)
+        {
+            CardIDs.Add(static_cast<ECardID>(CardValue));
+        }
+    }
+
+    return CardIDs;
+}
+
+void AMainGameMode::ShuffleCardIDs(TArray<ECardID>& CardIDs) const
+{
+    for (int32 Index = CardIDs.Num() - 1; Index > 0; --Index)
+    {
+        const int32 SwapIndex = FMath::RandRange(0, Index);
+        if (Index != SwapIndex)
+        {
+            CardIDs.Swap(Index, SwapIndex);
+        }
+    }
+}
+
+FVector AMainGameMode::GetDistributedCardDropLocation(int32 Index, int32 TotalCount) const
+{
+    if (TotalCount <= 0)
+    {
+        return CardBundleDropCenter;
+    }
+
+    const float Aspect = CardBundleDropExtent.Y > 1.0f ? CardBundleDropExtent.X / CardBundleDropExtent.Y : 1.0f;
+    const int32 ColumnCount = FMath::Max(1, FMath::CeilToInt(FMath::Sqrt(static_cast<float>(TotalCount) * FMath::Max(0.25f, Aspect))));
+    const int32 RowCount = FMath::Max(1, FMath::CeilToInt(static_cast<float>(TotalCount) / static_cast<float>(ColumnCount)));
+
+    const int32 Column = Index % ColumnCount;
+    const int32 Row = Index / ColumnCount;
+
+    const float FullWidth = CardBundleDropExtent.X * 2.0f;
+    const float FullHeight = CardBundleDropExtent.Y * 2.0f;
+    const float CellWidth = FullWidth / static_cast<float>(ColumnCount);
+    const float CellHeight = FullHeight / static_cast<float>(RowCount);
+
+    const float MinX = CardBundleDropCenter.X - CardBundleDropExtent.X;
+    const float MinY = CardBundleDropCenter.Y - CardBundleDropExtent.Y;
+
+    const float JitterRatio = FMath::Clamp(CardBundleDropJitterRatio, 0.0f, 0.45f);
+    const float JitterX = CellWidth * JitterRatio;
+    const float JitterY = CellHeight * JitterRatio;
+
+    const float X = MinX + (static_cast<float>(Column) + 0.5f) * CellWidth + FMath::FRandRange(-JitterX, JitterX);
+    const float Y = MinY + (static_cast<float>(Row) + 0.5f) * CellHeight + FMath::FRandRange(-JitterY, JitterY);
+    const float Z = CardBundleDropCenter.Z;
+
+    return FVector(X, Y, Z);
 }
 
 int32 AMainGameMode::CreateCardInstance(ECardID CardID)
@@ -582,7 +715,11 @@ ACardDropActor* AMainGameMode::SpawnCardDrop(ECardID CardID, const FVector& Spaw
         return nullptr;
     }
 
-    TSubclassOf<ACardDropActor> SpawnClass = CardDropActorClass ? CardDropActorClass : ACardDropActor::StaticClass();
+    TSubclassOf<ACardDropActor> SpawnClass = CardDropActorClass;
+    if (!SpawnClass)
+    {
+        SpawnClass = ACardDropActor::StaticClass();
+    }
 
     FActorSpawnParameters Params;
     Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
@@ -620,7 +757,7 @@ ACardDropActor* AMainGameMode::SpawnCardDrop(ECardID CardID, const FVector& Spaw
     return CardActor;
 }
 
-void AMainGameMode::SpawnDebugCardDropsForCardPhase()
+void AMainGameMode::SpawnRoundCardBundleForBattleRoyale()
 {
     if (!HasAuthority())
     {
@@ -629,20 +766,18 @@ void AMainGameMode::SpawnDebugCardDropsForCardPhase()
 
     ClearCardDrops();
 
-    const int32 SpawnCount = FMath::Max(0, DebugCardDropCount);
-    for (int32 Index = 0; Index < SpawnCount; ++Index)
-    {
-        const FVector SpawnLocation(
-            DebugCardDropCenter.X + FMath::FRandRange(-DebugCardDropExtent.X, DebugCardDropExtent.X),
-            DebugCardDropCenter.Y + FMath::FRandRange(-DebugCardDropExtent.Y, DebugCardDropExtent.Y),
-            DebugCardDropCenter.Z + (Index * 30.0f));
+    TArray<ECardID> CardIDs = BuildCardBundleIDs();
+    ShuffleCardIDs(CardIDs);
 
-        SpawnCardDrop(GetRandomCardID(), SpawnLocation);
+    for (int32 Index = 0; Index < CardIDs.Num(); ++Index)
+    {
+        SpawnCardDrop(CardIDs[Index], GetDistributedCardDropLocation(Index, CardIDs.Num()));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card DropDebugComplete Count=%d Round=%d"),
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card BundleDropComplete Count=%d Round=%d Phase=%s"),
         ActiveCardDrops.Num(),
-        CurrentRound);
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
 }
 
 void AMainGameMode::ClearCardDrops()
@@ -678,9 +813,218 @@ void AMainGameMode::ClearCardDrops()
     }
 }
 
+
+void AMainGameMode::EnsureThreeCardsForCardGame()
+{
+    if (!HasAuthority() || !GetWorld())
+    {
+        return;
+    }
+
+    TArray<int32> SupplementRecordIds;
+    for (const TPair<int32, FServerCardRecord>& Pair : ServerCardRecords)
+    {
+        const FServerCardRecord& Record = Pair.Value;
+        if (Record.CreatedRound == CurrentRound && Record.State == ECardRuntimeState::Removed && Record.CardID != ECardID::None)
+        {
+            SupplementRecordIds.Add(Pair.Key);
+        }
+    }
+
+    for (int32 Index = SupplementRecordIds.Num() - 1; Index > 0; --Index)
+    {
+        const int32 SwapIndex = FMath::RandRange(0, Index);
+        if (Index != SwapIndex)
+        {
+            SupplementRecordIds.Swap(Index, SwapIndex);
+        }
+    }
+
+    int32 TargetCount = 0;
+    int32 SupplementIndex = 0;
+    const int32 TargetCardCount = FMath::Max(0, MaxCardsPerPlayerPerRound);
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        APlayerController* PC = It->Get();
+        if (!PC)
+        {
+            continue;
+        }
+
+        AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+        if (!PS)
+        {
+            continue;
+        }
+
+        while (PS->OwnedCards.Num() < TargetCardCount)
+        {
+            bool bGranted = false;
+
+            while (SupplementIndex < SupplementRecordIds.Num())
+            {
+                const int32 InstanceId = SupplementRecordIds[SupplementIndex++];
+                if (GrantCardRecordToPlayer(InstanceId, PS, TEXT("AutoFill")))
+                {
+                    bGranted = true;
+                    break;
+                }
+            }
+
+            if (!bGranted)
+            {
+                bGranted = GrantNewCardToPlayer(PS, PickSupplementCardIDForPlayer(PS), TEXT("AutoFillFallback"));
+            }
+
+            if (!bGranted)
+            {
+                break;
+            }
+        }
+
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card EnsureThree Player=%s Count=%d Max=%d Round=%d"),
+            *PS->GetPlayerName(),
+            PS->OwnedCards.Num(),
+            TargetCardCount,
+            CurrentRound);
+        TargetCount++;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card EnsureThreeComplete targets=%d round=%d"), TargetCount, CurrentRound);
+}
+
+void AMainGameMode::ClearRoundCardsForAllPlayers()
+{
+    if (!HasAuthority() || !GetWorld())
+    {
+        return;
+    }
+
+    int32 TargetCount = 0;
+    int32 CardCount = 0;
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        APlayerController* PC = It->Get();
+        if (!PC)
+        {
+            continue;
+        }
+
+        AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+        if (!PS)
+        {
+            continue;
+        }
+
+        for (const FOwnedCardInfo& CardInfo : PS->OwnedCards)
+        {
+            if (FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId))
+            {
+                Record->State = ECardRuntimeState::Removed;
+                Record->OwnerPlayerState = nullptr;
+                Record->DropActor = nullptr;
+            }
+        }
+
+        CardCount += PS->OwnedCards.Num();
+        PS->ClearOwnedCards();
+        TargetCount++;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card ClearRoundCards targets=%d cards=%d round=%d"), TargetCount, CardCount, CurrentRound);
+}
+
+bool AMainGameMode::GrantCardRecordToPlayer(int32 CardInstanceId, AMainPlayerState* TargetPS, const TCHAR* Context)
+{
+    if (!HasAuthority() || !TargetPS || CardInstanceId <= 0)
+    {
+        return false;
+    }
+
+    if (TargetPS->OwnedCards.Num() >= MaxCardsPerPlayerPerRound)
+    {
+        return false;
+    }
+
+    FServerCardRecord* Record = ServerCardRecords.Find(CardInstanceId);
+    if (!Record || Record->CardID == ECardID::None || Record->State == ECardRuntimeState::Owned || Record->State == ECardRuntimeState::Used)
+    {
+        return false;
+    }
+
+    FOwnedCardInfo CardInfo;
+    CardInfo.CardInstanceId = Record->CardInstanceId;
+    CardInfo.CardID = Record->CardID;
+
+    TargetPS->AddOwnedCard(CardInfo);
+
+    Record->State = ECardRuntimeState::Owned;
+    Record->OwnerPlayerState = TargetPS;
+    Record->DropActor = nullptr;
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Grant Player=%s Instance=%d Card=%d Context=%s Count=%d"),
+        *TargetPS->GetPlayerName(),
+        CardInfo.CardInstanceId,
+        static_cast<int32>(CardInfo.CardID),
+        Context ? Context : TEXT("<NULL>"),
+        TargetPS->PublicCardCount);
+
+    return true;
+}
+
+bool AMainGameMode::GrantNewCardToPlayer(AMainPlayerState* TargetPS, ECardID CardID, const TCHAR* Context)
+{
+    if (!HasAuthority() || !TargetPS || CardID == ECardID::None)
+    {
+        return false;
+    }
+
+    const int32 InstanceId = CreateCardInstance(CardID);
+    if (InstanceId <= 0)
+    {
+        return false;
+    }
+
+    return GrantCardRecordToPlayer(InstanceId, TargetPS, Context);
+}
+
+ECardID AMainGameMode::PickSupplementCardIDForPlayer(const AMainPlayerState* TargetPS) const
+{
+    TArray<ECardID> CardIDs = BuildCardBundleIDs();
+    if (CardIDs.Num() == 0)
+    {
+        return ECardID::None;
+    }
+
+    if (TargetPS)
+    {
+        CardIDs.RemoveAll([TargetPS](ECardID Candidate)
+        {
+            return TargetPS->OwnedCards.ContainsByPredicate([Candidate](const FOwnedCardInfo& CardInfo)
+            {
+                return CardInfo.CardID == Candidate;
+            });
+        });
+    }
+
+    if (CardIDs.Num() == 0)
+    {
+        CardIDs = BuildCardBundleIDs();
+    }
+
+    if (CardIDs.Num() == 0)
+    {
+        return ECardID::None;
+    }
+
+    return CardIDs[FMath::RandRange(0, CardIDs.Num() - 1)];
+}
+
 bool AMainGameMode::IsCardPickupAllowed() const
 {
-    return CurrentServerPhase == EDediServerPhase::BattleRoyale || CurrentServerPhase == EDediServerPhase::CardGame;
+    return CurrentServerPhase == EDediServerPhase::BattleRoyale;
 }
 
 void AMainGameMode::SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context)

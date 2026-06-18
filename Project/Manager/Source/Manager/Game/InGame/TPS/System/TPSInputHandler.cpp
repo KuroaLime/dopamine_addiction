@@ -9,6 +9,7 @@
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 #include "Game/InGame/MainPlayerState.h"
+#include "Game/InGame/MainPlayerController.h"
 
 UTPSInputHandler::UTPSInputHandler()
 {
@@ -77,6 +78,14 @@ void UTPSInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputComponen
 	if (IA_Shop)
 	{
 		EnhancedInputComponent->BindAction(IA_Shop, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_Shop);
+	}
+	if (IA_PickupCard)
+	{
+		EnhancedInputComponent->BindAction(IA_PickupCard, ETriggerEvent::Started, this, &UTPSInputHandler::Input_PickupCard);
+	}
+	else if (IA_Shop)
+	{
+		EnhancedInputComponent->BindAction(IA_Shop, ETriggerEvent::Started, this, &UTPSInputHandler::Input_PickupCard);
 	}
 }
 
@@ -168,4 +177,15 @@ void UTPSInputHandler::Input_Shop()
 	{		
 		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Input.Shop")));
 	}
+}
+
+void UTPSInputHandler::Input_PickupCard()
+{
+	AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController);
+	if (!MainPC)
+	{
+		return;
+	}
+
+	MainPC->Server_RequestPickupNearestCard();
 }

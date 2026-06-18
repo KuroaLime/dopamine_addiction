@@ -60,6 +60,7 @@ public:
     void OnPlayerAction(AActor* Executor, FName ActionName);
     bool IsBattleRoyalePhase() const;
     bool TryPickupCard(AMainPlayerController* RequestingPC, ACardDropActor* TargetCard);
+    bool TryPickupNearestCard(AMainPlayerController* RequestingPC);
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "GameMode|Setup")
@@ -126,14 +127,17 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Server")
     float CardPickupRange = 350.0f;
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Debug")
-    int32 DebugCardDropCount = 3;
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Server")
+    int32 MaxCardsPerPlayerPerRound = 3;
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Debug")
-    FVector DebugCardDropCenter = FVector(0.0f, 0.0f, 180.0f);
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Bundle")
+    FVector CardBundleDropCenter = FVector(0.0f, 0.0f, 180.0f);
 
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Debug")
-    FVector2D DebugCardDropExtent = FVector2D(400.0f, 250.0f);
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Bundle")
+    FVector2D CardBundleDropExtent = FVector2D(1200.0f, 800.0f);
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Bundle")
+    float CardBundleDropJitterRatio = 0.3f;
 
     UPROPERTY()
     TMap<EGamePhase, TObjectPtr<UPhaseStrategy>> StrategyMap;
@@ -184,11 +188,19 @@ private:
     void ClearServerPhaseTimer();
     void SetServerRemainingTime(int32 NewTime);
 
-    ECardID GetRandomCardID() const;
+    TArray<ECardID> BuildCardBundleIDs() const;
+    void ShuffleCardIDs(TArray<ECardID>& CardIDs) const;
+    FVector GetDistributedCardDropLocation(int32 Index, int32 TotalCount) const;
     int32 CreateCardInstance(ECardID CardID);
     ACardDropActor* SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation);
-    void SpawnDebugCardDropsForCardPhase();
+    void SpawnRoundCardBundleForBattleRoyale();
     void ClearCardDrops();
+
+    void EnsureThreeCardsForCardGame();
+    void ClearRoundCardsForAllPlayers();
+    bool GrantCardRecordToPlayer(int32 CardInstanceId, AMainPlayerState* TargetPS, const TCHAR* Context);
+    bool GrantNewCardToPlayer(AMainPlayerState* TargetPS, ECardID CardID, const TCHAR* Context);
+    ECardID PickSupplementCardIDForPlayer(const AMainPlayerState* TargetPS) const;
     bool IsCardPickupAllowed() const;
 
     int32 GetReadyDuration() const;

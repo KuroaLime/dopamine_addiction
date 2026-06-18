@@ -132,6 +132,19 @@ bool AMainPlayerState::RemoveOwnedCardByInstanceId(int32 CardInstanceId, FOwnedC
     return true;
 }
 
+void AMainPlayerState::ClearOwnedCards()
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    OwnedCards.Empty();
+    PublicCardCount = 0;
+    OnOwnedCardsChangedNative.Broadcast(OwnedCards);
+    ForceNetUpdate();
+}
+
 void AMainPlayerState::AddGold(float Amount)
 {
     if (!HasAuthority())

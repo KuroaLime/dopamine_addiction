@@ -8,6 +8,8 @@
 #include "Game/InGame/Interface/InterfaceInfo.h"
 #include "Kismet/GameplayStatics.h"
 #include "Game/InGame/MainPlayerState.h"
+#include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/Card/Actor/CardDropActor.h"
 
 void AMainPlayerController::BeginPlay()
 {
@@ -236,4 +238,38 @@ void AMainPlayerController::Server_RequestUpgrade_Implementation(int32 ItemID)
 	//}
 
 
+}
+
+
+bool AMainPlayerController::Server_RequestPickupCard_Validate(ACardDropActor* TargetCard)
+{
+    return true;
+}
+
+void AMainPlayerController::Server_RequestPickupCard_Implementation(ACardDropActor* TargetCard)
+{
+    AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+    if (!GM)
+    {
+        return;
+    }
+
+    GM->TryPickupCard(this, TargetCard);
+}
+
+
+bool AMainPlayerController::Server_RequestPickupNearestCard_Validate()
+{
+    return true;
+}
+
+void AMainPlayerController::Server_RequestPickupNearestCard_Implementation()
+{
+    AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+    if (!GM)
+    {
+        return;
+    }
+
+    GM->TryPickupNearestCard(this);
 }

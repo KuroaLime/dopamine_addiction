@@ -89,4 +89,7 @@ public:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestPickupCard(ACardDropActor* TargetCard);
 
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestPickupNearestCard();
+
 };
