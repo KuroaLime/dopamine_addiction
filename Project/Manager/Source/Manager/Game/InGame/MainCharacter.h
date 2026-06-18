@@ -80,6 +80,15 @@ public:
 	virtual void DoLook(float Yaw, float Pitch);
 
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+	UFUNCTION()
+	void OnRep_IsDead();
+
+	void HandleDeath(AController* KillerController, AActor* DamageCauser);
+	void RespawnAfterDeath();
+	void ApplyDeathVisualState(bool bDead);
+	FVector FindRespawnLocation() const;
 
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }
@@ -103,5 +112,13 @@ protected:
 	UWidgetComponent* HPBarWidget;
 
 private:
+	UPROPERTY(ReplicatedUsing = OnRep_IsDead)
+	bool bIsDead = false;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Respawn")
+	float RespawnDelay = 3.0f;
+
+	FTimerHandle RespawnTimerHandle;
+
 	bool bLocalIsAiming = false;
 };

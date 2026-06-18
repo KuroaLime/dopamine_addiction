@@ -26,6 +26,8 @@
 #include "Default/Component/Player/InteractionComponent.h"
 #include "Game/InGame/MainPlayerState.h"
 #include "Default/Data/CameraStateComponent.h"
+#include "Net/UnrealNetwork.h"
+#include "GameFramework/PlayerStart.h"
 
 // Sets default values
 AMainCharacter::AMainCharacter()
@@ -116,7 +118,10 @@ void AMainCharacter::BeginPlay()
 	}
 
 	CharacterState->OnHPIsZero.AddLambda([this]()->void {
-		SetActorEnableCollision(false);
+		if (HasAuthority() && !bIsDead)
+		{
+			HandleDeath(nullptr, nullptr);
+		}
 		});
 
 	auto CharacterWidget = Cast<UTpsCharacterWidget>(HPBarWidget->GetUserWidgetObject());
@@ -247,39 +252,143 @@ void AMainCharacter::DoLook(float Yaw, float Pitch)
 
 float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser)
 {
-    if (!HasAuthority())
-    {
-        return 0.0f;
-    }
+	if (!HasAuthority() || bIsDead)
+	{
+		return 0.0f;
+	}
 
-    float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
 
-    AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
-    const float OldHP = PS ? PS->CurPlayerData.CurrentHP : 0.0f;
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	if (PS)
+	{
+		PS->ApplyDamage(ActualDamage);
 
-    if (PS)
-    {
-        PS->ApplyDamage(ActualDamage);
-        const float NewHP = PS->CurPlayerData.CurrentHP;
+		if (PS->CurPlayerData.CurrentHP <= 0)
+		{
+			HandleDeath(EventInstigator, DamageCauser);
+		}
+	}
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] TPS Damage Target=%s Damage=%.2f HP=%.2f->%.2f"),
-            *GetName(),
-            ActualDamage,
-            OldHP,
-            NewHP);
+	return ActualDamage;
+}
 
-        if (OldHP > 0.0f && NewHP <= 0.0f)
-        {
-            const FString KillerName = EventInstigator && EventInstigator->GetPawn()
-                ? EventInstigator->GetPawn()->GetName()
-                : FString(TEXT("<NULL>"));
+void AMainCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 
-            UE_LOG(LogTemp, Warning, TEXT("[DS] TPS Death Victim=%s Killer=%s"),
-                *GetName(),
-                *KillerName);
-        }
-    }
+	DOREPLIFETIME(AMainCharacter, bIsDead);
+}
 
-    return ActualDamage;
+void AMainCharacter::OnRep_IsDead()
+{
+	ApplyDeathVisualState(bIsDead);
+}
+
+void AMainCharacter::HandleDeath(AController* KillerController, AActor* DamageCauser)
+{
+	if (!HasAuthority() || bIsDead)
+	{
+		return;
+	}
+
+	bIsDead = true;
+	ApplyDeathVisualState(true);
+
+	UE_LOG(LogTemp, Warning, TEXT("[DS] TPS Death Victim=%s Killer=%s Causer=%s RespawnDelay=%.2f"),
+		*GetName(),
+		KillerController ? *KillerController->GetName() : TEXT("<NULL>"),
+		DamageCauser ? *DamageCauser->GetName() : TEXT("<NULL>"),
+		RespawnDelay);
+
+	GetWorldTimerManager().ClearTimer(RespawnTimerHandle);
+	GetWorldTimerManager().SetTimer(RespawnTimerHandle, this, &AMainCharacter::RespawnAfterDeath, RespawnDelay, false);
+	ForceNetUpdate();
+}
+
+void AMainCharacter::RespawnAfterDeath()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	if (PS)
+	{
+		PS->CurPlayerData.CurrentHP = 150;
+		PS->ForceNetUpdate();
+	}
+
+	const FVector RespawnLocation = FindRespawnLocation();
+	SetActorLocation(RespawnLocation, false, nullptr, ETeleportType::TeleportPhysics);
+	SetActorRotation(FRotator::ZeroRotator);
+
+	bIsDead = false;
+	ApplyDeathVisualState(false);
+
+	UE_LOG(LogTemp, Warning, TEXT("[DS] TPS Respawn Player=%s Location=%s HP=%d"),
+		*GetName(),
+		*RespawnLocation.ToCompactString(),
+		PS ? PS->CurPlayerData.CurrentHP : -1);
+
+	ForceNetUpdate();
+}
+
+void AMainCharacter::ApplyDeathVisualState(bool bDead)
+{
+	if (UCharacterMovementComponent* MoveComp = GetCharacterMovement())
+	{
+		MoveComp->StopMovementImmediately();
+
+		if (bDead)
+		{
+			MoveComp->DisableMovement();
+		}
+		else
+		{
+			MoveComp->SetMovementMode(MOVE_Walking);
+		}
+	}
+
+	SetActorEnableCollision(!bDead);
+	SetActorHiddenInGame(bDead);
+
+	if (GetMesh())
+	{
+		GetMesh()->SetVisibility(!bDead, true);
+		GetMesh()->SetCollisionEnabled(bDead ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryAndPhysics);
+	}
+
+	if (HPBarWidget)
+	{
+		HPBarWidget->SetVisibility(!bDead, true);
+	}
+}
+
+FVector AMainCharacter::FindRespawnLocation() const
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return FVector(0.0f, 0.0f, 250.0f);
+	}
+
+	TArray<AActor*> Starts;
+	UGameplayStatics::GetAllActorsOfClass(World, APlayerStart::StaticClass(), Starts);
+	if (Starts.Num() > 0)
+	{
+		int32 Index = 0;
+		if (const AMainPlayerState* PS = GetPlayerState<AMainPlayerState>())
+		{
+			Index = FMath::Abs(PS->GetPlayerId()) % Starts.Num();
+		}
+
+		const FVector BaseLocation = Starts[Index]->GetActorLocation();
+		const FVector Offset((Index % 3) * 120.0f, (Index / 3) * 120.0f, 120.0f);
+		return BaseLocation + Offset;
+	}
+
+	return FVector(0.0f, 0.0f, 250.0f);
 }
 

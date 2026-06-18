@@ -3,8 +3,7 @@
 #include "Default/System/UManagerGameInstance.h"
 
 #include "Kismet/GameplayStatics.h"
-#include "Misc/CommandLine.h"
-#include "Misc/Parse.h"
+#include "GameFramework/PlayerController.h"
 
 #define UE_ASYNC_GUARD if (!IsValid(this) || !GetWorld()) return;
 
@@ -20,14 +19,6 @@ UUManagerGameInstance::UUManagerGameInstance() {
 
 void UUManagerGameInstance::Init() {
 	
-    Super::Init();
-
-    const bool bServerProcess = IsRunningDedicatedServer() || FParse::Param(FCommandLine::Get(), TEXT("server"));
-    if (bServerProcess)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[IOCP] Server process. Skip lobby TCP connect."));
-        return;
-    }
 
     const FString ip = "127.0.0.1";
     const uint16_t port = 9000;
@@ -46,6 +37,7 @@ void UUManagerGameInstance::Init() {
             GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Failed to connect to login server"));
         }
     }
+    Super::Init();
 }
 
 void UUManagerGameInstance::OnStart() {
@@ -370,69 +362,6 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
         break;
     }
 
-    case PacketType::S2C_ROOM_START_RES:
-    {
-        uint8_t r = 0;
-        if (ReadU8(payload, payloadLen, off, r))
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[IOCP] RoomStart result=%d"), static_cast<int32>(r));
-        }
-        break;
-    }
-
-    case PacketType::S2C_GAME_START:
-    {
-        uint8_t ipLen = 0;
-        uint32_t ticket = 0;
-        uint16_t port = 0;
-
-        if (!ReadU8(payload, payloadLen, off, ipLen))
-        {
-            break;
-        }
-
-        std::string ipUtf8 = ReadString(payload, payloadLen, off, ipLen);
-        if (ipUtf8.size() != ipLen)
-        {
-            break;
-        }
-
-        if (!ReadU32(payload, payloadLen, off, ticket))
-        {
-            break;
-        }
-
-        if (!ReadU16(payload, payloadLen, off, port))
-        {
-            break;
-        }
-
-        const FString TargetIp = UTF8_TO_TCHAR(ipUtf8.c_str());
-        const uint32_t TravelTicket = ticket != 0 ? ticket : m_sessionId;
-        const FString InGameMapPath = TEXT("/Game/InGame/System/Main_Game_World");
-        const FString URL = FString::Printf(
-            TEXT("%s:%d%s?ticket=%u"),
-            *TargetIp,
-            static_cast<int32>(port),
-            *InGameMapPath,
-            TravelTicket
-        );
-
-        AsyncTask(ENamedThreads::GameThread, [this, URL]()
-            {
-                UE_ASYNC_GUARD
-
-                UE_LOG(LogTemp, Warning, TEXT("[IOCP] GameStart received. ClientTravel URL=%s"), *URL);
-
-                APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
-                if (PC)
-                {
-                    PC->ClientTravel(URL, TRAVEL_Absolute);
-                }
-            });
-        break;
-    }
-
     case PacketType::S2C_ROOM_READY_BRD:
     {
         uint32_t sid = 0;
@@ -446,6 +375,72 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
         }
         break;
 	}
+
+
+    case PacketType::S2C_ROOM_START_RES:
+    {
+        uint8_t r = 0;
+        if (ReadU8(payload, payloadLen, off, r))
+        {
+            RoomResult result = static_cast<RoomResult>(r);
+            AsyncTask(ENamedThreads::GameThread, [result]()
+                {
+                    if (GEngine)
+                    {
+                        const FColor MsgColor = result == RoomResult::OK ? FColor::Green : FColor::Red;
+                        GEngine->AddOnScreenDebugMessage(-1, 5.f, MsgColor,
+                            FString::Printf(TEXT("[IOCP] RoomStartRes=%s"), UTF8_TO_TCHAR(RoomResultToString(result))));
+                    }
+                });
+        }
+        break;
+    }
+
+    case PacketType::S2C_GAME_START:
+    {
+        uint8_t ipLen = 0;
+        if (!ReadU8(payload, payloadLen, off, ipLen))
+        {
+            break;
+        }
+
+        std::string ipBytes = ReadString(payload, payloadLen, off, ipLen);
+        if (ipBytes.size() != ipLen)
+        {
+            break;
+        }
+
+        uint32_t ticket = 0;
+        uint16_t port = 0;
+        if (!ReadU32(payload, payloadLen, off, ticket) || !ReadU16(payload, payloadLen, off, port))
+        {
+            break;
+        }
+
+        FString ServerIp = FString(UTF8_TO_TCHAR(ipBytes.c_str()));
+        AsyncTask(ENamedThreads::GameThread, [this, ServerIp, port, ticket]()
+            {
+                UE_ASYNC_GUARD
+
+                APlayerController* PC = UGameplayStatics::GetPlayerController(GetWorld(), 0);
+                if (!PC)
+                {
+                    return;
+                }
+
+                const FString TravelURL = FString::Printf(TEXT("%s:%u?ticket=%u"), *ServerIp, static_cast<uint32>(port), ticket);
+
+                if (GEngine)
+                {
+                    GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Yellow,
+                        FString::Printf(TEXT("[IOCP] GAME_START travel %s"), *TravelURL));
+                }
+
+                PC->ClientTravel(TravelURL, TRAVEL_Absolute);
+            });
+
+        break;
+    }
 
     default:
     {
@@ -546,14 +541,17 @@ bool UUManagerGameInstance::SendRoomListReq()
 
 bool UUManagerGameInstance::SendCreateRoom(const FString& roomName)
 {
-    if (roomName.Len() > 255)
+    FTCHARToUTF8 Converted(*roomName);
+    const int32 ByteLen = Converted.Length();
+
+    if (ByteLen <= 0 || ByteLen > ROOM_TITLE_MAX)
     {
         return false;
     }
+
     std::vector<char> payload;
-    AppendU8(payload, static_cast<uint8_t>(roomName.Len()));
-    std::string roomNameUtf8 = TCHAR_TO_UTF8(*roomName);
-    payload.insert(payload.end(), roomNameUtf8.begin(), roomNameUtf8.end());
+    AppendU8(payload, static_cast<uint8_t>(ByteLen));
+    payload.insert(payload.end(), Converted.Get(), Converted.Get() + ByteLen);
     return SendPacket(PacketType::C2S_ROOM_CREATE_REQ, payload.data(), static_cast<uint16_t>(payload.size()));
 }
 
@@ -575,11 +573,6 @@ bool UUManagerGameInstance::SendReady(bool ready)
     return SendPacket(PacketType::C2S_ROOM_READY_REQ, &v, 1);
 }
 
-bool UUManagerGameInstance::SendRoomStart()
-{
-    return SendPacket(PacketType::C2S_ROOM_START_REQ, nullptr, 0);
-}
-
 
 FABCharacterData* UUManagerGameInstance::GetABCharacterData(int32 Level) {
     if (nullptr == ABCharacterTable) return nullptr;
@@ -590,4 +583,8 @@ FABCharacterData* UUManagerGameInstance::GetABCharacterData(int32 Level) {
     }
 
     return ABCharacterTable->FindRow<FABCharacterData>(*FString::FromInt(Level), TEXT(""));
+}
+bool UUManagerGameInstance::SendRoomStart()
+{
+    return SendPacket(PacketType::C2S_ROOM_START_REQ, nullptr, 0);
 }

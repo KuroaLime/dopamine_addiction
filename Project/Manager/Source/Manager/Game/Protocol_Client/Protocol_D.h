@@ -12,6 +12,10 @@
 #include <windows.h>
 #pragma comment(lib, "ws2_32.lib")
 
+#ifdef GetObject
+#undef GetObject
+#endif
+
 #include <atomic>
 #include <cstdint>
 #include <cstring>
@@ -51,47 +55,47 @@ struct FRoomMemberInfoView
 
 enum class PacketType : uint16_t
 {
-    // [System] ¿¬°á È®ÀÎ ¹× ÃÊ±âÈ­
+    // [System] ï¿½ï¿½ï¿½ï¿½ È®ï¿½ï¿½ ï¿½ï¿½ ï¿½Ê±ï¿½È­
     C2S_PING = 1,
     S2C_PONG = 2,
     S2C_WELCOME = 10,
 
-    // [Auth] ·Î±×ÀÎ/È¸¿ø°¡ÀÔ
+    // [Auth] ï¿½Î±ï¿½ï¿½ï¿½/È¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
     C2S_LOGIN_REQ = 20,
     S2C_LOGIN_RES = 21,
     C2S_REGISTER_REQ = 22,
     S2C_REGISTER_RES = 23,
 
-    // [Lobby] ¹æ ¸ñ·Ï Á¶È¸
+    // [Lobby] ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½È¸
     C2S_ROOM_LIST_REQ = 100,
     S2C_ROOM_LIST_RES = 101,
 
-    // [Room] ¹æ »ý¼º
+    // [Room] ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     C2S_ROOM_CREATE_REQ = 110,
     S2C_ROOM_CREATE_RES = 111,
 
-    // [Room] ¹æ ÀÔÀå
+    // [Room] ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     C2S_ROOM_JOIN_REQ = 120,
     S2C_ROOM_JOIN_RES = 121,
     S2C_ROOM_MEMBER_LIST = 122,
 
-    // [Room] ¹æ ÅðÀå
+    // [Room] ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     C2S_ROOM_LEAVE_REQ = 130,
     S2C_ROOM_LEAVE_RES = 131,
 
-    // [Room Action] ¹æÀå/·¹µð ½Ã½ºÅÛ
-    C2S_ROOM_READY_REQ = 140, // Å¬¶ó -> ¼­¹ö: "³ª ·¹µðÇÒ°Ô/Ãë¼ÒÇÒ°Ô"
-    S2C_ROOM_READY_BRD = 141, // ¼­¹ö -> Å¬¶ó: "´©°¡ ·¹µðÇß´ë/Ãë¼ÒÇß´ë" (Broadcast)
-    C2S_ROOM_START_REQ = 150, // ¹æÀå -> ¼­¹ö: "°ÔÀÓ ½ÃÀÛÇÏÀÚ!"
-    S2C_ROOM_START_RES = 151, // ¼­¹ö -> Å¬¶ó: "´Ù ·¹µð ¾È ÇÔ" ¶Ç´Â "½ÃÀÛ ¼º°ø"
+    // [Room Action] ï¿½ï¿½ï¿½ï¿½/ï¿½ï¿½ï¿½ï¿½ ï¿½Ã½ï¿½ï¿½ï¿½
+    C2S_ROOM_READY_REQ = 140, // Å¬ï¿½ï¿½ -> ï¿½ï¿½ï¿½ï¿½: "ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ò°ï¿½/ï¿½ï¿½ï¿½ï¿½Ò°ï¿½"
+    S2C_ROOM_READY_BRD = 141, // ï¿½ï¿½ï¿½ï¿½ -> Å¬ï¿½ï¿½: "ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ß´ï¿½/ï¿½ï¿½ï¿½ï¿½ß´ï¿½" (Broadcast)
+    C2S_ROOM_START_REQ = 150, // ï¿½ï¿½ï¿½ï¿½ -> ï¿½ï¿½ï¿½ï¿½: "ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½!"
+    S2C_ROOM_START_RES = 151, // ï¿½ï¿½ï¿½ï¿½ -> Å¬ï¿½ï¿½: "ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½" ï¿½Ç´ï¿½ "ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½"
 
-    // [In-Game] °ÔÀÓ ½ÃÀÛ ¹× ¼­¹ö ÀÌµ¿ (Session Handover)
+    // [In-Game] ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ìµï¿½ (Session Handover)
     S2C_GAME_START = 200,
 };
 
 struct PacketHeader
 {
-    uint16_t size; // ÀüÃ¼ ÆÐÅ¶ ±æÀÌ (Header + Payload)
+    uint16_t size; // ï¿½ï¿½Ã¼ ï¿½ï¿½Å¶ ï¿½ï¿½ï¿½ï¿½ (Header + Payload)
     uint16_t type; // PacketType
 };
 static_assert(sizeof(PacketHeader) == 4, "PacketHeader must be 4 bytes");
@@ -106,50 +110,50 @@ static constexpr uint8_t MAX_PW_LEN = 16;
 
 enum class LoginResult : uint8_t
 {
-    OK = 0, // Ã¹ ·Î±×ÀÎ ¼º°ø (·Îºñ·Î ÀÌµ¿)
-    OK_RECONNECT = 1, // ÀçÁ¢¼Ó ¼º°ø (¹Ù·Î ÀÎ°ÔÀÓ ÁøÀÔ)
+    OK = 0, // Ã¹ ï¿½Î±ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½Îºï¿½ï¿½ ï¿½Ìµï¿½)
+    OK_RECONNECT = 1, // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½Ù·ï¿½ ï¿½Î°ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½)
 
     ID_NOT_FOUND = 10,
     WRONG_PASSWORD = 11,
     ALREADY_LOGGED_IN = 12,
 
-    ID_ALREADY_EXISTS = 20, // È¸¿ø°¡ÀÔ ½Ã
+    ID_ALREADY_EXISTS = 20, // È¸ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½
     INVALID_FORMAT = 21,
 };
 
-// °ÔÀÓ ¹× ¹æ ¼³Á¤ »ó¼ö
+// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½
 static constexpr uint8_t  ROOM_MAX_PLAYERS = 4;
-static constexpr uint8_t  ROOM_TITLE_MAX = 32;     // UTF-8 ¹ÙÀÌÆ® ±âÁØ
-static constexpr uint16_t PACKET_SIZE_MAX = 4096;   // ÃÖ´ë ÆÐÅ¶ Å©±â
+static constexpr uint8_t  ROOM_TITLE_MAX = 96;     // UTF-8 ï¿½ï¿½ï¿½ï¿½Æ® ï¿½ï¿½ï¿½ï¿½
+static constexpr uint16_t PACKET_SIZE_MAX = 4096;   // ï¿½Ö´ï¿½ ï¿½ï¿½Å¶ Å©ï¿½ï¿½
 
-// ¹æ »óÅÂ (Ç¥½Ã¿ë)
+// ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (Ç¥ï¿½Ã¿ï¿½)
 enum class RoomState : uint8_t
 {
-    WAITING = 0, // ´ë±â Áß
-    IN_GAME = 1, // °ÔÀÓ ÁøÇà Áß
+    WAITING = 0, // ï¿½ï¿½ï¿½ ï¿½ï¿½
+    IN_GAME = 1, // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½
 };
 
-// ¿äÃ» Ã³¸® °á°ú ÄÚµå
+// ï¿½ï¿½Ã» Ã³ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½Úµï¿½
 enum class RoomResult : uint8_t
 {
     OK = 0,
 
-    // ³í¸®Àû ¿¡·¯
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     INVALID_ROOM = 1,
     FULL = 2,
     IN_GAME = 3,
 
-    // »óÅÂ ¿¡·¯
+    // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     ALREADY_IN_ROOM = 10,
     NOT_IN_ROOM = 11,
 
-    // µ¥ÀÌÅÍ ¿¡·¯
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     BAD_PAYLOAD = 20,
     TITLE_TOO_LONG = 21,
 
-    NOT_HOST = 30,          // ¹æÀåÀÌ ¾Æ´Ñµ¥ ½ÃÀÛ ´©¸§
-    NOT_ALL_READY = 31,     // Âü¿©ÀÚ Áß ·¹µð ¾È ÇÑ »ç¶÷ÀÌ ÀÖÀ½
-    NEED_MORE_PLAYERS = 32, // È¥ÀÚ ÀÖ´Âµ¥ ½ÃÀÛ ´©¸§ (ÃÖ¼Ò 2¸í ÇÊ¿ä)
+    NOT_HOST = 30,          // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Æ´Ñµï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
+    NOT_ALL_READY = 31,     // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
+    NEED_MORE_PLAYERS = 32, // È¥ï¿½ï¿½ ï¿½Ö´Âµï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½Ö¼ï¿½ 2ï¿½ï¿½ ï¿½Ê¿ï¿½)
 };
 
 
@@ -157,7 +161,7 @@ enum class RoomResult : uint8_t
 // Data Structures
 // ===========================================================================
 
-// ¹æ Á¤º¸ ±¸Á¶Ã¼ (¼­¹ö ³»ºÎ ¸ñ·Ï °ü¸® ¹× Å¬¶óÀÌ¾ðÆ® Àü¼Û¿ë)
+// ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ã¼ (ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ Å¬ï¿½ï¿½ï¿½Ì¾ï¿½Æ® ï¿½ï¿½ï¿½Û¿ï¿½)
 struct RoomInfoView
 {
     uint32_t  roomId = 0;
@@ -165,14 +169,14 @@ struct RoomInfoView
     uint8_t   curPlayers = 0;
     uint8_t   maxPlayers = ROOM_MAX_PLAYERS;
 
-    uint32_t  hostId = 0; // ¹æÀåÀÇ Session ID
+    uint32_t  hostId = 0; // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Session ID
 
     FString   title;
 };
 
 
 // ===========================================================================
-// Âü°í¿ë ÁÖ¼®
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ö¼ï¿½
 // ===========================================================================
 /*
     [S2C_WELCOME]
@@ -379,7 +383,8 @@ namespace
         out.curPlayers = in.curPlayers;
         out.maxPlayers = in.maxPlayers;
         out.hostId = in.hostId;
-        out.title = FString(UTF8_TO_TCHAR(in.title.c_str()));
+        FUTF8ToTCHAR Converted(in.title.data(), static_cast<int32>(in.title.size()));
+        out.title = FString(Converted.Length(), Converted.Get());
 
         return out;
     }
@@ -414,7 +419,3 @@ namespace
         return true;
     }
 }
-
-#ifdef GetObject
-#undef GetObject
-#endif
