@@ -27,10 +27,11 @@ public:
 	virtual void SetUITimer(int32 time) override;
 	virtual EGamePhase GetCurrentPhase() override;
 
+
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
-
+	virtual void BeginDestroy() override;
 public:
 	virtual void SetupInputComponent() override;
 
@@ -91,21 +92,15 @@ public:
 	void Multicast_PopMode();
 
 
-	//����ī��3�� �����ϱ����ؼ�
-	//��ư ������ �� Ŭ�� ȣ��
-	//3���� ī�� ������ �޾ƿ���
 	UFUNCTION(Server, Reliable)
 	void Server_RequestRandomUpgradeOptions();
 
-	//������ ������ ������ Ŭ��UI�� �ٶ� ���
 	UFUNCTION(Client, Reliable)
 	void Client_ReceiveRandomUpgradeOptions(const TArray<EUpgradeType>&Options);
 
-	//UI���� ī�带 ������� �� Ŭ�� ȣ��
 	UFUNCTION(Server, Reliable)
 	void Server_SelectUpgradeOption(int32 SelectedIndex);
 
-	//���� ������
 	UPROPERTY()
 	TArray<EUpgradeType> CurrentUpgradeOptions;
 

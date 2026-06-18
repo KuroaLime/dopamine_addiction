@@ -26,7 +26,16 @@ void AMainPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
 }
+//임시방편
+void AMainPlayerController::BeginDestroy()
+{
+	InputHandlerMap.Empty();
+	UIHandlerMap.Empty();
+	PhaseStack.Empty();
+	CurrentUpgradeOptions.Empty();
 
+	Super::BeginDestroy();
+}
 void AMainPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
@@ -299,20 +308,16 @@ void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
 
 void AMainPlayerController::Client_ReceiveRandomUpgradeOptions_Implementation(const TArray<EUpgradeType>& Options)
 {
-	if (UIHandlerMap.Contains(EGamePhase::TPS))
-	{
-		UUIHandler * Handler = UIHandlerMap[EGamePhase::TPS];
+	if (!UIHandlerMap.Contains(EGamePhase::TPS)) return;
 
-		TArray<UUserWidget*> FoundWidgets;
-		UWidgetBlueprintLibrary::GetAllWidgetsOfClass(GetWorld(), FoundWidgets, UShopWidget::StaticClass());
-		for (UUserWidget* Widget : FoundWidgets){
-			UShopWidget * Shop = Cast<UShopWidget>(Widget);
-			if (Shop && Shop->GetOwningPlayer() == this){
-				Shop->Update_UpgradeSelectionWidget(Options);
-				return;
-			}
-		}
-	}
+	UUIHandler* Handler = UIHandlerMap[EGamePhase::TPS];
+	if (!IsValid(Handler)) return;
+
+	// UIHandler는 UUserWidget만 알면 됨, Cast는 Controller에서
+	UShopWidget* Shop = Cast<UShopWidget>(Handler->GetManagedWidget());
+	if (!IsValid(Shop)) return;
+
+	Shop->Update_UpgradeSelectionWidget(Options);
 }
 
 void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 SelectedIndex)
@@ -325,7 +330,7 @@ void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 Sele
 		PS->Server_ApplyUpgrad_Implementation(ChosenType);
 	}
 	CurrentUpgradeOptions.Empty();
-
+}
 void AMainPlayerController::Server_SetUITimer_Implementation(int32 time)
 {
 	Client_SetUITimer(time);

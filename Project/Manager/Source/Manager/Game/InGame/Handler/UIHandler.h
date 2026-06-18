@@ -42,6 +42,8 @@ protected:
 
 	UCharacterStateComponent* ResolveOwnerCharacterState() const;
 
+	UPROPERTY()
+	TObjectPtr<UUserWidget> ManagedWidget=nullptr;
 public:
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	virtual void UIActivate();
@@ -61,4 +63,7 @@ public:
 	UUserWidget* GetWidget() {
 		return PlayerWidget;
 	};
+
+	//임시방편
+	UUserWidget* GetManagedWidget() const { return ManagedWidget; }
 };
