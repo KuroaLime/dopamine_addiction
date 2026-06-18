@@ -158,8 +158,16 @@ void AMainPlayerState::ApplyDamage(float ActualDamage)
 {
     if (!HasAuthority())
         return;
-    CurPlayerData.CurrentHP = FMath::Max(0, CurPlayerData.CurrentHP - static_cast<int32>(ActualDamage));
-    //OnRep_CurPlayerData();
+
+    const int32 OldHP = CurPlayerData.CurrentHP;
+    CurPlayerData.CurrentHP = FMath::Max(0, OldHP - static_cast<int32>(ActualDamage));
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] TPS DamageApplied Player=%s Damage=%.2f HP=%d->%d"),
+        *GetPlayerName(),
+        ActualDamage,
+        OldHP,
+        CurPlayerData.CurrentHP);
+
     ForceNetUpdate();
 }
 

@@ -10,6 +10,7 @@
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 #include "Game/InGame/MainPlayerState.h"
 #include "Game/InGame/MainPlayerController.h"
+#include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
 
 UTPSInputHandler::UTPSInputHandler()
 {
@@ -126,18 +127,50 @@ void UTPSInputHandler::Input_Jump()
 
 void UTPSInputHandler::Input_StartFire()
 {
-	if (!OwnerController) return;
+	if (!OwnerController)
+	{
+		return;
+	}
 
-	IAbilityOwnerInterface* OwnerInterface = Cast<IAbilityOwnerInterface>(OwnerController->GetPawn());
-	if (!OwnerInterface) return;
+	APawn* OwnerPawn = OwnerController->GetPawn();
+	IAbilityOwnerInterface* OwnerInterface = Cast<IAbilityOwnerInterface>(OwnerPawn);
+	if (!OwnerInterface)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Client] TPS Input_StartFire Reject MissingOwnerInterface PC=%s Pawn=%s"),
+			*OwnerController->GetName(),
+			OwnerPawn ? *OwnerPawn->GetName() : TEXT("<NULL>"));
+		return;
+	}
 
 	AWeapon* EquippedGun = Cast<AWeapon>(OwnerInterface->GetEquippedWeapon());
-	if (!EquippedGun || !EquippedGun->Setting) return;
+	if (!EquippedGun || !EquippedGun->Setting)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[Client] TPS Input_StartFire Reject MissingWeapon PC=%s Pawn=%s Weapon=%s"),
+			*OwnerController->GetName(),
+			OwnerPawn ? *OwnerPawn->GetName() : TEXT("<NULL>"),
+			EquippedGun ? *EquippedGun->GetName() : TEXT("<NULL>"));
+		return;
+	}
+
+	FVector ViewLocation = OwnerPawn ? OwnerPawn->GetActorLocation() + FVector(0.0f, 0.0f, 80.0f) : FVector::ZeroVector;
+	FRotator ViewRotation = OwnerController->GetControlRotation();
+	OwnerController->GetPlayerViewPoint(ViewLocation, ViewRotation);
+
+	UE_LOG(LogTemp, Warning, TEXT("[Client] TPS Input_StartFire PC=%s Pawn=%s Weapon=%s ViewLoc=%s ViewRot=%s"),
+		*OwnerController->GetName(),
+		OwnerPawn ? *OwnerPawn->GetName() : TEXT("<NULL>"),
+		*EquippedGun->GetName(),
+		*ViewLocation.ToCompactString(),
+		*ViewRotation.ToCompactString());
+
+	EquippedGun->Setting->PlayLocalFireFeedback();
+
+	if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController))
+	{
+		MainPC->Server_TPSFireFromClient(ViewLocation, ViewRotation);
+	}
 
 	EquippedGun->Setting->StartLoopFire();
-
-
-
 }
 
 void UTPSInputHandler::Input_StopFire()
@@ -149,6 +182,10 @@ void UTPSInputHandler::Input_StopFire()
 
 	AWeapon* EquippedGun = Cast<AWeapon>(OwnerInterface->GetEquippedWeapon());
 	if (!EquippedGun || !EquippedGun->Setting) return;
+
+	UE_LOG(LogTemp, Warning, TEXT("[Client] TPS Input_StopFire PC=%s Weapon=%s"),
+		*OwnerController->GetName(),
+		*EquippedGun->GetName());
 
 	EquippedGun->Setting->StopLoopFire();
 }

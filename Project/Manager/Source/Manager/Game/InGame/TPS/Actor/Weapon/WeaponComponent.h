@@ -30,35 +30,41 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	virtual void Fire(const FVector& MuzzleLocation, const FVector& TargetLocation = FVector::ZeroVector, float InDamage = -1.0f);
+	virtual void Fire(const FVector& MuzzleLocation);
+	virtual void Fire(const FVector& MuzzleLocation, const FVector& ShotDirection, float InDamage = -1.0f);
 	virtual void FireOnce();
+	void PlayLocalFireFeedback();
+	void ExecuteServerFireFromView(FVector ViewLocation, FRotator ViewRotation);
 	virtual void StartLoopFire();
 	virtual void StopLoopFire();
 	virtual void Reload();
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_FireFromClient(FVector ViewLocation, FRotator ViewRotation);
 
 protected:
 	FTimerHandle FireTimerHandle;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gameplay")
 	float FireInterval = 0.1f;
-	//Fire½Ã ³ª¿À´Â Sound
+	//Fireï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Sound
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	USoundBase* m_FireSound;
 
-	//Åº¾ËÀÌ ºñ¾úÀ» ½Ã ³ª¿À´Â Sound
+	//Åºï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Sound
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	USoundBase* m_pEmptySound;
 
-	//¸ðµç ¼Ò¸®¸¦ ÀúÀåÇÏ´Â ¿ëµµ
+	//ï¿½ï¿½ï¿½ ï¿½Ò¸ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï´ï¿½ ï¿½ëµµ
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	TArray<USoundBase*> m_pEnvironmentalSounds;
 
 
-	//·¹ÀÌÀú Á¾·ù
+	//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Lazer")
 	EFireType FireType = EFireType::LineTrace;
 
-	//socket ´ë¿ë
+	//socket ï¿½ï¿½ï¿½
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Gameplay")
 	FVector m_vMuzzleOffset = FVector(100.0f, 0, 10.0f);
 

@@ -6,6 +6,7 @@
 #include "GameFramework/PlayerController.h"
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/Card/Actor/CardDropActor.h"
+#include "Game/InGame/Card/Data/SeotdaTypes.h"
 
 UCardInputHandler::UCardInputHandler()
 {
@@ -75,68 +76,95 @@ void UCardInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputCompone
 
 void UCardInputHandler::Input_Check()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[Card] Check"));
+    if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController))
+    {
+        MainPC->Server_RequestSeotdaBetAction(EBettingAction::Check);
+    }
+    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[Card] Check"));
 }
 
 void UCardInputHandler::Input_Call()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[Card] Call"));
+    if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController))
+    {
+        MainPC->Server_RequestSeotdaBetAction(EBettingAction::Call);
+    }
+    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[Card] Call"));
 }
 
 void UCardInputHandler::Input_Half()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[Card] Half"));
+    if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController))
+    {
+        MainPC->Server_RequestSeotdaBetAction(EBettingAction::Half);
+    }
+    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[Card] Half"));
 }
 
 void UCardInputHandler::Input_Die()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("[Card] Die"));
+    if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController))
+    {
+        MainPC->Server_RequestSeotdaBetAction(EBettingAction::Die);
+    }
+    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("[Card] Die"));
 }
 
 void UCardInputHandler::Input_AllIn()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Magenta, TEXT("[Card] AllIn"));
+    if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController))
+    {
+        MainPC->Server_RequestSeotdaBetAction(EBettingAction::AllIn);
+    }
+    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Magenta, TEXT("[Card] AllIn"));
 }
 
 void UCardInputHandler::Input_SelectCard1()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("[Card] SelectCard1"));
+    bSelectedCard0 = !bSelectedCard0;
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, bSelectedCard0 ? FColor::Green : FColor::Yellow,
+            FString::Printf(TEXT("[Card] SelectCard1=%d"), bSelectedCard0 ? 1 : 0));
+    }
 }
 
 void UCardInputHandler::Input_SelectCard2()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("[Card] SelectCard2"));
+    bSelectedCard1 = !bSelectedCard1;
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, bSelectedCard1 ? FColor::Green : FColor::Yellow,
+            FString::Printf(TEXT("[Card] SelectCard2=%d"), bSelectedCard1 ? 1 : 0));
+    }
 }
 
 void UCardInputHandler::Input_SelectCard3()
 {
-	if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, TEXT("[Card] SelectCard3"));
+    bSelectedCard2 = !bSelectedCard2;
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, bSelectedCard2 ? FColor::Green : FColor::Yellow,
+            FString::Printf(TEXT("[Card] SelectCard3=%d"), bSelectedCard2 ? 1 : 0));
+    }
 }
 
 void UCardInputHandler::Input_ConfirmSelection()
 {
-    if (!OwnerController)
-    {
-        return;
-    }
-
-    FHitResult Hit;
-    OwnerController->GetHitResultUnderCursor(ECC_Visibility, false, Hit);
-
-    ACardDropActor* TargetCard = Cast<ACardDropActor>(Hit.GetActor());
-    if (!TargetCard)
-    {
-        if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("[Card] No target card"));
-        return;
-    }
-
     AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController);
     if (!MainPC)
     {
         return;
     }
 
-    MainPC->Server_RequestPickupCard(TargetCard);
+    MainPC->Server_SubmitSeotdaSelection(bSelectedCard0, bSelectedCard1, bSelectedCard2);
 
-    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("[Card] Pickup request"));
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green,
+            FString::Printf(TEXT("[Card] Submit selection %d/%d/%d"),
+                bSelectedCard0 ? 1 : 0,
+                bSelectedCard1 ? 1 : 0,
+                bSelectedCard2 ? 1 : 0));
+    }
 }

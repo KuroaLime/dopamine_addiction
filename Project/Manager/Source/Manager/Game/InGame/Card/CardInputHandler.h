@@ -60,6 +60,11 @@ protected:
 	UInputAction* IA_ConfirmSelection = nullptr;
 
 protected:
+	bool bSelectedCard0 = false;
+	bool bSelectedCard1 = false;
+	bool bSelectedCard2 = false;
+
+protected:
 	void Input_Check();
 	void Input_Call();
 	void Input_Half();

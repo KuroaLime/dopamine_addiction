@@ -10,6 +10,10 @@
 #include "Game/InGame/MainPlayerState.h"
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/Card/Actor/CardDropActor.h"
+#include "Default/Ability/Interface/AbilityOwnerInterface.h"
+#include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
+#include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
+#include "GameFramework/Pawn.h"
 
 void AMainPlayerController::BeginPlay()
 {
@@ -121,7 +125,7 @@ void AMainPlayerController::Multicast_SwitchMode_Implementation(EGamePhase NewPh
 
 void AMainPlayerController::Server_SwitchMode_Implementation(EGamePhase NewPhase)
 {
-	// ¼­¹ö¿¡¼­ ¹Þ¾Æ¼­ ¸ðµç Å¬¶óÀÌ¾ðÆ®¿¡ ÀüÆÄ
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Þ¾Æ¼ï¿½ ï¿½ï¿½ï¿½ Å¬ï¿½ï¿½ï¿½Ì¾ï¿½Æ®ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 	Multicast_SwitchMode(NewPhase);
 }
 
@@ -220,8 +224,8 @@ void AMainPlayerController::Multicast_PopMode_Implementation()
 	CurrentPhase = PrevPhase;
 }
 
-//»óÁ¡¿¡¼­ ¾ÆÀÌÅÛ ±¸¸ÅÈÄ ¹Ý¿µ
-//Ä³¸¯ÅÍ °íÁ¤ state ¾÷±×·¹ÀÌµå
+//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ý¿ï¿½
+//Ä³ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ state ï¿½ï¿½ï¿½×·ï¿½ï¿½Ìµï¿½
 bool AMainPlayerController::Server_RequestUpgrade_Validate(int32 ItemID)
 {
 	if (ItemID < 0) return false;
@@ -272,4 +276,83 @@ void AMainPlayerController::Server_RequestPickupNearestCard_Implementation()
     }
 
     GM->TryPickupNearestCard(this);
+}
+
+
+bool AMainPlayerController::Server_SubmitSeotdaSelection_Validate(bool bCard0, bool bCard1, bool bCard2)
+{
+    return true;
+}
+
+void AMainPlayerController::Server_SubmitSeotdaSelection_Implementation(bool bCard0, bool bCard1, bool bCard2)
+{
+    AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+    if (!GM)
+    {
+        return;
+    }
+
+    GM->SubmitSeotdaSelection(this, bCard0, bCard1, bCard2);
+}
+
+
+bool AMainPlayerController::Server_RequestSeotdaBetAction_Validate(EBettingAction Action)
+{
+    return true;
+}
+
+void AMainPlayerController::Server_RequestSeotdaBetAction_Implementation(EBettingAction Action)
+{
+    AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+    if (!GM)
+    {
+        return;
+    }
+
+    GM->SubmitSeotdaBetAction(this, Action);
+}
+
+
+bool AMainPlayerController::Server_TPSFireFromClient_Validate(FVector ViewLocation, FRotator ViewRotation)
+{
+    return true;
+}
+
+void AMainPlayerController::Server_TPSFireFromClient_Implementation(FVector ViewLocation, FRotator ViewRotation)
+{
+    AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+    if (!GM || !GM->IsBattleRoyalePhase())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireRejected Reason=InvalidPhase PC=%s"), *GetName());
+        return;
+    }
+
+    APawn* OwnerPawn = GetPawn();
+    IAbilityOwnerInterface* OwnerInterface = OwnerPawn ? Cast<IAbilityOwnerInterface>(OwnerPawn) : nullptr;
+    if (!OwnerPawn || !OwnerInterface)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireRejected Reason=MissingPawnOrOwnerInterface PC=%s Pawn=%s"),
+            *GetName(),
+            OwnerPawn ? *OwnerPawn->GetName() : TEXT("<NULL>"));
+        return;
+    }
+
+    AWeapon* EquippedGun = Cast<AWeapon>(OwnerInterface->GetEquippedWeapon());
+    if (!EquippedGun || !EquippedGun->Setting)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireRejected Reason=MissingWeapon PC=%s Pawn=%s Weapon=%s"),
+            *GetName(),
+            *OwnerPawn->GetName(),
+            EquippedGun ? *EquippedGun->GetName() : TEXT("<NULL>"));
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireInputViaPC PC=%s Pawn=%s Weapon=%s ViewLoc=%s ViewRot=%s"),
+        *GetName(),
+        *OwnerPawn->GetName(),
+        *EquippedGun->GetName(),
+        *ViewLocation.ToCompactString(),
+        *ViewRotation.ToCompactString());
+
+    EquippedGun->Setting->ExecuteServerFireFromView(ViewLocation, ViewRotation);
 }

@@ -381,6 +381,7 @@ void AMainGameMode::StartCardGamePhase()
 
     ClearPlayerPawnMovementBases(TEXT("CardGame"));
     EnsureThreeCardsForCardGame();
+    ResetSeotdaRoundStates();
     BroadcastSwitchMode(EGamePhase::Card);
     StartTimedServerPhase(EDediServerPhase::CardGame, GetCardGameDuration());
     BeginPhase(EGamePhase::Card);
@@ -545,6 +546,695 @@ bool AMainGameMode::TryPickupCard(AMainPlayerController* RequestingPC, ACardDrop
     return true;
 }
 
+
+
+bool AMainGameMode::SubmitSeotdaSelection(AMainPlayerController* RequestingPC, bool bCard0, bool bCard1, bool bCard2)
+{
+    if (!HasAuthority())
+    {
+        return false;
+    }
+
+    if (!RequestingPC)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidRequest"));
+        return false;
+    }
+
+    if (CurrentServerPhase != EDediServerPhase::CardGame)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidPhase Player=%s Phase=%s"),
+            *RequestingPC->GetName(),
+            GetServerPhaseName(CurrentServerPhase));
+        return false;
+    }
+
+    AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
+    if (!PS)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=MissingPS Player=%s"), *RequestingPC->GetName());
+        return false;
+    }
+
+    if (PS->OwnedCards.Num() != MaxCardsPerPlayerPerRound)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidCardCount Player=%s Count=%d Required=%d"),
+            *PS->GetPlayerName(),
+            PS->OwnedCards.Num(),
+            MaxCardsPerPlayerPerRound);
+        return false;
+    }
+
+    const int32 SelectedCount = (bCard0 ? 1 : 0) + (bCard1 ? 1 : 0) + (bCard2 ? 1 : 0);
+    if (SelectedCount != 2)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidSelectCount Player=%s Count=%d"),
+            *PS->GetPlayerName(),
+            SelectedCount);
+        return false;
+    }
+
+    FSeotdaPlayerRoundState* ExistingState = SeotdaRoundStates.Find(PS);
+    if (ExistingState && ExistingState->bSubmitted)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=AlreadySubmitted Player=%s"), *PS->GetPlayerName());
+        return false;
+    }
+
+    TArray<FOwnedCardInfo> SelectedCards;
+    if (bCard0)
+    {
+        SelectedCards.Add(PS->OwnedCards[0]);
+    }
+    if (bCard1)
+    {
+        SelectedCards.Add(PS->OwnedCards[1]);
+    }
+    if (bCard2)
+    {
+        SelectedCards.Add(PS->OwnedCards[2]);
+    }
+
+    FSeotdaHandResult HandResult = EvaluateSeotdaHand(SelectedCards[0], SelectedCards[1]);
+
+    FSeotdaPlayerRoundState NewState;
+    NewState.PlayerState = PS;
+    NewState.bSubmitted = true;
+    NewState.HandResult = HandResult;
+    NewState.SelectedCardInstanceIds = HandResult.UsedCardInstanceIds;
+    SeotdaRoundStates.Add(PS, NewState);
+
+    for (int32 InstanceId : HandResult.UsedCardInstanceIds)
+    {
+        if (FServerCardRecord* Record = ServerCardRecords.Find(InstanceId))
+        {
+            if (Record->OwnerPlayerState.Get() == PS)
+            {
+                Record->State = ECardRuntimeState::Used;
+            }
+        }
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitOK Player=%s Cards=%d,%d Combo=%s Rank=%d SubRank=%d"),
+        *PS->GetPlayerName(),
+        HandResult.UsedCardInstanceIds.Num() > 0 ? HandResult.UsedCardInstanceIds[0] : 0,
+        HandResult.UsedCardInstanceIds.Num() > 1 ? HandResult.UsedCardInstanceIds[1] : 0,
+        *HandResult.Name,
+        HandResult.Rank,
+        HandResult.SubRank);
+
+    TryResolveSeotdaRoundIfReady();
+    return true;
+}
+
+void AMainGameMode::ResetSeotdaRoundStates()
+{
+    SeotdaRoundStates.Empty();
+    SeotdaTurnOrder.Empty();
+    SeotdaPot = 0;
+    SeotdaCurrentBet = 0;
+    SeotdaCurrentTurnIndex = 0;
+    bSeotdaBettingActive = false;
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda Reset Round=%d"), CurrentRound);
+}
+
+void AMainGameMode::TryResolveSeotdaRoundIfReady()
+{
+    if (!HasAuthority() || !GetWorld())
+    {
+        return;
+    }
+
+    int32 TargetCount = 0;
+    int32 SubmittedCount = 0;
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        APlayerController* PC = It->Get();
+        if (!PC)
+        {
+            continue;
+        }
+
+        AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+        if (!PS)
+        {
+            continue;
+        }
+
+        TargetCount++;
+        FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
+        if (State && State->bSubmitted)
+        {
+            SubmittedCount++;
+        }
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitProgress submitted=%d targets=%d Round=%d"), SubmittedCount, TargetCount, CurrentRound);
+
+    if (TargetCount <= 0 || SubmittedCount < TargetCount || bSeotdaBettingActive)
+    {
+        return;
+    }
+
+    StartSeotdaBettingRound();
+}
+
+void AMainGameMode::StartSeotdaBettingRound()
+{
+    if (!HasAuthority() || !GetWorld())
+    {
+        return;
+    }
+
+    SeotdaTurnOrder.Empty();
+    SeotdaPot = 0;
+    SeotdaCurrentBet = 0;
+    SeotdaCurrentTurnIndex = 0;
+    bSeotdaBettingActive = true;
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        APlayerController* PC = It->Get();
+        if (!PC)
+        {
+            continue;
+        }
+
+        AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+        if (!PS)
+        {
+            continue;
+        }
+
+        FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
+        if (!State || !State->bSubmitted)
+        {
+            continue;
+        }
+
+        State->bFolded = false;
+        State->bActedThisBetRound = false;
+        State->BetMoney = 0;
+        SeotdaTurnOrder.Add(PS);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BettingStart players=%d pot=%d currentBet=%d round=%d"),
+        SeotdaTurnOrder.Num(),
+        SeotdaPot,
+        SeotdaCurrentBet,
+        CurrentRound);
+
+    if (SeotdaTurnOrder.Num() <= 1)
+    {
+        ResolveSeotdaRoundResult(TEXT("SinglePlayer"));
+        return;
+    }
+
+    AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetTurn Player=%s Index=%d Pot=%d CurrentBet=%d"),
+        TurnPS ? *TurnPS->GetPlayerName() : TEXT("<NULL>"),
+        SeotdaCurrentTurnIndex,
+        SeotdaPot,
+        SeotdaCurrentBet);
+}
+
+bool AMainGameMode::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, EBettingAction Action)
+{
+    if (!HasAuthority())
+    {
+        return false;
+    }
+
+    if (!RequestingPC)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidRequest Action=%d"), static_cast<int32>(Action));
+        return false;
+    }
+
+    if (CurrentServerPhase != EDediServerPhase::CardGame)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidPhase Player=%s Phase=%s Action=%d"),
+            *RequestingPC->GetName(),
+            GetServerPhaseName(CurrentServerPhase),
+            static_cast<int32>(Action));
+        return false;
+    }
+
+    if (!bSeotdaBettingActive)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=BettingNotActive Player=%s Action=%d"),
+            *RequestingPC->GetName(),
+            static_cast<int32>(Action));
+        return false;
+    }
+
+    AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
+    if (!PS)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=MissingPS Player=%s Action=%d"),
+            *RequestingPC->GetName(),
+            static_cast<int32>(Action));
+        return false;
+    }
+
+    AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
+    if (TurnPS != PS)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=NotYourTurn Player=%s Turn=%s Action=%d"),
+            *PS->GetPlayerName(),
+            TurnPS ? *TurnPS->GetPlayerName() : TEXT("<NULL>"),
+            static_cast<int32>(Action));
+        return false;
+    }
+
+    FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
+    if (!State || !State->bSubmitted || State->bFolded)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidState Player=%s Action=%d"),
+            *PS->GetPlayerName(),
+            static_cast<int32>(Action));
+        return false;
+    }
+
+    const int32 OldCurrentBet = SeotdaCurrentBet;
+    const int32 CallAmount = FMath::Max(0, SeotdaCurrentBet - State->BetMoney);
+    int32 RequestedPay = 0;
+    bool bFoldAction = false;
+
+    switch (Action)
+    {
+    case EBettingAction::Check:
+        if (CallAmount > 0)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=CheckNeedsCall Player=%s Call=%d"), *PS->GetPlayerName(), CallAmount);
+            return false;
+        }
+        RequestedPay = 0;
+        break;
+    case EBettingAction::Call:
+        RequestedPay = CallAmount;
+        break;
+    case EBettingAction::Half:
+        RequestedPay = CallAmount + FMath::Max(1, (SeotdaPot + CallAmount) / 2);
+        break;
+    case EBettingAction::AllIn:
+        RequestedPay = GetSeotdaPlayerMoney(PS);
+        break;
+    case EBettingAction::Die:
+        bFoldAction = true;
+        break;
+    default:
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidAction Player=%s Action=%d"),
+            *PS->GetPlayerName(),
+            static_cast<int32>(Action));
+        return false;
+    }
+
+    int32 Paid = 0;
+    if (bFoldAction)
+    {
+        State->bFolded = true;
+        State->bActedThisBetRound = true;
+    }
+    else
+    {
+        Paid = PaySeotdaBet(PS, RequestedPay);
+        State->BetMoney += Paid;
+        if (State->BetMoney > SeotdaCurrentBet)
+        {
+            SeotdaCurrentBet = State->BetMoney;
+        }
+
+        const bool bRaised = SeotdaCurrentBet > OldCurrentBet;
+        if (bRaised)
+        {
+            for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
+            {
+                if (Pair.Key != PS && Pair.Value.bSubmitted && !Pair.Value.bFolded)
+                {
+                    Pair.Value.bActedThisBetRound = false;
+                }
+            }
+        }
+
+        State->bActedThisBetRound = true;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetOK Player=%s Action=%d Paid=%d BetMoney=%d Pot=%d CurrentBet=%d Money=%d Folded=%d"),
+        *PS->GetPlayerName(),
+        static_cast<int32>(Action),
+        Paid,
+        State->BetMoney,
+        SeotdaPot,
+        SeotdaCurrentBet,
+        GetSeotdaPlayerMoney(PS),
+        State->bFolded ? 1 : 0);
+
+    if (GetActiveSeotdaPlayerCount() <= 1 || AreSeotdaBetsSettled())
+    {
+        ResolveSeotdaRoundResult(TEXT("BetSettled"));
+        return true;
+    }
+
+    AdvanceSeotdaBettingTurn();
+    return true;
+}
+
+void AMainGameMode::AdvanceSeotdaBettingTurn()
+{
+    if (SeotdaTurnOrder.Num() <= 0)
+    {
+        ResolveSeotdaRoundResult(TEXT("NoTurnOrder"));
+        return;
+    }
+
+    for (int32 Step = 0; Step < SeotdaTurnOrder.Num(); ++Step)
+    {
+        SeotdaCurrentTurnIndex = (SeotdaCurrentTurnIndex + 1) % SeotdaTurnOrder.Num();
+        AMainPlayerState* CandidatePS = SeotdaTurnOrder[SeotdaCurrentTurnIndex].Get();
+        FSeotdaPlayerRoundState* State = CandidatePS ? SeotdaRoundStates.Find(CandidatePS) : nullptr;
+        if (CandidatePS && State && State->bSubmitted && !State->bFolded)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetTurn Player=%s Index=%d Pot=%d CurrentBet=%d NeedCall=%d"),
+                *CandidatePS->GetPlayerName(),
+                SeotdaCurrentTurnIndex,
+                SeotdaPot,
+                SeotdaCurrentBet,
+                FMath::Max(0, SeotdaCurrentBet - State->BetMoney));
+            return;
+        }
+    }
+
+    ResolveSeotdaRoundResult(TEXT("NoActiveTurn"));
+}
+
+void AMainGameMode::ResolveSeotdaRoundResult(const TCHAR* Reason)
+{
+    if (!HasAuthority())
+    {
+        return;
+    }
+
+    FSeotdaPlayerRoundState* BestState = nullptr;
+    for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
+    {
+        FSeotdaPlayerRoundState& State = Pair.Value;
+        if (!State.bSubmitted || State.bFolded || !State.PlayerState.IsValid())
+        {
+            continue;
+        }
+
+        if (!BestState || State.HandResult.Rank > BestState->HandResult.Rank ||
+            (State.HandResult.Rank == BestState->HandResult.Rank && State.HandResult.SubRank > BestState->HandResult.SubRank))
+        {
+            BestState = &State;
+        }
+    }
+
+    if (!BestState || !BestState->PlayerState.IsValid())
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda ResultFailed Reason=%s Pot=%d"), Reason ? Reason : TEXT("<NULL>"), SeotdaPot);
+        bSeotdaBettingActive = false;
+        return;
+    }
+
+    bool bTie = false;
+    for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
+    {
+        const FSeotdaPlayerRoundState& State = Pair.Value;
+        if (&State == BestState || !State.bSubmitted || State.bFolded)
+        {
+            continue;
+        }
+
+        if (State.HandResult.Rank == BestState->HandResult.Rank && State.HandResult.SubRank == BestState->HandResult.SubRank)
+        {
+            bTie = true;
+            break;
+        }
+    }
+
+    AMainPlayerState* WinnerPS = BestState->PlayerState.Get();
+    if (WinnerPS && SeotdaPot > 0)
+    {
+        WinnerPS->AddGold(SeotdaPot);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda Winner Player=%s Combo=%s Rank=%d SubRank=%d Pot=%d Tie=%d Reason=%s Money=%d"),
+        WinnerPS ? *WinnerPS->GetPlayerName() : TEXT("<NULL>"),
+        *BestState->HandResult.Name,
+        BestState->HandResult.Rank,
+        BestState->HandResult.SubRank,
+        SeotdaPot,
+        bTie ? 1 : 0,
+        Reason ? Reason : TEXT("<NULL>"),
+        WinnerPS ? GetSeotdaPlayerMoney(WinnerPS) : 0);
+
+    bSeotdaBettingActive = false;
+}
+
+AMainPlayerState* AMainGameMode::GetCurrentSeotdaTurnPlayer() const
+{
+    if (SeotdaTurnOrder.Num() <= 0 || !SeotdaTurnOrder.IsValidIndex(SeotdaCurrentTurnIndex))
+    {
+        return nullptr;
+    }
+
+    return SeotdaTurnOrder[SeotdaCurrentTurnIndex].Get();
+}
+
+int32 AMainGameMode::GetSeotdaPlayerMoney(const AMainPlayerState* TargetPS) const
+{
+    return TargetPS ? TargetPS->CurPlayerData.HoldingGold : 0;
+}
+
+int32 AMainGameMode::PaySeotdaBet(AMainPlayerState* TargetPS, int32 Amount)
+{
+    if (!TargetPS || Amount <= 0)
+    {
+        return 0;
+    }
+
+    const int32 ActualPay = FMath::Min(Amount, FMath::Max(0, TargetPS->CurPlayerData.HoldingGold));
+    if (ActualPay > 0)
+    {
+        TargetPS->AddGold(-ActualPay);
+        SeotdaPot += ActualPay;
+    }
+
+    return ActualPay;
+}
+
+int32 AMainGameMode::GetActiveSeotdaPlayerCount() const
+{
+    int32 Count = 0;
+    for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
+    {
+        if (Pair.Value.bSubmitted && !Pair.Value.bFolded)
+        {
+            Count++;
+        }
+    }
+    return Count;
+}
+
+bool AMainGameMode::AreSeotdaBetsSettled() const
+{
+    if (!bSeotdaBettingActive)
+    {
+        return false;
+    }
+
+    for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
+    {
+        const FSeotdaPlayerRoundState& State = Pair.Value;
+        if (!State.bSubmitted || State.bFolded)
+        {
+            continue;
+        }
+
+        if (!State.bActedThisBetRound || State.BetMoney < SeotdaCurrentBet)
+        {
+            return false;
+        }
+    }
+
+    return GetActiveSeotdaPlayerCount() > 0;
+}
+
+AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedCardInfo& FirstCard, const FOwnedCardInfo& SecondCard) const
+{
+    FSeotdaHandResult Result;
+    Result.UsedCardInstanceIds.Add(FirstCard.CardInstanceId);
+    Result.UsedCardInstanceIds.Add(SecondCard.CardInstanceId);
+
+    const int32 FirstMonth = GetSeotdaCardMonth(FirstCard.CardID);
+    const int32 SecondMonth = GetSeotdaCardMonth(SecondCard.CardID);
+    if (FirstMonth <= 0 || SecondMonth <= 0)
+    {
+        Result.Name = TEXT("Invalid");
+        return Result;
+    }
+
+    const bool bFirstGwang = IsSeotdaGwang(FirstCard.CardID);
+    const bool bSecondGwang = IsSeotdaGwang(SecondCard.CardID);
+    const bool bBothGwang = bFirstGwang && bSecondGwang;
+
+    if (bBothGwang && HasSeotdaMonths(FirstMonth, SecondMonth, 3, 8))
+    {
+        Result.Rank = 10000;
+        Result.SubRank = 38;
+        Result.Name = TEXT("38GwangDdang");
+        return Result;
+    }
+
+    if (bBothGwang && HasSeotdaMonths(FirstMonth, SecondMonth, 1, 3))
+    {
+        Result.Rank = 9000;
+        Result.SubRank = 13;
+        Result.Name = TEXT("13GwangDdang");
+        return Result;
+    }
+
+    if (bBothGwang && HasSeotdaMonths(FirstMonth, SecondMonth, 1, 8))
+    {
+        Result.Rank = 9000;
+        Result.SubRank = 18;
+        Result.Name = TEXT("18GwangDdang");
+        return Result;
+    }
+
+    if (FirstMonth == SecondMonth)
+    {
+        Result.Rank = 8000 + FirstMonth;
+        Result.SubRank = FirstMonth;
+        Result.Name = FString::Printf(TEXT("%dDdang"), FirstMonth);
+        return Result;
+    }
+
+    if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 2))
+    {
+        Result.Rank = 7000;
+        Result.SubRank = 12;
+        Result.Name = TEXT("Ali");
+        return Result;
+    }
+
+    if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 4))
+    {
+        Result.Rank = 6900;
+        Result.SubRank = 14;
+        Result.Name = TEXT("Doksa");
+        return Result;
+    }
+
+    if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 9))
+    {
+        Result.Rank = 6800;
+        Result.SubRank = 19;
+        Result.Name = TEXT("Guping");
+        return Result;
+    }
+
+    if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 10))
+    {
+        Result.Rank = 6700;
+        Result.SubRank = 110;
+        Result.Name = TEXT("Jangping");
+        return Result;
+    }
+
+    if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 10))
+    {
+        Result.Rank = 6600;
+        Result.SubRank = 410;
+        Result.Name = TEXT("Jangsa");
+        return Result;
+    }
+
+    if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 6))
+    {
+        Result.Rank = 6500;
+        Result.SubRank = 46;
+        Result.Name = TEXT("Seryuk");
+        return Result;
+    }
+
+    if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 9))
+    {
+        Result.Rank = 100;
+        Result.SubRank = 49;
+        Result.Name = TEXT("Mangtong");
+        return Result;
+    }
+
+    const int32 Gut = (FirstMonth + SecondMonth) % 10;
+    if (Gut == 9)
+    {
+        Result.Rank = 6000;
+        Result.SubRank = 9;
+        Result.Name = TEXT("GapOh");
+        return Result;
+    }
+
+    Result.Rank = 1000 + Gut;
+    Result.SubRank = Gut;
+    Result.Name = FString::Printf(TEXT("%dGut"), Gut);
+    return Result;
+}
+
+int32 AMainGameMode::GetSeotdaCardMonth(ECardID CardID) const
+{
+    switch (CardID)
+    {
+    case ECardID::Jan_Gwang:
+    case ECardID::Jan_Pi:
+        return 1;
+    case ECardID::Feb_Yul:
+    case ECardID::Feb_Ddi:
+        return 2;
+    case ECardID::Mar_Gwang:
+    case ECardID::Mar_Ddi:
+        return 3;
+    case ECardID::Apr_Yul:
+    case ECardID::Apr_Pi:
+        return 4;
+    case ECardID::May_Yul:
+    case ECardID::May_Ddi:
+        return 5;
+    case ECardID::Jun_Yul:
+    case ECardID::Jun_Ddi:
+        return 6;
+    case ECardID::Jul_Yul:
+    case ECardID::Jul_Ddi:
+        return 7;
+    case ECardID::Aug_Gwang:
+    case ECardID::Aug_Yul:
+        return 8;
+    case ECardID::Sep_Yul:
+    case ECardID::Sep_Ddi:
+        return 9;
+    case ECardID::Oct_Gwang:
+    case ECardID::Oct_Yul:
+        return 10;
+    default:
+        return 0;
+    }
+}
+
+bool AMainGameMode::IsSeotdaGwang(ECardID CardID) const
+{
+    return CardID == ECardID::Jan_Gwang ||
+        CardID == ECardID::Mar_Gwang ||
+        CardID == ECardID::Aug_Gwang ||
+        CardID == ECardID::Oct_Gwang;
+}
+
+bool AMainGameMode::HasSeotdaMonths(int32 FirstMonth, int32 SecondMonth, int32 A, int32 B) const
+{
+    return (FirstMonth == A && SecondMonth == B) || (FirstMonth == B && SecondMonth == A);
+}
 
 bool AMainGameMode::TryPickupNearestCard(AMainPlayerController* RequestingPC)
 {
@@ -932,6 +1622,8 @@ void AMainGameMode::ClearRoundCardsForAllPlayers()
         PS->ClearOwnedCards();
         TargetCount++;
     }
+
+    SeotdaRoundStates.Empty();
 
     UE_LOG(LogTemp, Warning, TEXT("[DS] Card ClearRoundCards targets=%d cards=%d round=%d"), TargetCount, CardCount, CurrentRound);
 }

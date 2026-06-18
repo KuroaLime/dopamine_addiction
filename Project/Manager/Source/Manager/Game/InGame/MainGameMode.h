@@ -4,6 +4,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "Game/InGame/Interface/PhaseGameModeInterface.h"
 #include "Game/Protocol_Client/Protocol_InGame.h"
+#include "Game/InGame/Card/Data/SeotdaTypes.h"
 #include "MainGameMode.generated.h"
 
 class UPhaseStrategy;
@@ -61,6 +62,8 @@ public:
     bool IsBattleRoyalePhase() const;
     bool TryPickupCard(AMainPlayerController* RequestingPC, ACardDropActor* TargetCard);
     bool TryPickupNearestCard(AMainPlayerController* RequestingPC);
+    bool SubmitSeotdaSelection(AMainPlayerController* RequestingPC, bool bCard0, bool bCard1, bool bCard2);
+    bool SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, EBettingAction Action);
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "GameMode|Setup")
@@ -103,7 +106,7 @@ protected:
     int32 DebugReadyDuration = 5;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|Debug")
-    int32 DebugBattleRoyaleDuration = 30;
+    int32 DebugBattleRoyaleDuration = 60;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|Debug")
     int32 DebugTransitionDuration = 3;
@@ -166,6 +169,34 @@ private:
     UPROPERTY()
     TArray<TObjectPtr<ACardDropActor>> ActiveCardDrops;
 
+
+    struct FSeotdaHandResult
+    {
+        int32 Rank = 0;
+        int32 SubRank = 0;
+        FString Name;
+        TArray<int32> UsedCardInstanceIds;
+    };
+
+    struct FSeotdaPlayerRoundState
+    {
+        TWeakObjectPtr<AMainPlayerState> PlayerState;
+        TArray<int32> SelectedCardInstanceIds;
+        FSeotdaHandResult HandResult;
+        bool bSubmitted = false;
+        bool bFolded = false;
+        bool bActedThisBetRound = false;
+        int32 BetMoney = 0;
+    };
+
+    TMap<AMainPlayerState*, FSeotdaPlayerRoundState> SeotdaRoundStates;
+    TArray<TWeakObjectPtr<AMainPlayerState>> SeotdaTurnOrder;
+    int32 SeotdaPot = 0;
+    int32 SeotdaCurrentBet = 0;
+    int32 SeotdaCurrentTurnIndex = 0;
+    bool bSeotdaBettingActive = false;
+
+
 private:
     void InitStrategy();
     void TryStartGameIfReady();
@@ -202,6 +233,21 @@ private:
     bool GrantNewCardToPlayer(AMainPlayerState* TargetPS, ECardID CardID, const TCHAR* Context);
     ECardID PickSupplementCardIDForPlayer(const AMainPlayerState* TargetPS) const;
     bool IsCardPickupAllowed() const;
+
+    void ResetSeotdaRoundStates();
+    void TryResolveSeotdaRoundIfReady();
+    void StartSeotdaBettingRound();
+    void AdvanceSeotdaBettingTurn();
+    void ResolveSeotdaRoundResult(const TCHAR* Reason);
+    AMainPlayerState* GetCurrentSeotdaTurnPlayer() const;
+    int32 GetSeotdaPlayerMoney(const AMainPlayerState* TargetPS) const;
+    int32 PaySeotdaBet(AMainPlayerState* TargetPS, int32 Amount);
+    int32 GetActiveSeotdaPlayerCount() const;
+    bool AreSeotdaBetsSettled() const;
+    FSeotdaHandResult EvaluateSeotdaHand(const FOwnedCardInfo& FirstCard, const FOwnedCardInfo& SecondCard) const;
+    int32 GetSeotdaCardMonth(ECardID CardID) const;
+    bool IsSeotdaGwang(ECardID CardID) const;
+    bool HasSeotdaMonths(int32 FirstMonth, int32 SecondMonth, int32 A, int32 B) const;
 
     int32 GetReadyDuration() const;
     int32 GetBattleRoyaleDuration() const;

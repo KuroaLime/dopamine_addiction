@@ -13,6 +13,7 @@ UCustomASC::UCustomASC()
 	// Set this component to be initialized when the game starts, and to be ticked every frame.  You can turn these features
 	// off to improve performance if you don't need them.
 	PrimaryComponentTick.bCanEverTick = false;
+	SetIsReplicatedByDefault(true);
 
 	// ...
 }
@@ -121,6 +122,14 @@ bool UCustomASC::HandleGameplayEvent(FGameplayTag EventTag, const FCustomGamepla
 
 void UCustomASC::ServerRPC_SendGameplayEvent_Implementation(FGameplayTag EventTag, const FCustomGameplayEventData& Payload)
 {
+	static const FGameplayTag FireTag = FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire"));
+
+	if (EventTag == FireTag)
+	{
+		HandleGameplayEvent(EventTag, Payload);
+		return;
+	}
+
 	HandleGameplayEvent(EventTag, Payload);
 }
 

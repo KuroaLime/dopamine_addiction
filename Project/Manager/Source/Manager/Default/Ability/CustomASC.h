@@ -23,6 +23,15 @@ public:
 	// 전달하고 싶은 임의의 액터 데이터 (예: 주워진 아이템 자신)
 	UPROPERTY(BlueprintReadWrite)
 	AActor* TargetObject = nullptr;
+
+	UPROPERTY(BlueprintReadWrite)
+	bool bHasAimData = false;
+
+	UPROPERTY(BlueprintReadWrite)
+	FVector AimLocation = FVector::ZeroVector;
+
+	UPROPERTY(BlueprintReadWrite)
+	FRotator AimRotation = FRotator::ZeroRotator;
 };
 
 

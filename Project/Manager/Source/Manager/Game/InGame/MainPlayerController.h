@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
+#include "Game/InGame/Card/Data/SeotdaTypes.h"
 #include "MainPlayerController.generated.h"
 
 class UInputHandler;
@@ -91,5 +92,14 @@ public:
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestPickupNearestCard();
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SubmitSeotdaSelection(bool bCard0, bool bCard1, bool bCard2);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestSeotdaBetAction(EBettingAction Action);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_TPSFireFromClient(FVector ViewLocation, FRotator ViewRotation);
 
 };
