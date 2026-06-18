@@ -256,7 +256,6 @@ float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& 
 		}
 	}
 
-
 	return ActualDamage;
 }
 

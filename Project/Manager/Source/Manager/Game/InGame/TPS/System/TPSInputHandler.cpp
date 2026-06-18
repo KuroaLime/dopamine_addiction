@@ -67,8 +67,11 @@ void UTPSInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputComponen
 	if (IA_Move) EnhancedInputComponent->BindAction(IA_Move, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_Move);
 	if (IA_Look) EnhancedInputComponent->BindAction(IA_Look, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_Look);
 	if (IA_Jump) EnhancedInputComponent->BindAction(IA_Jump, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Jump);
-	if (IA_Fire) EnhancedInputComponent->BindAction(IA_Fire, ETriggerEvent::Started, this, &UTPSInputHandler::Input_StartFire);
-	if (IA_Fire) EnhancedInputComponent->BindAction(IA_Fire, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_StopFire);
+	if (IA_Fire)
+	{
+		EnhancedInputComponent->BindAction(IA_Fire, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_StartFire);
+		EnhancedInputComponent->BindAction(IA_Fire, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_StopFire);
+	}
 	if (IA_Aim)
 	{
 		EnhancedInputComponent->BindAction(IA_Aim, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Aim);
@@ -117,31 +120,19 @@ void UTPSInputHandler::Input_Jump()
 
 void UTPSInputHandler::Input_StartFire()
 {
-	if (!OwnerController) return;
-
-	IAbilityOwnerInterface* OwnerInterface = Cast<IAbilityOwnerInterface>(OwnerController->GetPawn());
-	if (!OwnerInterface) return;
-
-	AWeapon* EquippedGun = Cast<AWeapon>(OwnerInterface->GetEquippedWeapon());
-	if (!EquippedGun || !EquippedGun->Setting) return;
-
-	EquippedGun->Setting->StartLoopFire();
-
-
-
+	if (UPFGASC* ASC = ResolveOwnerASC())
+	{
+		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire")));
+	}
 }
 
 void UTPSInputHandler::Input_StopFire()
 {
-	if (!OwnerController) return;
-
-	IAbilityOwnerInterface* OwnerInterface = Cast<IAbilityOwnerInterface>(OwnerController->GetPawn());
-	if (!OwnerInterface) return;
-
-	AWeapon* EquippedGun = Cast<AWeapon>(OwnerInterface->GetEquippedWeapon());
-	if (!EquippedGun || !EquippedGun->Setting) return;
-
-	EquippedGun->Setting->StopLoopFire();
+	if (UPFGASC* ASC = ResolveOwnerASC())
+	{
+		ASC->CancelAbilitiesWithTag(
+			FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire"))));
+	}
 }
 
 void UTPSInputHandler::Input_Aim()

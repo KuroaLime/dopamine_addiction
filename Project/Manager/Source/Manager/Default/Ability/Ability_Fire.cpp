@@ -25,20 +25,103 @@ UAbility_Fire::UAbility_Fire()
 	CooldownTags.AddTag(FGameplayTag::RequestGameplayTag(FName("State.Cooldown.Fire")));
 
 	ActivationOwnedTags.AddTag(FGameplayTag::RequestGameplayTag(FName("State.Movement.Firing")));
+
+	bIsServerFire = false;
+	bIsClientFire = false;
 }
 
 void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 {
-	// 클라이언트 전용: 레이캐스트 + 발사 이펙트 + 히트 시 ServerRPC 전송.
-	// 서버 응답을 기다리지 않고 즉시 실행해 발사 반응을 자연스럽게 만든다.
+	if (!bIsClientFire)
+	{
+		ACharacter* Character = Cast<ACharacter>(InOwner);
+		if (!Character) return;
+		IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
+		IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
+		if (!PS_Interface || !GS_Interface) return;
+
+		int32 FireRate = GS_Interface->GetWeaponBaseData(
+			PS_Interface->GetWeaponID(),
+			EWeaponBaseStatType::FireRate);
+
+		// 발사 속도 하드 코딩
+		float finalFireRate = FireRate * 0.25;
+
+		FTimerDelegate Delegate;
+		TWeakObjectPtr<AActor> WeakOwner(InOwner);
+		Delegate.BindLambda([this, WeakOwner]()
+			{
+				if (!WeakOwner.IsValid()) return;
+				Client_ExecuteFire(WeakOwner.Get());
+			});
+
+		Character->GetWorldTimerManager().SetTimer(
+			ClientFireTimerHandle,
+			Delegate,
+			finalFireRate,
+			true
+		);
+		bIsClientFire = true;
+
+		Client_ExecuteFire(InOwner);
+	}
+}
+
+void UAbility_Fire::LocalCancelWithOwner(AActor* InOwner)
+{
+	if (!InOwner) return;
+	InOwner->GetWorldTimerManager().ClearTimer(ClientFireTimerHandle);
+	bIsClientFire = false;
+}
+
+void UAbility_Fire::ActivateAbility()
+{
+	if (!OwnerCharacter || !OwnerCharacter->HasAuthority()) return;
+
+	if (!bIsServerFire)
+	{
+		IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
+		IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
+		IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(OwnerCharacter->GetWorld()->GetGameState());
+
+		if (!Owner || !PS_Interface || !GS_Interface) return;
+
+		int32 FireRate = GS_Interface->GetWeaponBaseData(
+			PS_Interface->GetWeaponID(), 
+			EWeaponBaseStatType::FireRate);
+
+		// 발사 속도 하드 코딩
+		float finalFireRate = FireRate * 0.25;
+
+		bIsServerFire = true;
+		OwnerCharacter->GetWorldTimerManager().SetTimer(
+			ServerFireTimerHandle,
+			this,
+			&UAbility_Fire::Server_ExecuteFire,
+			finalFireRate,
+			true
+		);
+
+		bIsServerFire = true;
+
+		Server_ExecuteFire();
+	}
+}
+
+void UAbility_Fire::EndAbility(bool bWasCancelled)
+{
+	if (!OwnerCharacter || !OwnerCharacter->HasAuthority()) return;
+	OwnerCharacter->GetWorldTimerManager().ClearTimer(ServerFireTimerHandle);
+	bIsServerFire = false;
+	Super::EndAbility(bWasCancelled);
+}
+
+void UAbility_Fire::Client_ExecuteFire(AActor* InOwner)
+{
 	ACharacter* Character = Cast<ACharacter>(InOwner);
 	if (!Character) return;
 
-	// 로컬 소유 클라이언트에서만 실행
-	if (!Character->IsLocallyControlled()) return;
-
 	IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(Character);
-
 	if (!Owner) return;
 
 	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
@@ -48,44 +131,18 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 
 	// 발사 이펙트/사운드 재생
 	EquippedGun->Setting->Fire(MuzzleLoc);
-
-	if (UPFGASC* ASC = Cast<UPFGASC>(Character->GetComponentByClass(UPFGASC::StaticClass())))
-	{
-		FPFGGameplayEventData Payload;
-		Payload.Instigator = Character;
-		Payload.TargetObject = nullptr;
-
-		static const FGameplayTag HitTag = FGameplayTag::RequestGameplayTag(FName("Event.Weapon.Hit"));
-		ASC->ServerRPC_SendGameplayEvent(HitTag, Payload);
-	}
 }
 
-void UAbility_Fire::ActivateAbility()
+void UAbility_Fire::Server_ExecuteFire()
 {
-	// 서버: 실제 발사 로직은 클라이언트의 LocalActivateWithOwner에서 처리.
-	// 여기서는 쿨다운/ActivationOwnedTags가 TryActivateAbility에서 자동 처리되므로
-	// 즉시 종료만 한다.
-	EndAbilityNow();
-}
+	IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
+	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
+	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(OwnerCharacter->GetWorld()->GetGameState());
 
-bool UAbility_Fire::TryActivateAbilityWithEvent(const FPFGGameplayEventData& Payload)
-{
-	if (OwnerCharacter && !OwnerCharacter->HasAuthority())
-	{
-		return false;
-	}
-
-	ACharacter* Character = Cast<ACharacter>(Payload.Instigator);
-	if (!Character) return false;
-
-	IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(Character);
-	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
-	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
-
-	if (!Owner || !PS_Interface || !GS_Interface) return false;
+	if (!Owner || !PS_Interface || !GS_Interface) return;
 
 	UCameraComponent* FollowCamera = Owner->GetFollowCameraComponent();
-	if (!FollowCamera) return false;
+	if (!FollowCamera) return;
 
 	int32 BaseRange = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::Range);
 	int32 RangeUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Range);
@@ -97,9 +154,9 @@ bool UAbility_Fire::TryActivateAbilityWithEvent(const FPFGGameplayEventData& Pay
 
 	FHitResult CamHit;
 	FCollisionQueryParams Params;
-	Params.AddIgnoredActor(Character);
+	Params.AddIgnoredActor(OwnerCharacter);
 
-	UWorld* World = Character->GetWorld();
+	UWorld* World = OwnerCharacter->GetWorld();
 	bool bCamHit = World->LineTraceSingleByChannel(CamHit, CamStart, CamEnd, ECC_Pawn, Params);
 
 	int32 BaseDamage = GS_Interface->GetWeaponBaseData(
@@ -120,8 +177,6 @@ bool UAbility_Fire::TryActivateAbilityWithEvent(const FPFGGameplayEventData& Pay
 		OwnerCharacter,
 		nullptr
 	);
-
-	return true;
 }
 
 float UAbility_Fire::CalculateDamage(int32 Base, int32 Level) const

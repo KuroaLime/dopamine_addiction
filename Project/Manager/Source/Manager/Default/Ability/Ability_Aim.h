@@ -26,5 +26,5 @@ protected:
 	virtual void EndAbility(bool bWasCancelled) override;
 
 private:
-	void RestoreLocalState(AActor* InOwner);
+	void RestoreLocalState(AActor* InOwner, bool isAim);
 };
