@@ -2,18 +2,18 @@
 
 void UCardPhaseStrategy::OnPhaseStart()
 {
-    UE_LOG(LogTemp, Warning, TEXT("[DS] CardPhase OnPhaseStart"));
-    LoadStage();
+	UE_LOG(LogTemp, Warning, TEXT("[DS] CardPhase OnPhaseStart"));
+	LoadStage();
 }
 
 void UCardPhaseStrategy::OnPhaseEnd()
 {
-    if (UWorld* World = GetWorld())
-    {
-        World->GetTimerManager().ClearTimer(RoundTimerHandle);
-    }
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(RoundTimerHandle);
+	}
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] CardPhase OnPhaseEnd"));
+	UE_LOG(LogTemp, Warning, TEXT("[DS] CardPhase OnPhaseEnd"));
 }
 
 void UCardPhaseStrategy::OnTimerTick()
@@ -26,7 +26,7 @@ void UCardPhaseStrategy::OnPlayerAction(AActor* Executor, FName ActionName)
 
 void UCardPhaseStrategy::LoadStage()
 {
-    UE_LOG(LogTemp, Warning, TEXT("[DS] CardPhase LoadStage"));
+	UE_LOG(LogTemp, Warning, TEXT("[DS] CardPhase LoadStage"));
 }
 
 void UCardPhaseStrategy::UnloadStage()
