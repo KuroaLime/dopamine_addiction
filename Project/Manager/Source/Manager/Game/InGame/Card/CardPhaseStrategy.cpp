@@ -5,7 +5,7 @@
 
 void UCardPhaseStrategy::OnPhaseStart()
 {
-	PhaseDuration = 3;
+	PhaseDuration = 100'000;
 
 	LoadStage();
 	StartPhaseTimer();
