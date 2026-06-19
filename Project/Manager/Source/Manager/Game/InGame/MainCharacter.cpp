@@ -210,6 +210,21 @@ bool AMainCharacter::IsCharacterAiming() const
 	return false;
 }
 
+bool AMainCharacter::IsCharacterDeath() const
+{
+	if (bIsDead)
+	{
+		return true;
+	}
+
+	if (AbilitySystemComponent)
+	{
+		return AbilitySystemComponent->HasAnyMatchingGameplayTags(
+			FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("State.Movement.Death"))));
+	}
+	return false;
+}
+
 void AMainCharacter::EquipWeapon(EWeaponType NewWeaponID)
 {
 	if (!HasAuthority()) return;
@@ -390,5 +405,14 @@ FVector AMainCharacter::FindRespawnLocation() const
 	}
 
 	return FVector(0.0f, 0.0f, 250.0f);
+}
+
+
+void AMainCharacter::OnCharacterDeath()
+{
+	if (HasAuthority() && !bIsDead)
+	{
+		HandleDeath(nullptr, nullptr);
+	}
 }
 

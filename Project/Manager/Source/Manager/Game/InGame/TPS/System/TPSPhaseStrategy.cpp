@@ -7,18 +7,18 @@
 
 void UTPSPhaseStrategy::OnPhaseStart()
 {
-    UE_LOG(LogTemp, Warning, TEXT("[DS] TPSPhase OnPhaseStart"));
-    LoadStage();
+	UE_LOG(LogTemp, Warning, TEXT("[DS] TPSPhase OnPhaseStart"));
+	LoadStage();
 }
 
 void UTPSPhaseStrategy::OnPhaseEnd()
 {
-    if (UWorld* World = GetWorld())
-    {
-        World->GetTimerManager().ClearTimer(RoundTimerHandle);
-    }
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(RoundTimerHandle);
+	}
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] TPSPhase OnPhaseEnd"));
+	UE_LOG(LogTemp, Warning, TEXT("[DS] TPSPhase OnPhaseEnd"));
 }
 
 void UTPSPhaseStrategy::OnTimerTick()
@@ -31,35 +31,35 @@ void UTPSPhaseStrategy::OnPlayerAction(AActor* Executor, FName ActionName)
 
 void UTPSPhaseStrategy::LoadStage()
 {
-    if (!GetWorld() || !GetWorld()->GetAuthGameMode()) return;
+	if (!GetWorld() || !GetWorld()->GetAuthGameMode()) return;
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] TPSPhase LoadStage"));
+	UE_LOG(LogTemp, Warning, TEXT("[DS] TPSPhase LoadStage"));
 
-    EWeaponType RoundWeapon = EWeaponType::SMG;
-    if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
-    {
-        GS->SetRoundWeapon(RoundWeapon);
-    }
+	EWeaponType RoundWeapon = EWeaponType::SMG;
+	if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
+	{
+		GS->SetRoundWeapon(RoundWeapon);
+	}
 
-    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-    {
-        APlayerController* PC = It->Get();
-        if (PC && PC->PlayerState)
-        {
-            if (IPhasePlayerStateInterface* PS = Cast<IPhasePlayerStateInterface>(PC->PlayerState))
-            {
-                PS->SetWeaponID(RoundWeapon);
-            }
+	for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+	{
+		APlayerController* PC = It->Get();
+		if (PC && PC->PlayerState)
+		{
+			if (IPhasePlayerStateInterface* PS = Cast<IPhasePlayerStateInterface>(PC->PlayerState))
+			{
+				PS->SetWeaponID(RoundWeapon);
+			}
 
-            if (APawn* PlayerPawn = PC->GetPawn())
-            {
-                if (IPhaseCharacterInterface* IC = Cast<IPhaseCharacterInterface>(PlayerPawn))
-                {
-                    IC->EquipWeapon(RoundWeapon);
-                }
-            }
-        }
-    }
+			if (APawn* PlayerPawn = PC->GetPawn())
+			{
+				if (IPhaseCharacterInterface* IC = Cast<IPhaseCharacterInterface>(PlayerPawn))
+				{
+					IC->EquipWeapon(RoundWeapon);
+				}
+			}
+		}
+	}
 }
 
 void UTPSPhaseStrategy::UnloadStage()

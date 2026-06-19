@@ -32,7 +32,6 @@ class MANAGER_API AMainCharacter : public ACharacter,
 	GENERATED_BODY()
 
 public:
-	// Sets default values for this character's properties
 	AMainCharacter();
 
 	virtual void Tick(float DeltaTime) override;
@@ -40,6 +39,7 @@ public:
 
 public:
 	virtual bool IsCharacterAiming() const override;
+	virtual bool IsCharacterDeath() const override;
 	virtual UCameraStateComponent* GetCameraStateComponent() const override { return CameraState; }
 	virtual UCameraComponent* GetFollowCameraComponent() const override { return FollowCamera; }
 	virtual AActor* GetEquippedWeapon() const override { return m_pEquippedGun; }
@@ -89,6 +89,7 @@ public:
 	void RespawnAfterDeath();
 	void ApplyDeathVisualState(bool bDead);
 	FVector FindRespawnLocation() const;
+	void OnCharacterDeath();
 
 	FORCEINLINE USpringArmComponent* GetCameraBoom() const { return CameraBoom; }
 	FORCEINLINE UCameraComponent* GetFollowCamera() const { return FollowCamera; }

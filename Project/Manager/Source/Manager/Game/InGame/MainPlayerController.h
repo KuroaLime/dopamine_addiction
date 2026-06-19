@@ -11,9 +11,7 @@
 class UInputHandler;
 class UUIHandler;
 class ACardDropActor;
-/**
- * 
- */
+
 UCLASS()
 class MANAGER_API AMainPlayerController : public APlayerController,
 										  public IPhasePlayerControllerInterface
@@ -23,13 +21,16 @@ class MANAGER_API AMainPlayerController : public APlayerController,
 public:
 	virtual void SwitchMode(EGamePhase NewPhase) override;
 	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) override;
+	virtual void SwitchState(EGamePhase NewPhase) override;
 	virtual void PushMode(EGamePhase NewPhase) override;
 	virtual void PopMode() override;
+	virtual void SetUITimer(int32 time) override;
 	virtual EGamePhase GetCurrentPhase() override;
 
 protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
+	virtual void BeginDestroy() override;
 
 public:
 	virtual void SetupInputComponent() override;
@@ -72,6 +73,12 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
 
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_SwitchState(EGamePhase NewPhase);
+
+	UFUNCTION(Client, Reliable)
+	void Client_SwitchState(EGamePhase NewPhase);
+
 	UFUNCTION(Server, Reliable)
 	void Server_PushMode(EGamePhase NewPhase);
 
@@ -102,4 +109,21 @@ public:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_TPSFireFromClient(FVector ViewLocation, FRotator ViewRotation);
 
+	UFUNCTION(Server, Reliable)
+	void Server_RequestRandomUpgradeOptions();
+
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveRandomUpgradeOptions(const TArray<EUpgradeType>& Options);
+
+	UFUNCTION(Server, Reliable)
+	void Server_SelectUpgradeOption(int32 SelectedIndex);
+
+	UPROPERTY()
+	TArray<EUpgradeType> CurrentUpgradeOptions;
+
+	UFUNCTION(Server, Reliable)
+	void Server_SetUITimer(int32 time);
+
+	UFUNCTION(Client, Reliable)
+	void Client_SetUITimer(int32 time);
 };

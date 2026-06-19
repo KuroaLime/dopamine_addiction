@@ -14,6 +14,8 @@
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
 #include "GameFramework/Pawn.h"
+#include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Game/InGame/TPS/UI/Shop/ShopWidget.h"
 
 void AMainPlayerController::BeginPlay()
 {
@@ -29,7 +31,16 @@ void AMainPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	Super::EndPlay(EndPlayReason);
 }
+//임시방편
+void AMainPlayerController::BeginDestroy()
+{
+	InputHandlerMap.Empty();
+	UIHandlerMap.Empty();
+	PhaseStack.Empty();
+	CurrentUpgradeOptions.Empty();
 
+	Super::BeginDestroy();
+}
 void AMainPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
@@ -52,6 +63,18 @@ void AMainPlayerController::SwitchToLevel(FName LevelToUnload, FName LevelToLoad
 	Server_SwitchToLevel(LevelToUnload, LevelToLoad);
 }
 
+void AMainPlayerController::SwitchState(EGamePhase NewPhase)
+{
+	if (HasAuthority())
+	{
+		Client_SwitchState(NewPhase);
+	}
+	else
+	{
+		Server_SwitchState(NewPhase);
+	}
+}
+
 EGamePhase AMainPlayerController::GetCurrentPhase()
 {
 	return CurrentPhase;
@@ -71,6 +94,14 @@ void AMainPlayerController::PopMode()
 		Multicast_PopMode();
 	else
 		Server_PopMode();
+}
+
+void AMainPlayerController::SetUITimer(int32 time)
+{
+	if (HasAuthority())
+		Client_SetUITimer(time);
+	else
+		Server_SetUITimer(time);
 }
 
 void AMainPlayerController::InitHandler()
@@ -125,7 +156,7 @@ void AMainPlayerController::Multicast_SwitchMode_Implementation(EGamePhase NewPh
 
 void AMainPlayerController::Server_SwitchMode_Implementation(EGamePhase NewPhase)
 {
-	// �������� �޾Ƽ� ��� Ŭ���̾�Ʈ�� ����
+
 	Multicast_SwitchMode(NewPhase);
 }
 
@@ -182,6 +213,45 @@ void AMainPlayerController::Client_SwitchToLevel_Implementation(FName LevelToUnl
 	}
 }
 
+bool AMainPlayerController::Server_SwitchState_Validate(EGamePhase NewPhase)
+{
+	return true;
+}
+
+void AMainPlayerController::Server_SwitchState_Implementation(EGamePhase NewPhase)
+{
+	Client_SwitchState(NewPhase);
+}
+
+void AMainPlayerController::Client_SwitchState_Implementation(EGamePhase NewPhase)
+{
+	for (auto& Pair : InputHandlerMap)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->InputDeactivate();
+		}
+	}
+	for (auto& Pair : UIHandlerMap)
+	{
+		if (Pair.Value)
+		{
+			Pair.Value->UIDeactivate();
+		}
+	}
+
+	if (InputHandlerMap.Contains(NewPhase))
+	{
+		InputHandlerMap[NewPhase]->InputActivate();
+	}
+	if (UIHandlerMap.Contains(NewPhase))
+	{
+		UIHandlerMap[NewPhase]->UIActivate();
+		UIHandlerMap[NewPhase]->SetIsFocusable(false);
+	}
+	CurrentPhase = NewPhase;
+}
+
 void AMainPlayerController::Server_PushMode_Implementation(EGamePhase NewPhase)
 {
 	Multicast_PushMode(NewPhase);
@@ -224,26 +294,73 @@ void AMainPlayerController::Multicast_PopMode_Implementation()
 	CurrentPhase = PrevPhase;
 }
 
-//�������� ������ ������ �ݿ�
-//ĳ���� ���� state ���׷��̵�
+void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
+{
+	TArray<EUpgradeType> AllTypes;
+	for (uint8 i = (uint8)EUpgradeType::Weapon_Damage; i <= (uint8)EUpgradeType::Weapon_Reload;++i) {
+		AllTypes.Add(static_cast<EUpgradeType>(i));
+	}
+
+	CurrentUpgradeOptions.Empty();
+	for (int32 i = 0; i < 3; i++) {
+		if (AllTypes.Num() == 0)break;
+		int32 RandomIdx = FMath::RandRange(0, AllTypes.Num() - 1);
+		CurrentUpgradeOptions.Add(AllTypes[RandomIdx]);
+		AllTypes.RemoveAt(RandomIdx);
+	}
+	Client_ReceiveRandomUpgradeOptions(CurrentUpgradeOptions);
+}
+
+void AMainPlayerController::Client_ReceiveRandomUpgradeOptions_Implementation(const TArray<EUpgradeType>& Options)
+{
+	if (!UIHandlerMap.Contains(EGamePhase::TPS)) return;
+
+	UUIHandler* Handler = UIHandlerMap[EGamePhase::TPS];
+	if (!IsValid(Handler)) return;
+
+	// UIHandler는 UUserWidget만 알면 됨, Cast는 Controller에서
+	UShopWidget* Shop = Cast<UShopWidget>(Handler->GetWidget());
+	if (!IsValid(Shop)) return;
+
+	Shop->Update_UpgradeSelectionWidget(Options);
+}
+
+void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 SelectedIndex)
+{
+	if (!CurrentUpgradeOptions.IsValidIndex(SelectedIndex)) return;
+
+	EUpgradeType ChosenType = CurrentUpgradeOptions[SelectedIndex];
+
+	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>()) {
+		PS->Server_ApplyUpgrad_Implementation(ChosenType);
+	}
+	CurrentUpgradeOptions.Empty();
+}
+void AMainPlayerController::Server_SetUITimer_Implementation(int32 time)
+{
+	Client_SetUITimer(time);
+}
+
+void AMainPlayerController::Client_SetUITimer_Implementation(int32 time)
+{
+	if (UIHandlerMap.Contains(CurrentPhase))
+		UIHandlerMap[CurrentPhase]->SetUITimer(time);
+}
+
+
+
 bool AMainPlayerController::Server_RequestUpgrade_Validate(int32 ItemID)
 {
-	if (ItemID < 0) return false;
 	return true;
 }
+
 void AMainPlayerController::Server_RequestUpgrade_Implementation(int32 ItemID)
 {
-	//AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
-	int32 Price=0;// = GetItemPrice(ItemID);
-	//if (PS->GetGold() >= Price)
-	//{
-	//	/*PS->AddGold(-Price);
-	//	 PS->ApplyUpgrade(ItemID);*/
-	//}
-
-
+	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>())
+	{
+		PS->Server_ApplyUpgrad_Implementation(static_cast<EUpgradeType>(ItemID));
+	}
 }
-
 
 bool AMainPlayerController::Server_RequestPickupCard_Validate(ACardDropActor* TargetCard)
 {
@@ -356,3 +473,4 @@ void AMainPlayerController::Server_TPSFireFromClient_Implementation(FVector View
 
     EquippedGun->Setting->ExecuteServerFireFromView(ViewLocation, ViewRotation);
 }
+
