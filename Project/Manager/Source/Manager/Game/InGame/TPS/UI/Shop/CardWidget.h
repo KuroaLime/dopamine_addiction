@@ -4,6 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Default/UI/WidgetParent.h"
+#include "Game/Protocol_Client/Protocol_InGame.h"
+
 #include "CardWidget.generated.h"
 
 /**
@@ -34,7 +36,9 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	class UButton* Selection_Button = nullptr;
 
-	int32 CardID = -1;
+	EUpgradeType CurrentType;
+
+	int32 SelectionIndex = -1;
 
 	UFUNCTION()
 	void OnSelectCardClicked();
@@ -44,7 +48,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnCardSelectionButtonClicked OnCardSelectionEvent;
 
-	void SetCardID(int32 NewID);
+	void SetUpgradeType(EUpgradeType NewType, int32 Index);
 
 	virtual void BindCharacterState(class UCharacterStateComponent* NewCharacterState) override;
 

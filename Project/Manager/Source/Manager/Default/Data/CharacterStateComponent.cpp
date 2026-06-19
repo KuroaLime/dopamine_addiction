@@ -24,7 +24,6 @@ UCharacterStateComponent::UCharacterStateComponent()
 	
 }
 
-
 // Called when the game starts
 void UCharacterStateComponent::BeginPlay()
 {
@@ -39,7 +38,6 @@ void UCharacterStateComponent::BeginPlay()
 	}
 }
 
-
 // Called every frame
 void UCharacterStateComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
 {
@@ -52,7 +50,6 @@ void UCharacterStateComponent::InitializeComponent() {
 	
 	Super::InitializeComponent();
 	//SetNewLevel(Level);
-
 }
 
 void UCharacterStateComponent::SetNewLevel(int32 NewLevel) {
@@ -70,13 +67,7 @@ void UCharacterStateComponent::SetNewLevel(int32 NewLevel) {
 			//ABLOG(Error, TEXT("Level (%d) data doesn't exist"), NewLevel);
 		}
 	}
-
-
-
 }
-
-
-
 
 float UCharacterStateComponent::GetAttack() {
 	return 10.0f;
@@ -94,6 +85,7 @@ float UCharacterStateComponent::GetHPRatio() {
 	}
 	return 0.0f;
 }
+
 float UCharacterStateComponent::GetCurrentHP() {
 	if (APawn* Pawn = Cast<APawn>(GetOwner())) {
 		if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {
@@ -108,11 +100,11 @@ float UCharacterStateComponent::GetMaxHP() {
 	if (CurrentStateData == nullptr) return 100.0f;
 	return (CurrentStateData->MaxHP);
 }
+
 int UCharacterStateComponent::GetLevel() {
 	if (CurrentStateData == nullptr) return 1;
 	return (CurrentStateData->Level);
 }
-
 
 void UCharacterStateComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {

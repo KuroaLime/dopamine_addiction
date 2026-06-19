@@ -3,6 +3,8 @@
 
 #include "Game/InGame/TPS/System/TPSUIHandler.h"
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
+#include "Game/InGame/Interface/UIInterface.h"
+#include "Blueprint/UserWidget.h"
 
 UTPSUIHandler::UTPSUIHandler()
 {
@@ -22,6 +24,17 @@ void UTPSUIHandler::UIActivate()
 void UTPSUIHandler::UIDeactivate()
 {
 	Super::UIDeactivate();
+}
+
+void UTPSUIHandler::SetUITimer(int32 time)
+{
+	Super::SetUITimer(time);
+
+	IUIInterface* UII =
+		Cast<IUIInterface>(PlayerWidget);
+	if (!UII) return;
+
+	UII->UpdateTime(time);
 }
 
 void UTPSUIHandler::CreateHUD()

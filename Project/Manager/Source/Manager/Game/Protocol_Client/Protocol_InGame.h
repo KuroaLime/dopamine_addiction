@@ -60,6 +60,20 @@ enum class ECardTypeData : uint8
 
 //////////////////////////////////////////////////////////
 // PlayerState Data
+#define Max_UpgradeLevel 10
+UENUM(BlueprintType)
+enum class EUpgradeType : uint8 {
+    Player_Health,
+    Player_MoveSpeed,
+    Player_HealthRegeneration,
+
+    Weapon_Damage,
+    Weapon_FireRate,
+    Weapon_Range,
+    Weapon_Magazine,
+    Weapon_Reload
+};
+
 USTRUCT(BlueprintType)
 struct FWeaponData
 {

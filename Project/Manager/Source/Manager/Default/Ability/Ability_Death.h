@@ -4,18 +4,18 @@
 
 #include "CoreMinimal.h"
 #include "Default/Ability/GAS/PFGAbility.h"
-#include "Ability_Aim.generated.h"
+#include "Ability_Death.generated.h"
 
 /**
  * 
  */
 UCLASS()
-class MANAGER_API UAbility_Aim : public UPFGAbility
+class MANAGER_API UAbility_Death : public UPFGAbility
 {
 	GENERATED_BODY()
 	
 public:
-	UAbility_Aim();
+	UAbility_Death();
 
 public:
 	virtual void LocalActivateWithOwner(AActor* InOwner) override;
@@ -26,5 +26,9 @@ protected:
 	virtual void EndAbility(bool bWasCancelled) override;
 
 private:
-	void RestoreLocalState(AActor* InOwner, bool isAim);
+	int32 RespawnTime;
+
+	FTimerHandle ServerRespawnTimerHandle;
+
+	void Server_ExecuteCountDown();
 };

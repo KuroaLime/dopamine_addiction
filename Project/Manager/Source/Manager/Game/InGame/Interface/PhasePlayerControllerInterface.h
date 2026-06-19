@@ -28,9 +28,13 @@ public:
 
 	virtual void SwitchToLevel(FName LevelToUnload, FName LevelToLoad) = 0;
 
+	virtual void SwitchState(EGamePhase NewPhase) = 0;
+
 	virtual void PushMode(EGamePhase NewPhase) = 0;
 
 	virtual void PopMode() = 0;
+
+	virtual void SetUITimer(int32 time) = 0;
 
 	virtual EGamePhase GetCurrentPhase() = 0;
 };

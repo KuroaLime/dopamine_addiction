@@ -42,6 +42,8 @@ protected:
 
 	UCharacterStateComponent* ResolveOwnerCharacterState() const;
 
+	UPROPERTY()
+	TObjectPtr<UUserWidget> ManagedWidget=nullptr;
 public:
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	virtual void UIActivate();
@@ -51,7 +53,17 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	virtual void UIToggle();
+
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	virtual void SetUITimer(int32 time);
+
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	virtual void SetIsFocusable(bool isFocus);
+
 	UUserWidget* GetWidget() {
 		return PlayerWidget;
 	};
+
+	//임시방편
+	UUserWidget* GetManagedWidget() const { return ManagedWidget; }
 };

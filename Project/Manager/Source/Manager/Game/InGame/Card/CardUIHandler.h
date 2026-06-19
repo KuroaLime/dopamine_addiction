@@ -22,6 +22,7 @@ public:
 public:
 	virtual void UIActivate() override;
 	virtual void UIDeactivate() override;
+	virtual void SetUITimer(int32 time) override;
 
 protected:
 	virtual void CreateHUD();

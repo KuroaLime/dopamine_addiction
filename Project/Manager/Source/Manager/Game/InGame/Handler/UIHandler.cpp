@@ -34,6 +34,7 @@ void UUIHandler::UIDeactivate()
 {
 	HideHUD();
 }
+
 void UUIHandler::UIToggle()
 {
 	FString NetMode = (GetNetMode() == NM_Client) ? TEXT("Client") : TEXT("Server");
@@ -52,6 +53,12 @@ void UUIHandler::UIToggle()
 		UIActivate();
 	}
 }
+
+void UUIHandler::SetIsFocusable(bool isFocus)
+{
+	PlayerWidget->SetIsFocusable(isFocus);
+}
+
 void UUIHandler::CreateHUD()
 {
 	if (!OwnerController) return;
@@ -84,6 +91,11 @@ void UUIHandler::ShowHUD()
 void UUIHandler::HideHUD()
 {
 	SetWidgetVisibility(ESlateVisibility::Collapsed);
+}
+
+void UUIHandler::SetUITimer(int32 time)
+{
+
 }
 
 void UUIHandler::SetWidgetVisibility(ESlateVisibility Visibility)
