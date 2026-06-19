@@ -27,13 +27,14 @@ void UAbility_Aim::LocalCancelWithOwner(AActor* InOwner)
 void UAbility_Aim::ActivateAbility()
 {
 	if (!OwnerCharacter || !OwnerCharacter->HasAuthority()) return;
-
+	RestoreLocalState(OwnerCharacter, true);
 	OwnerCharacter->bUseControllerRotationYaw = true;
 	OwnerCharacter->GetCharacterMovement()->bOrientRotationToMovement = false;
 }
 
 void UAbility_Aim::EndAbility(bool bWasCancelled)
 {
+	RestoreLocalState(OwnerCharacter, false);
 	Super::EndAbility(bWasCancelled);
 }
 

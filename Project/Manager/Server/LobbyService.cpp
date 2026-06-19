@@ -14,7 +14,6 @@
 #include <thread>
 #include <chrono>
 #include <string>
-#include <filesystem>
 #include <cstdlib>
 
 
@@ -24,6 +23,9 @@
 
 static const char* DEDI_EDITOR_ENV =
 "MANAGER_UE_EDITOR_EXE";
+
+static const char* DEDI_PACKAGED_SERVER_ENV =
+"MANAGER_DEDI_SERVER_EXE";
 
 static const char* DEDI_EXE_REL_PATH =
 "..\\..\\..\\..\\..\\UE\\UE_5.7_Source\\Engine\\Binaries\\Win64\\UnrealEditor.exe";
@@ -46,6 +48,33 @@ static const char* DEDI_PUBLIC_IP =
 static constexpr size_t MIN_PLAYERS_TO_START = 1;
 static constexpr int DEDI_GAME_START_DELAY_SECONDS = 15;
 
+static std::string GetDirectoryName(const std::string& path)
+{
+    size_t pos1 = path.find_last_of('\\');
+    size_t pos2 = path.find_last_of('/');
+
+    size_t pos = std::string::npos;
+    if (pos1 == std::string::npos)
+    {
+        pos = pos2;
+    }
+    else if (pos2 == std::string::npos)
+    {
+        pos = pos1;
+    }
+    else
+    {
+        pos = pos1 > pos2 ? pos1 : pos2;
+    }
+
+    if (pos == std::string::npos)
+    {
+        return std::string();
+    }
+
+    return path.substr(0, pos);
+}
+
 static std::string GetExecutableDirectory()
 {
     char path[MAX_PATH]{};
@@ -56,15 +85,26 @@ static std::string GetExecutableDirectory()
         return ".";
     }
 
-    std::filesystem::path exePath(path);
-    return exePath.parent_path().string();
+    return GetDirectoryName(path);
 }
 
 static std::string MakeAbsoluteFromExeDir(const char* relativePath)
 {
-    std::filesystem::path base(GetExecutableDirectory());
-    std::filesystem::path full = base / relativePath;
-    return full.lexically_normal().string();
+    std::string combined = GetExecutableDirectory();
+    if (!combined.empty() && combined.back() != '\\' && combined.back() != '/')
+    {
+        combined += "\\";
+    }
+    combined += relativePath;
+
+    char fullPath[MAX_PATH]{};
+    DWORD len = GetFullPathNameA(combined.c_str(), MAX_PATH, fullPath, nullptr);
+    if (len == 0 || len >= MAX_PATH)
+    {
+        return combined;
+    }
+
+    return fullPath;
 }
 
 static bool FileExists(const std::string& path)
@@ -92,6 +132,21 @@ static std::string GetEnvironmentValue(const char* name)
     std::string result(value);
     free(value);
     return result;
+}
+
+static std::string GetParentDirectory(const std::string& path)
+{
+    if (path.empty())
+    {
+        return std::string();
+    }
+
+    return GetDirectoryName(path);
+}
+
+static std::string GetPackagedServerExePath()
+{
+    return GetEnvironmentValue(DEDI_PACKAGED_SERVER_ENV);
 }
 
 static std::string GetDediEditorExePath()
@@ -236,27 +291,53 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_
         static_cast<unsigned>(requiredPlayers)
     );
 
-    const std::string editorExePath = GetDediEditorExePath();
-    const std::string projectPath = GetDediProjectPath();
-    const std::string workingDir = GetDediWorkingDir();
+    const std::string packagedServerExePath = GetPackagedServerExePath();
+    const bool bUsePackagedServer = !packagedServerExePath.empty();
 
-    printf("[DEDI] ResolvePaths editor=%s project=%s workingDir=%s editorExists=%d projectExists=%d workingDirExists=%d\n",
-        editorExePath.c_str(),
-        projectPath.c_str(),
-        workingDir.c_str(),
-        FileExists(editorExePath) ? 1 : 0,
-        FileExists(projectPath) ? 1 : 0,
-        DirectoryExists(workingDir) ? 1 : 0);
-
+    std::string workingDir;
     char cmdLine[2048]{};
-    sprintf_s(
-        cmdLine,
-        "\"%s\" \"%s\" \"%s\" -server -log -port=%u -NullRHI -NoLiveCoding -Unattended",
-        editorExePath.c_str(),
-        projectPath.c_str(),
-        mapWithOptions,
-        port
-    );
+
+    if (bUsePackagedServer)
+    {
+        workingDir = GetParentDirectory(packagedServerExePath);
+
+        printf("[DEDI] ResolvePackagedServer serverExe=%s workingDir=%s serverExists=%d workingDirExists=%d\n",
+            packagedServerExePath.c_str(),
+            workingDir.c_str(),
+            FileExists(packagedServerExePath) ? 1 : 0,
+            DirectoryExists(workingDir) ? 1 : 0);
+
+        sprintf_s(
+            cmdLine,
+            "\"%s\" \"%s\" -log -port=%u -Unattended",
+            packagedServerExePath.c_str(),
+            mapWithOptions,
+            port
+        );
+    }
+    else
+    {
+        const std::string editorExePath = GetDediEditorExePath();
+        const std::string projectPath = GetDediProjectPath();
+        workingDir = GetDediWorkingDir();
+
+        printf("[DEDI] ResolveEditorServer editor=%s project=%s workingDir=%s editorExists=%d projectExists=%d workingDirExists=%d\n",
+            editorExePath.c_str(),
+            projectPath.c_str(),
+            workingDir.c_str(),
+            FileExists(editorExePath) ? 1 : 0,
+            FileExists(projectPath) ? 1 : 0,
+            DirectoryExists(workingDir) ? 1 : 0);
+
+        sprintf_s(
+            cmdLine,
+            "\"%s\" \"%s\" \"%s\" -server -log -port=%u -NullRHI -NoLiveCoding -Unattended",
+            editorExePath.c_str(),
+            projectPath.c_str(),
+            mapWithOptions,
+            port
+        );
+    }
 
     STARTUPINFOA si{};
     si.cb = sizeof(si);

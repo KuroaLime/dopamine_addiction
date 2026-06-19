@@ -79,6 +79,7 @@ AMainCharacter::AMainCharacter()
 	HPBarWidget->SetOwnerNoSee(true);
 
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
+	SetReplicates(true);
 }
 
 // Called when the game starts or when spawned

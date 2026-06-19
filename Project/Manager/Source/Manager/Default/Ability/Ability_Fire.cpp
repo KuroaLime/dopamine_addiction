@@ -187,11 +187,6 @@ void UAbility_Fire::Server_ExecuteFire()
 	EndAbilityNow();
 }
 
-bool UAbility_Fire::TryActivateAbilityWithEvent(const FPFGGameplayEventData& Payload)
-{
-	return false;
-}
-
 float UAbility_Fire::CalculateDamage(int32 Base, int32 Level) const
 {
 	return static_cast<float>(Base) + (Level * 5.0f);
