@@ -8,24 +8,34 @@
 
 #ifdef _WIN32
 #include <winsock2.h>
+#include <windows.h>
 #endif
 
 #include <thread>
 #include <chrono>
+#include <string>
+#include <filesystem>
+#include <cstdlib>
 
 
 // ===========================================================================
 // Dedicated Server Settings
 // ===========================================================================
 
-static const char* DEDI_EXE_PATH =
+static const char* DEDI_EDITOR_ENV =
+"MANAGER_UE_EDITOR_EXE";
+
+static const char* DEDI_EXE_REL_PATH =
+"..\\..\\..\\..\\..\\UE\\UE_5.7_Source\\Engine\\Binaries\\Win64\\UnrealEditor.exe";
+
+static const char* DEDI_EXE_FALLBACK_PATH =
 "S:\\UE\\UE_5.7_Source\\Engine\\Binaries\\Win64\\UnrealEditor.exe";
 
-static const char* DEDI_PROJECT_PATH =
-"X:\\Project\\Manager\\Manager.uproject";
+static const char* DEDI_PROJECT_REL_PATH =
+"..\\..\\..\\Manager.uproject";
 
-static const char* DEDI_WORKING_DIR =
-"X:\\Project\\Manager";
+static const char* DEDI_WORKING_DIR_REL_PATH =
+"..\\..\\..";
 
 static const char* DEDI_MAP_PATH =
 "/Game/InGame/System/Main_Game_World";
@@ -35,6 +45,81 @@ static const char* DEDI_PUBLIC_IP =
 
 static constexpr size_t MIN_PLAYERS_TO_START = 1;
 static constexpr int DEDI_GAME_START_DELAY_SECONDS = 15;
+
+static std::string GetExecutableDirectory()
+{
+    char path[MAX_PATH]{};
+
+    DWORD len = GetModuleFileNameA(nullptr, path, MAX_PATH);
+    if (len == 0 || len >= MAX_PATH)
+    {
+        return ".";
+    }
+
+    std::filesystem::path exePath(path);
+    return exePath.parent_path().string();
+}
+
+static std::string MakeAbsoluteFromExeDir(const char* relativePath)
+{
+    std::filesystem::path base(GetExecutableDirectory());
+    std::filesystem::path full = base / relativePath;
+    return full.lexically_normal().string();
+}
+
+static bool FileExists(const std::string& path)
+{
+    DWORD attr = GetFileAttributesA(path.c_str());
+    return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY) == 0;
+}
+
+static bool DirectoryExists(const std::string& path)
+{
+    DWORD attr = GetFileAttributesA(path.c_str());
+    return attr != INVALID_FILE_ATTRIBUTES && (attr & FILE_ATTRIBUTE_DIRECTORY) != 0;
+}
+
+static std::string GetEnvironmentValue(const char* name)
+{
+    char* value = nullptr;
+    size_t len = 0;
+
+    if (_dupenv_s(&value, &len, name) != 0 || !value)
+    {
+        return std::string();
+    }
+
+    std::string result(value);
+    free(value);
+    return result;
+}
+
+static std::string GetDediEditorExePath()
+{
+    std::string envPath = GetEnvironmentValue(DEDI_EDITOR_ENV);
+    if (!envPath.empty())
+    {
+        return envPath;
+    }
+
+    std::string relativePath = MakeAbsoluteFromExeDir(DEDI_EXE_REL_PATH);
+    if (FileExists(relativePath))
+    {
+        return relativePath;
+    }
+
+    return DEDI_EXE_FALLBACK_PATH;
+}
+
+static std::string GetDediProjectPath()
+{
+    return MakeAbsoluteFromExeDir(DEDI_PROJECT_REL_PATH);
+}
+
+static std::string GetDediWorkingDir()
+{
+    return MakeAbsoluteFromExeDir(DEDI_WORKING_DIR_REL_PATH);
+}
 
 
 // ===========================================================================
@@ -151,12 +236,24 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_
         static_cast<unsigned>(requiredPlayers)
     );
 
-    char cmdLine[1024]{};
+    const std::string editorExePath = GetDediEditorExePath();
+    const std::string projectPath = GetDediProjectPath();
+    const std::string workingDir = GetDediWorkingDir();
+
+    printf("[DEDI] ResolvePaths editor=%s project=%s workingDir=%s editorExists=%d projectExists=%d workingDirExists=%d\n",
+        editorExePath.c_str(),
+        projectPath.c_str(),
+        workingDir.c_str(),
+        FileExists(editorExePath) ? 1 : 0,
+        FileExists(projectPath) ? 1 : 0,
+        DirectoryExists(workingDir) ? 1 : 0);
+
+    char cmdLine[2048]{};
     sprintf_s(
         cmdLine,
         "\"%s\" \"%s\" \"%s\" -server -log -port=%u -NullRHI -NoLiveCoding -Unattended",
-        DEDI_EXE_PATH,
-        DEDI_PROJECT_PATH,
+        editorExePath.c_str(),
+        projectPath.c_str(),
         mapWithOptions,
         port
     );
@@ -174,7 +271,7 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_
         FALSE,
         CREATE_NEW_CONSOLE,
         nullptr,
-        DEDI_WORKING_DIR,
+        workingDir.c_str(),
         &si,
         &pi
     );
