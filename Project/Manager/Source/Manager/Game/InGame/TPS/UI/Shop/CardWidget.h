@@ -36,7 +36,7 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	class UButton* Selection_Button = nullptr;
 
-	EUpgradeType CurrentType;
+	FRandomCardOption CurrentOption;
 
 	int32 SelectionIndex = -1;
 
@@ -48,7 +48,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnCardSelectionButtonClicked OnCardSelectionEvent;
 
-	void SetUpgradeType(EUpgradeType NewType, int32 Index);
+	void SetUpgradeType(const FRandomCardOption& NewOption, int32 Index);
 
 	virtual void BindCharacterState(class UCharacterStateComponent* NewCharacterState) override;
 

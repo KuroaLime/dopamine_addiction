@@ -20,6 +20,7 @@ void AMainPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(AMainPlayerState, CurPlayerData);
 	DOREPLIFETIME_CONDITION(AMainPlayerState, OwnedCards, COND_OwnerOnly);
 	DOREPLIFETIME(AMainPlayerState, PublicCardCount);
+	DOREPLIFETIME(AMainPlayerState, AccumulatedUpgrades);
 }
 
 int32 AMainPlayerState::GetWeaponStatLV(EWeaponStatType StatType) const
@@ -267,6 +268,53 @@ void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 		break;
 	default:
 		break;
+	}
+
+	ForceNetUpdate();
+}
+
+//여기 적용과정 수정하면 될듯
+void AMainPlayerState::ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledStats)
+{
+	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("ApplyCardUpgrade")));
+
+	if (!HasAuthority()) return;
+	for (const auto& Pair : RolledStats)
+	{
+		EUpgradeType UpgradeType = Pair.Key;
+		float RolledValue = Pair.Value;
+		switch (UpgradeType)
+		{
+		case EUpgradeType::Player_Health:
+			AccumulatedUpgrades.LvHealth += RolledValue;
+			CurPlayerData.CurrentHP += FMath::RoundToInt(RolledValue);
+			GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Success")));
+
+			break;
+		case EUpgradeType::Player_MoveSpeed:
+			AccumulatedUpgrades.LvMoveSpeed += RolledValue;
+			break;
+		case EUpgradeType::Player_HealthRegeneration:
+			AccumulatedUpgrades.LvHealthRegen += RolledValue;
+			break;
+		case EUpgradeType::Weapon_Damage:
+			AccumulatedUpgrades.LvWeaponDamage += RolledValue;
+			break;
+		case EUpgradeType::Weapon_FireRate:
+			AccumulatedUpgrades.LvWeaponFireRate += RolledValue;
+			break;
+		case EUpgradeType::Weapon_Range:
+			AccumulatedUpgrades.LvWeaponRange += RolledValue;
+			break;
+		case EUpgradeType::Weapon_Magazine:
+			AccumulatedUpgrades.LvWeaponMagazine += RolledValue;
+			break;
+		case EUpgradeType::Weapon_Reload:
+			AccumulatedUpgrades.LvWeaponReload += RolledValue;
+			break;
+		default:
+			break;
+		}
 	}
 
 	ForceNetUpdate();

@@ -23,7 +23,7 @@ void UShopInputHandler::InputActivate()
 
 	if (!OwnerController) return;
 	OwnerController->bShowMouseCursor = true;
-	OwnerController->SetInputMode(FInputModeGameOnly());
+	OwnerController->SetInputMode(FInputModeGameAndUI());
 }
 
 void UShopInputHandler::InputDeactivate()

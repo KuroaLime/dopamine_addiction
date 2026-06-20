@@ -47,6 +47,6 @@ protected:
 	virtual void NativeConstruct() override;
 
 public:
-	void Update_UpgradeSelectionWidget(const TArray<EUpgradeType>& Options);
+	void Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>& Options);
 	
 };

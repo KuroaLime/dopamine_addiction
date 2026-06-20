@@ -19,6 +19,9 @@ AMainGameState::AMainGameState()
 
 	static ConstructorHelpers::FObjectFinder<UDataTable> PlayerDataTableFinder(TEXT("/Game/GameData/DT_Player.DT_Player"));
 	if (PlayerDataTableFinder.Succeeded()) PlayerDataTableAsset = PlayerDataTableFinder.Object;
+
+	static ConstructorHelpers::FObjectFinder<UDataTable> ShopRandomCardDataTableAssetFinder(TEXT("/Game/GameData/DT_UpgradeCardInfo.DT_UpgradeCardInfo"));
+	if (ShopRandomCardDataTableAssetFinder.Succeeded()) ShopRandomCardDataTableAsset = ShopRandomCardDataTableAssetFinder.Object;
 }
 
 void AMainGameState::BeginPlay()
@@ -111,6 +114,16 @@ void AMainGameState::InitializeMasterData()
 		if (Rows.Num() > 0 && Rows[0])
 		{
 			BasePlayerData = *Rows[0];
+		}
+	}
+
+	if (ShopRandomCardDataTableAsset)
+	{
+		TArray<FRandomUpgradeCardDataTable*> Rows;
+		ShopRandomCardDataTableAsset->GetAllRows<FRandomUpgradeCardDataTable>(TEXT("Context_Player"), Rows);
+		for (FRandomUpgradeCardDataTable* Row : Rows)
+		{
+			if (Row) RandCardData.Add(*Row);
 		}
 	}
 }

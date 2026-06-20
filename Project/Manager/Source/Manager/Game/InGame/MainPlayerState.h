@@ -77,7 +77,11 @@ protected:
 	UFUNCTION()
 	void OnRep_PublicCardCount();
 
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player Upgrades")
+	FAccumulatedUpgrades AccumulatedUpgrades;
 public:
 	UFUNCTION()
 	void Server_ApplyUpgrad_Implementation(EUpgradeType Type);
+
+	void ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledStats);
 };

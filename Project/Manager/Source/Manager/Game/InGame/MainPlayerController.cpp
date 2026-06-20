@@ -17,6 +17,8 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Game/InGame/TPS/UI/Shop/ShopWidget.h"
 
+#include "Game/InGame/MainGameState.h"
+
 void AMainPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -296,26 +298,56 @@ void AMainPlayerController::Multicast_PopMode_Implementation()
 
 void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
 {
-	TArray<EUpgradeType> AllTypes;
-	for (uint8 i = (uint8)EUpgradeType::Weapon_Damage; i <= (uint8)EUpgradeType::Weapon_Reload;++i) {
-		AllTypes.Add(static_cast<EUpgradeType>(i));
-	}
+
+	AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
+	if (!IsValid(GS)) return;
+
+	UDataTable* ShopTable = GS->GetShopRandomCardDataTable();
+	if (!IsValid(ShopTable)) return;
+
+	TArray<FName> RowNames = ShopTable->GetRowNames();
+	if (RowNames.Num() == 0)return;
 
 	CurrentUpgradeOptions.Empty();
-	for (int32 i = 0; i < 3; i++) {
-		if (AllTypes.Num() == 0)break;
-		int32 RandomIdx = FMath::RandRange(0, AllTypes.Num() - 1);
-		CurrentUpgradeOptions.Add(AllTypes[RandomIdx]);
-		AllTypes.RemoveAt(RandomIdx);
+	TArray<FName> SelectedRowNames;
+	TArray<FName> TempRowNames = RowNames;
+
+	for (int32 i = 0; i < 3; ++i)
+	{
+		if (TempRowNames.Num() == 0) break;
+
+		int32 RandomIdx = FMath::RandRange(0, TempRowNames.Num() - 1);
+		SelectedRowNames.Add(TempRowNames[RandomIdx]);
+		TempRowNames.RemoveAt(RandomIdx);
+	}
+
+	for (const FName& RowName : SelectedRowNames)
+	{
+		FRandomUpgradeCardDataTable* CardData = ShopTable->FindRow<FRandomUpgradeCardDataTable>(RowName, TEXT("Context_RollUpgrade"));
+		if (!CardData) continue;
+		FRandomCardOption NewOption;
+		NewOption.CardRowName = RowName;
+
+		for (const auto& Pair : CardData->UpgradeValue)
+		{
+			EUpgradeType StatType = Pair.Key;
+			FStatRangeInfo RangeInfo = Pair.Value;
+
+			float RolledValue = FMath::FRandRange(RangeInfo.MinValue, RangeInfo.MaxValue);
+			NewOption.RolledStats.Add(StatType, RolledValue);
+
+		}
+		CurrentUpgradeOptions.Add(NewOption);
 	}
 	Client_ReceiveRandomUpgradeOptions(CurrentUpgradeOptions);
 }
 
-void AMainPlayerController::Client_ReceiveRandomUpgradeOptions_Implementation(const TArray<EUpgradeType>& Options)
+void AMainPlayerController::Client_ReceiveRandomUpgradeOptions_Implementation(const TArray<FRandomCardOption>& Options)
 {
-	if (!UIHandlerMap.Contains(EGamePhase::TPS)) return;
 
-	UUIHandler* Handler = UIHandlerMap[EGamePhase::TPS];
+	if (!UIHandlerMap.Contains(EGamePhase::Shop)) return;
+
+	UUIHandler* Handler = UIHandlerMap[EGamePhase::Shop];
 	if (!IsValid(Handler)) return;
 
 	// UIHandler는 UUserWidget만 알면 됨, Cast는 Controller에서
@@ -327,13 +359,15 @@ void AMainPlayerController::Client_ReceiveRandomUpgradeOptions_Implementation(co
 
 void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 SelectedIndex)
 {
+
 	if (!CurrentUpgradeOptions.IsValidIndex(SelectedIndex)) return;
 
-	EUpgradeType ChosenType = CurrentUpgradeOptions[SelectedIndex];
+	const FRandomCardOption& ChosenOption = CurrentUpgradeOptions[SelectedIndex];
 
 	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>()) {
-		PS->Server_ApplyUpgrad_Implementation(ChosenType);
+		PS->ApplyCardUpgrade(ChosenOption.RolledStats);
 	}
+
 	CurrentUpgradeOptions.Empty();
 }
 void AMainPlayerController::Server_SetUITimer_Implementation(int32 time)

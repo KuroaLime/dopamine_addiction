@@ -2,7 +2,11 @@
 <Project>
   <ProjectOutputs>
     <ProjectOutput>
+<<<<<<< Updated upstream
       <FullPath>D:\Project-for-Graduation\Project\Manager\Server\x64\Debug\IOCP_Server.exe</FullPath>
+=======
+      <FullPath>C:\Users\benev\OneDrive\Documents\GitHub\Project-for-Graduation\Project\Manager\Server\x64\Debug\IOCP_Server.exe</FullPath>
+>>>>>>> Stashed changes
     </ProjectOutput>
   </ProjectOutputs>
   <ContentFiles />

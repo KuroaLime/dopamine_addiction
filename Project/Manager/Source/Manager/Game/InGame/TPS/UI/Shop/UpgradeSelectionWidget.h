@@ -40,7 +40,7 @@ public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnSelectionFinished OnSelectionFinishedEvent;
 
-	void SetCardID(const TArray<EUpgradeType>& Options);
+	void SetCardID(const TArray<FRandomCardOption>& Options);
 
 	virtual void BindCharacterState(class UCharacterStateComponent* NewCharacterState) override;
 
