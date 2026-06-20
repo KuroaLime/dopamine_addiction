@@ -26,6 +26,9 @@ protected:
 	UPROPERTY(meta = (BindWidget))
 	class UImage* RespawnCard;
 
+	UPROPERTY(meta = (BindWidget))
+	class UImage* CardFrontImage;
+
 	UPROPERTY(Transient, meta = (BindWidgetAnim), BlueprintReadOnly)
 	class UWidgetAnimation* CardRotateAnim;
 
@@ -34,6 +37,12 @@ protected:
 
 public:
 	void UpdateTime(int32 time) const override;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Card", meta = (AllowPrivateAccess = "true"))
+	TArray<class UTexture2D*> CardFrontImages;
+
+	UFUNCTION(BlueprintCallable, Category = "Card")
+	void SetRandomCardFrontImage();
 
 protected:
 	virtual void NativeConstruct() override;

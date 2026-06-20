@@ -76,6 +76,15 @@ void UDeathWidget::UpdateTime(int32 time) const
     ResponeTimeText->SetText(FText::FromString(TimeStr));
 }
 
+void UDeathWidget::SetRandomCardFrontImage()
+{
+    if (!CardFrontImage) return;
+    if (CardFrontImages.Num() == 0) return;
+
+    const int32 RandIndex = FMath::RandRange(0, CardFrontImages.Num() - 1);
+    CardFrontImage->SetBrushFromTexture(CardFrontImages[RandIndex]);
+}
+
 void UDeathWidget::UpdateCircle(float CurrentTime) const
 {
     if (!RespawnCircleMID) return;
