@@ -347,8 +347,6 @@ void AMainPlayerController::Client_SetUITimer_Implementation(int32 time)
 		UIHandlerMap[CurrentPhase]->SetUITimer(time);
 }
 
-
-
 bool AMainPlayerController::Server_RequestUpgrade_Validate(int32 ItemID)
 {
 	return true;

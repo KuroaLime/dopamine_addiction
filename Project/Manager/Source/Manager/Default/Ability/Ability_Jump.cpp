@@ -19,5 +19,6 @@ void UAbility_Jump::LocalActivateWithOwner(AActor* InOwner)
 
 void UAbility_Jump::ActivateAbility()
 {
+	OwnerCharacter->Jump();
 	EndAbilityNow();
 }

@@ -69,7 +69,7 @@ void UTPSInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputComponen
 	if (IA_Move) EnhancedInputComponent->BindAction(IA_Move, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_Move);
 	if (IA_Look) EnhancedInputComponent->BindAction(IA_Look, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_Look);
 	if (IA_Jump) EnhancedInputComponent->BindAction(IA_Jump, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Jump);
-	if (IA_Fire) EnhancedInputComponent->BindAction(IA_Fire, ETriggerEvent::Started, this, &UTPSInputHandler::Input_StartFire);
+	if (IA_Fire) EnhancedInputComponent->BindAction(IA_Fire, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_StartFire);
 	if (IA_Fire) EnhancedInputComponent->BindAction(IA_Fire, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_StopFire);
 	if (IA_Aim)
 	{
@@ -127,67 +127,20 @@ void UTPSInputHandler::Input_Jump()
 
 void UTPSInputHandler::Input_StartFire()
 {
-	if (!OwnerController)
+	if (UPFGASC* ASC = ResolveOwnerASC())
 	{
-		return;
+		ASC->TryActivateAbilityByTag(
+			FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire")));
 	}
-
-	APawn* OwnerPawn = OwnerController->GetPawn();
-	IAbilityOwnerInterface* OwnerInterface = Cast<IAbilityOwnerInterface>(OwnerPawn);
-	if (!OwnerInterface)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[Client] TPS Input_StartFire Reject MissingOwnerInterface PC=%s Pawn=%s"),
-			*OwnerController->GetName(),
-			OwnerPawn ? *OwnerPawn->GetName() : TEXT("<NULL>"));
-		return;
-	}
-
-	AWeapon* EquippedGun = Cast<AWeapon>(OwnerInterface->GetEquippedWeapon());
-	if (!EquippedGun || !EquippedGun->Setting)
-	{
-		UE_LOG(LogTemp, Warning, TEXT("[Client] TPS Input_StartFire Reject MissingWeapon PC=%s Pawn=%s Weapon=%s"),
-			*OwnerController->GetName(),
-			OwnerPawn ? *OwnerPawn->GetName() : TEXT("<NULL>"),
-			EquippedGun ? *EquippedGun->GetName() : TEXT("<NULL>"));
-		return;
-	}
-
-	FVector ViewLocation = OwnerPawn ? OwnerPawn->GetActorLocation() + FVector(0.0f, 0.0f, 80.0f) : FVector::ZeroVector;
-	FRotator ViewRotation = OwnerController->GetControlRotation();
-	OwnerController->GetPlayerViewPoint(ViewLocation, ViewRotation);
-
-	UE_LOG(LogTemp, Warning, TEXT("[Client] TPS Input_StartFire PC=%s Pawn=%s Weapon=%s ViewLoc=%s ViewRot=%s"),
-		*OwnerController->GetName(),
-		OwnerPawn ? *OwnerPawn->GetName() : TEXT("<NULL>"),
-		*EquippedGun->GetName(),
-		*ViewLocation.ToCompactString(),
-		*ViewRotation.ToCompactString());
-
-	EquippedGun->Setting->PlayLocalFireFeedback();
-
-	if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController))
-	{
-		MainPC->Server_TPSFireFromClient(ViewLocation, ViewRotation);
-	}
-
-	EquippedGun->Setting->StartLoopFire();
 }
 
 void UTPSInputHandler::Input_StopFire()
 {
-	if (!OwnerController) return;
-
-	IAbilityOwnerInterface* OwnerInterface = Cast<IAbilityOwnerInterface>(OwnerController->GetPawn());
-	if (!OwnerInterface) return;
-
-	AWeapon* EquippedGun = Cast<AWeapon>(OwnerInterface->GetEquippedWeapon());
-	if (!EquippedGun || !EquippedGun->Setting) return;
-
-	UE_LOG(LogTemp, Warning, TEXT("[Client] TPS Input_StopFire PC=%s Weapon=%s"),
-		*OwnerController->GetName(),
-		*EquippedGun->GetName());
-
-	EquippedGun->Setting->StopLoopFire();
+	if (UPFGASC* ASC = ResolveOwnerASC())
+	{
+		ASC->CancelAbilitiesWithTag(
+			FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire"))));
+	}
 }
 
 void UTPSInputHandler::Input_Aim()

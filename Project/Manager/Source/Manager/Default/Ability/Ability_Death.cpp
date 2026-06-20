@@ -67,9 +67,8 @@ void UAbility_Death::Server_ExecuteCountDown()
 		Cast<IPhasePlayerControllerInterface>(OwnerCharacter->GetController());
 	if (!PC) return;
 
-	PC->SetUITimer(RespawnTime);
-
 	RespawnTime--;
+	PC->SetUITimer(RespawnTime);
 
 	if (RespawnTime <= 0)
 	{

@@ -39,7 +39,7 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 			PS_Interface->GetWeaponID(),
 			EWeaponBaseStatType::FireRate);
 
-		float finalFireRate = FireRate * 0.01f;
+		float finalFireRate = FireRate * 0.5f;
 
 		FTimerDelegate Delegate;
 		TWeakObjectPtr<AActor> WeakOwner(InOwner);
@@ -84,7 +84,7 @@ void UAbility_Fire::ActivateAbility()
 			PS_Interface->GetWeaponID(),
 			EWeaponBaseStatType::FireRate);
 
-		float finalFireRate = FireRate * 0.01f;
+		float finalFireRate = FireRate * 0.5f;
 
 		bIsServerFire = true;
 		OwnerCharacter->GetWorldTimerManager().SetTimer(
@@ -150,6 +150,14 @@ void UAbility_Fire::Server_ExecuteFire()
 		return;
 	}
 
+	UCameraComponent* FollowCamera = Owner->GetFollowCameraComponent();
+	if (!FollowCamera)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireRejected Reason=NoFollowCamera Owner=%s"), *OwnerCharacter->GetName());
+		EndAbilityNow();
+		return;
+	}
+
 	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
 	if (!EquippedGun || !EquippedGun->Setting)
 	{
@@ -166,14 +174,10 @@ void UAbility_Fire::Server_ExecuteFire()
 	int32 DamageUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Damage);
 	float FinalDamage = CalculateDamage(BaseDamage, DamageUpgradeLevel);
 
-	FVector ViewLocation = OwnerCharacter->GetActorLocation();
-	FRotator ViewRotation = OwnerCharacter->GetActorRotation();
-	if (AController* Controller = OwnerCharacter->GetController())
-	{
-		Controller->GetPlayerViewPoint(ViewLocation, ViewRotation);
-	}
+	FVector CamStart = FollowCamera->GetComponentLocation();
+	FRotator CamRot = FollowCamera->GetComponentRotation();
+	FVector CamEnd = CamStart + (CamRot.Vector() * FinalRange);
 
-	FVector TargetPoint = ViewLocation + (ViewRotation.Vector() * FinalRange);
 	FVector MuzzleLoc = EquippedGun->m_pMesh ? EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle")) : OwnerCharacter->GetActorLocation();
 
 	UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireAccepted Owner=%s WeaponID=%d Damage=%.2f Range=%.2f"),
@@ -182,9 +186,7 @@ void UAbility_Fire::Server_ExecuteFire()
 		FinalDamage,
 		FinalRange);
 
-	EquippedGun->Setting->Fire(MuzzleLoc, TargetPoint, FinalDamage);
-
-	EndAbilityNow();
+	EquippedGun->Setting->Fire(MuzzleLoc, CamEnd, FinalDamage);
 }
 
 float UAbility_Fire::CalculateDamage(int32 Base, int32 Level) const

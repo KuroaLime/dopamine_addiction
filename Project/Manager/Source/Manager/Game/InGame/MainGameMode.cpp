@@ -67,12 +67,12 @@ void AMainGameMode::PreLogin(
         return;
     }
 
-    if (Ticket.IsEmpty())
-    {
-        ErrorMessage = TEXT("MissingTicket");
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main PreLogin rejected. Error=%s"), *ErrorMessage);
-        return;
-    }
+    //if (Ticket.IsEmpty())
+    //{
+    //    ErrorMessage = TEXT("MissingTicket");
+    //    UE_LOG(LogTemp, Warning, TEXT("[DS] Main PreLogin rejected. Error=%s"), *ErrorMessage);
+    //    return;
+    //}
 }
 
 void AMainGameMode::BeginPlay()
