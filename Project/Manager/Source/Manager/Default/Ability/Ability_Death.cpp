@@ -68,7 +68,6 @@ void UAbility_Death::Server_ExecuteCountDown()
 	if (!PC) return;
 
 	RespawnTime--;
-	PC->SetUITimer(RespawnTime);
 
 	if (RespawnTime <= 0)
 	{
@@ -81,4 +80,6 @@ void UAbility_Death::Server_ExecuteCountDown()
 
 		EPFGAbilityActivationResult Result = OwnerASC->TryActivateAbilityByTag(RespawnTag);
 	}
+
+	PC->SetUITimer(RespawnTime);
 }

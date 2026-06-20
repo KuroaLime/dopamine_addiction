@@ -39,7 +39,7 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 			PS_Interface->GetWeaponID(),
 			EWeaponBaseStatType::FireRate);
 
-		float finalFireRate = FireRate * 0.5f;
+		float finalFireRate = FireRate * 0.1f;
 
 		FTimerDelegate Delegate;
 		TWeakObjectPtr<AActor> WeakOwner(InOwner);
@@ -84,7 +84,7 @@ void UAbility_Fire::ActivateAbility()
 			PS_Interface->GetWeaponID(),
 			EWeaponBaseStatType::FireRate);
 
-		float finalFireRate = FireRate * 0.5f;
+		float finalFireRate = FireRate * 0.1f;
 
 		bIsServerFire = true;
 		OwnerCharacter->GetWorldTimerManager().SetTimer(
