@@ -87,4 +87,6 @@ public:
 
 	FABCharacterData* GetABCharacterData(int32 Level);
 
+
+
 };

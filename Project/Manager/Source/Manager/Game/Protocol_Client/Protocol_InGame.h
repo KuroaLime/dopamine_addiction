@@ -107,6 +107,28 @@ struct FPlayerData
     UPROPERTY(BlueprintReadWrite)
     int32 LvHealthRegeneration = 0;
 };
+
+USTRUCT(BlueprintType)
+struct FAccumulatedUpgrades
+{
+    GENERATED_BODY()
+    UPROPERTY(BlueprintReadOnly)
+    float LvHealth = 0.f;
+    UPROPERTY(BlueprintReadOnly)
+    float LvMoveSpeed = 0.f;
+    UPROPERTY(BlueprintReadOnly)
+    float LvHealthRegen = 0.f;
+    UPROPERTY(BlueprintReadOnly)
+    float LvWeaponDamage = 0.f;
+    UPROPERTY(BlueprintReadOnly)
+    float LvWeaponFireRate = 0.f;
+    UPROPERTY(BlueprintReadOnly)
+    float LvWeaponRange = 0.f;
+    UPROPERTY(BlueprintReadOnly)
+    float LvWeaponMagazine = 0.f;
+    UPROPERTY(BlueprintReadOnly)
+    float LvWeaponReload = 0.f;
+};
 //////////////////////////////////////////////////////////
 // 실시간 플레이어 데이터
 USTRUCT(BlueprintType)
@@ -121,6 +143,49 @@ struct FCurPlayerData
 };
 //////////////////////////////////////////////////////////
 // GameState Data
+USTRUCT(BlueprintType)
+struct FStatRangeInfo
+{
+    GENERATED_BODY()
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat")
+    float MinValue = 0.0f;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Stat")
+    float MaxValue = 0.0f;
+};
+USTRUCT(BlueprintType)
+struct FRandomUpgradeCardDataTable : public FTableRowBase
+{
+    GENERATED_BODY()
+
+public:
+    FRandomUpgradeCardDataTable() : CardTitle(FText::GetEmpty()) , CardTexture(nullptr), CardDescription(FText::GetEmpty())
+    { }
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Card")
+    FText CardTitle;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Card")
+    TObjectPtr<UTexture2D> CardTexture;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Card")
+    FText CardDescription;
+
+    UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Card")
+    TMap<EUpgradeType, FStatRangeInfo> UpgradeValue;
+};
+USTRUCT(BlueprintType)
+struct FRandomCardOption
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly)
+    FName CardRowName;
+
+    UPROPERTY(BlueprintReadOnly)
+    TMap<EUpgradeType, float> RolledStats;
+};
 USTRUCT(BlueprintType)
 struct FBulletDataTable : public FTableRowBase
 {

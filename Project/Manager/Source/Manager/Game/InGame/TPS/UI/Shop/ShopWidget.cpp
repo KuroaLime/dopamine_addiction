@@ -49,6 +49,8 @@ void UShopWidget::NativeConstruct() {
 
 }
 void UShopWidget::HandleUpgradePurchase(int32 ItemID) {
+
+
 	AMainPlayerController* PlayerController = Cast<AMainPlayerController>(GetOwningPlayer());
 	if (PlayerController) {
 		PlayerController->Server_RequestRandomUpgradeOptions();
@@ -65,8 +67,9 @@ void UShopWidget::HandleUpgradCharacterState(int32 ItemID)
 }
 
 
-void UShopWidget::Update_UpgradeSelectionWidget(const TArray<EUpgradeType>& Options) {
-	FSlateApplication::Get().SetAllUserFocusToGameViewport();
+void UShopWidget::Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>& Options) {
+
+	//FSlateApplication::Get().SetAllUserFocusToGameViewport();
 	if (UpgradeButton00) UpgradeButton00->SetVisibility(ESlateVisibility::Collapsed);
 	for (const auto& Button : Char_UpgradeButtons)
 		Button->SetVisibility(ESlateVisibility::Collapsed);
@@ -80,6 +83,8 @@ void UShopWidget::Update_UpgradeSelectionWidget(const TArray<EUpgradeType>& Opti
 
 void UShopWidget::bRandomCardSelected(int32 CardID)
 {
+	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("bRandomCardSelected")));
+
 	ReturnToShopButtons();
 	SendToSelectionCardID(CardID);
 }

@@ -5,6 +5,9 @@
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Button.h"
+#include "Game/InGame/MainGameState.h"
+
+
 void UCardWidget::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
 
 }
@@ -28,9 +31,27 @@ void UCardWidget::OnSelectCardHover() {
 void UCardWidget::UpdateWidget() {
 	//물결이 차오르는 듯한 표현 추가 필요
 }
-void UCardWidget::SetUpgradeType(EUpgradeType NewType, int32 Index) {
-	CurrentType = NewType;
+void UCardWidget::SetUpgradeType(const FRandomCardOption& NewOption, int32 Index) {
+	CurrentOption = NewOption;
 	SelectionIndex = Index;
 
-	//여기서 데이터테이블 연계 확인
+    AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
+    if (!GS) return;
+    UDataTable* ShopTable = GS->GetShopRandomCardDataTable();
+    if (!ShopTable) return;
+    FRandomUpgradeCardDataTable* CardData = ShopTable->FindRow<FRandomUpgradeCardDataTable>(CurrentOption.CardRowName, TEXT("Context_CardUI"));
+    if (!CardData) return;
+    if (Card_Name) Card_Name->SetText(CardData->CardTitle);
+    if (Selection_Icon) Selection_Icon->SetBrushFromTexture(CardData->CardTexture);
+    if (Card_Descriptor)
+    {
+        FString FullDesc = CardData->CardDescription.ToString() + TEXT("\n\n");
+        for (const auto& Pair : CurrentOption.RolledStats)
+        {
+            FString StatName = UEnum::GetValueAsString(Pair.Key);
+            StatName.Split(TEXT("::"), nullptr, &StatName);
+            FullDesc += FString::Printf(TEXT("%s: +%.1f\n"), *StatName, Pair.Value);
+        }
+        Card_Descriptor->SetText(FText::FromString(FullDesc));
+    }
 }

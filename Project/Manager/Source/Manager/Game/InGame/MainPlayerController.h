@@ -113,13 +113,13 @@ public:
 	void Server_RequestRandomUpgradeOptions();
 
 	UFUNCTION(Client, Reliable)
-	void Client_ReceiveRandomUpgradeOptions(const TArray<EUpgradeType>& Options);
+	void Client_ReceiveRandomUpgradeOptions(const TArray<FRandomCardOption>& Options);
 
 	UFUNCTION(Server, Reliable)
 	void Server_SelectUpgradeOption(int32 SelectedIndex);
 
 	UPROPERTY()
-	TArray<EUpgradeType> CurrentUpgradeOptions;
+	TArray<FRandomCardOption> CurrentUpgradeOptions;
 
 	UFUNCTION(Server, Reliable)
 	void Server_SetUITimer(int32 time);

@@ -40,6 +40,9 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingTime)
 	int32 RemainingTime;
 
+	UPROPERTY(BlueprintReadOnly, Category = "Master Data | Random3Card")
+	TArray<FRandomUpgradeCardDataTable> RandCardData;
+
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
 public:
@@ -55,7 +58,7 @@ public:
 	virtual void SetRoundWeapon(EWeaponType InWeaponID) override;
 	virtual EWeaponType GetWeaponID() const override;
 	virtual int32 GetWeaponBaseData(EWeaponType WeaponID, EWeaponBaseStatType StatType) const override;
-
+	class UDataTable* GetShopRandomCardDataTable() const { return ShopRandomCardDataTableAsset; }
 protected:
 	virtual void BeginPlay() override;
 
@@ -73,6 +76,9 @@ private:
 
 	UPROPERTY(EditDefaultsOnly, Category = "Master Data | Setup", meta = (AllowPrivateAccess = "true"))
 	class UDataTable* PlayerDataTableAsset;
+
+	UPROPERTY(EditDefaultsOnly, Category = "Master Data | Setup", meta = (AllowPrivateAccess = "true"))
+	class UDataTable* ShopRandomCardDataTableAsset;
 
 	void InitializeMasterData();
 };

@@ -26,6 +26,7 @@ void UCardInputHandler::InputActivate()
 	if (!OwnerController) return;
 	OwnerController->bShowMouseCursor = true;
 	OwnerController->SetInputMode(FInputModeGameAndUI());
+
 }
 
 void UCardInputHandler::InputDeactivate()
