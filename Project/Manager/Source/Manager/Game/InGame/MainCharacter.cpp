@@ -28,6 +28,7 @@
 #include "Default/Data/CameraStateComponent.h"
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/PlayerStart.h"
+#include "Game/InGame/TPS/System/HealthRegenComponent.h"
 
 // Sets default values
 AMainCharacter::AMainCharacter()
@@ -159,7 +160,25 @@ void AMainCharacter::PossessedBy(AController* NewController)
 {
 	Super::PossessedBy(NewController);
 
+	if (HasAuthority() && !HealthRegen)
+	{
+		HealthRegen = NewObject<UHealthRegenComponent>(this, TEXT("HEALTHREGEN"));
+		if (HealthRegen)
+		{
+			HealthRegen->RegisterComponent();
+		}
+	}
+
 	InitPlayerData();
+}
+
+void AMainCharacter::UnPossessed()
+{
+	if (HealthRegen)
+	{
+		HealthRegen->UnregisterComponent();
+	}
+	
 }
 
 void AMainCharacter::OnRep_PlayerState()

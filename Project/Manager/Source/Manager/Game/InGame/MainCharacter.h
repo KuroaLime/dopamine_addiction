@@ -51,9 +51,13 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void PossessedBy(AController* NewController) override;
+	virtual void UnPossessed() override;
 	virtual void OnRep_PlayerState() override;
 	void InitPlayerData();
 
+private:
+	UPROPERTY()
+	class UHealthRegenComponent* HealthRegen;
 public:
 	UPROPERTY(VisibleAnywhere, Category = State)
 	UCharacterStateComponent* CharacterState;
