@@ -35,7 +35,6 @@ private:
 	void HandleCardSelected(int32 CardID);
 
 
-
 public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnSelectionFinished OnSelectionFinishedEvent;

@@ -285,3 +285,13 @@ void AMainCharacter::OnCharacterDeath()
 	}
 }
 
+void AMainCharacter::UpdateCharacterStats()
+{
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	if (!PS) return;
+	if (GetCharacterMovement())
+	{
+		float BaseSpeed = 600.f;
+		GetCharacterMovement()->MaxWalkSpeed = PS->GetFinalMoveSpeed(BaseSpeed);
+	}
+}

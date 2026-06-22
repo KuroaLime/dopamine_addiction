@@ -74,16 +74,10 @@ float UCharacterStateComponent::GetAttack() {
 
 }
 float UCharacterStateComponent::GetHPRatio() {
-	if (CurrentStateData != nullptr) {
-		if (APawn* Pawn = Cast<APawn>(GetOwner())) {
-			if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {
-				return (CurrentStateData->MaxHP < KINDA_SMALL_NUMBER) ? 0.0f : (PS->CurPlayerData.CurrentHP / CurrentStateData->MaxHP);
-
-			}
-		}
-		
-	}
-	return 0.0f;
+	float MaxHP = GetMaxHP();
+	if (MaxHP < KINDA_SMALL_NUMBER)
+		return 0.0f;
+	return GetCurrentHP() / MaxHP;
 }
 
 float UCharacterStateComponent::GetCurrentHP() {
@@ -98,7 +92,14 @@ float UCharacterStateComponent::GetCurrentHP() {
 
 float UCharacterStateComponent::GetMaxHP() {
 	if (CurrentStateData == nullptr) return 100.0f;
-	return (CurrentStateData->MaxHP);
+	float BaseHP = CurrentStateData->MaxHP;
+
+	if (APawn* Pawn = Cast<APawn>(GetOwner())) {
+		if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {
+			return PS->GetFinalMaxHP(BaseHP);
+		}
+	}
+	return BaseHP;
 }
 
 int UCharacterStateComponent::GetLevel() {

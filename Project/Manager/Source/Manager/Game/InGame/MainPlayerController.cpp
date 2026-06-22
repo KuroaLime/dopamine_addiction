@@ -339,6 +339,8 @@ void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
 		}
 		CurrentUpgradeOptions.Add(NewOption);
 	}
+	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Rand Status UP")));
+
 	Client_ReceiveRandomUpgradeOptions(CurrentUpgradeOptions);
 }
 
@@ -370,6 +372,79 @@ void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 Sele
 
 	CurrentUpgradeOptions.Empty();
 }
+EUpgradeType AMainPlayerController::GetStaticUpgradeTypeFromIndex(int32 Index)
+{
+	// UI에 고정 능력치 상승 버튼들이 배치된 순서대로 대응시킵니다.
+	switch (Index)
+	{
+	case 0:
+		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_Health")));
+
+		return EUpgradeType::Player_Health;
+	case 1:
+		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_MoveSpeed")));
+
+		return EUpgradeType::Player_MoveSpeed;
+	case 2:
+		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_HealthRegeneration")));
+
+		return EUpgradeType::Player_HealthRegeneration;
+	default:
+		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("None")));
+
+		return EUpgradeType::None;
+	}
+}
+int32 AMainPlayerController::GetStaticUpgradeCost(EUpgradeType Type, int32 CurrentLevel)
+{
+
+	int32 BaseCost = 100;
+	return BaseCost + (CurrentLevel * 50);
+}
+// 현재 레벨을 조회하는 헬퍼
+int32 AMainPlayerController::GetCurrentUpgradeLevel(AMainPlayerState* PS, EUpgradeType Type)
+{
+	if (!PS) return 0;
+
+	switch (Type)
+	{
+	case EUpgradeType::Player_Health: return PS->PlayerData.LvHealth;
+	case EUpgradeType::Player_MoveSpeed: return PS->PlayerData.LvMovementSpeed;
+	case EUpgradeType::Player_HealthRegeneration: return PS->PlayerData.LvHealthRegeneration;
+	default: return 0;
+	}
+}
+void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int32 SelectedIndex) {
+
+	if (CurrentPhase != EGamePhase::Shop)
+	{
+		return;
+	}
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	if (!PS) return;
+
+	EUpgradeType UpgradeType = GetStaticUpgradeTypeFromIndex(SelectedIndex);
+	if (UpgradeType == EUpgradeType::None)
+		return;
+
+	int32 CurrentLevel = GetCurrentUpgradeLevel(PS, UpgradeType);
+	constexpr int32 MaxUpgradeLevel = 5;
+	if (CurrentLevel >= MaxUpgradeLevel)
+	{
+		return;
+	}
+
+	/*int32 Cost = GetStaticUpgradeCost(UpgradeType, CurrentLevel);
+	if (PS->CurPlayerData.HoldingGold < Cost)
+	{
+		return;
+	}*/
+
+	PS->AddGold(-5);
+	PS->Server_ApplyUpgrad_Implementation(UpgradeType);
+	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("static Status UP")));
+
+}
 void AMainPlayerController::Server_SetUITimer_Implementation(int32 time)
 {
 	Client_SetUITimer(time);
@@ -381,18 +456,18 @@ void AMainPlayerController::Client_SetUITimer_Implementation(int32 time)
 		UIHandlerMap[CurrentPhase]->SetUITimer(time);
 }
 
-bool AMainPlayerController::Server_RequestUpgrade_Validate(int32 ItemID)
-{
-	return true;
-}
-
-void AMainPlayerController::Server_RequestUpgrade_Implementation(int32 ItemID)
-{
-	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>())
-	{
-		PS->Server_ApplyUpgrad_Implementation(static_cast<EUpgradeType>(ItemID));
-	}
-}
+//bool AMainPlayerController::Server_RequestUpgrade_Validate(int32 ItemID)
+//{
+//	return true;
+//}
+//
+//void AMainPlayerController::Server_RequestUpgrade_Implementation(int32 ItemID)
+//{
+//	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>())
+//	{
+//		PS->Server_ApplyUpgrad_Implementation(static_cast<EUpgradeType>(ItemID));
+//	}
+//}
 
 bool AMainPlayerController::Server_RequestPickupCard_Validate(ACardDropActor* TargetCard)
 {

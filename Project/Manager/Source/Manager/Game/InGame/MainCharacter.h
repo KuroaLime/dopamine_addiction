@@ -104,4 +104,6 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
 	UWidgetComponent* HPBarWidget;
+public:
+	void UpdateCharacterStats();
 };

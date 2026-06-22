@@ -29,6 +29,11 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	class UUpgradeSelectionWidget* CardSelectionPanel = nullptr;
 
+	UPROPERTY(meta = (BindWidget))
+	class UImage* Static_Upgrade_Background = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	class UImage* Background = nullptr;
+	
 protected:
 	UFUNCTION()
 	void HandleUpgradePurchase(int32 ItemID);

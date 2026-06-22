@@ -22,8 +22,6 @@ void UUpgradeSelectionWidget::HandleCardSelected(int32 CardID) {
 	FSlateApplication::Get().SetAllUserFocusToGameViewport();
 	if (OnSelectionFinishedEvent.IsBound())
 	{
-
-
 		OnSelectionFinishedEvent.Broadcast(CardID);
 	}
 }

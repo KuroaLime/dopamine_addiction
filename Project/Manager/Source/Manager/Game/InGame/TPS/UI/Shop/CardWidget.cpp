@@ -21,8 +21,18 @@ void UCardWidget::NativeConstruct() {
 
 
 void UCardWidget::OnSelectCardClicked() {
-	if (OnCardSelectionEvent.IsBound())
-		OnCardSelectionEvent.Broadcast(SelectionIndex);
+	if (bIsFaceUp) {
+		if (FlipAnim && !IsAnimationPlaying(FlipAnim)) {
+			PlayAnimation(FlipAnim, 0.f, 1, EUMGSequencePlayMode::Forward);
+			bIsFaceUp = false;
+		}
+	}
+	else {
+		if (OnCardSelectionEvent.IsBound()) {
+			bIsFaceUp = true;
+			OnCardSelectionEvent.Broadcast(SelectionIndex);
+		}
+	}
 
 }
 void UCardWidget::OnSelectCardHover() {
@@ -54,4 +64,40 @@ void UCardWidget::SetUpgradeType(const FRandomCardOption& NewOption, int32 Index
         }
         Card_Descriptor->SetText(FText::FromString(FullDesc));
     }
+}
+void UCardWidget::NativeOnMouseEnter(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
+{
+	
+	Super::NativeOnMouseEnter(MyGeometry, MouseEvent);
+	if (bIsFaceUp && HoverAnim) {
+		PlayAnimation(HoverAnim, 0.f, 1, EUMGSequencePlayMode::Forward);
+	}
+}
+void UCardWidget::NativeOnMouseLeave(const FPointerEvent& MouseEvent)
+{
+	Super::NativeOnMouseLeave(MouseEvent);
+	if (bIsFaceUp && HoverAnim) {
+		PlayAnimation(HoverAnim, 0.f, 1, EUMGSequencePlayMode::Reverse);
+	}
+}
+FReply UCardWidget::NativeOnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
+{
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Mouse Entered Card Widget!"));
+	}
+	if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton) {
+		
+		if (FlipAnim && !IsAnimationPlaying(FlipAnim)) {
+			if (bIsFaceUp) {
+				PlayAnimation(FlipAnim, 0.f, 1, EUMGSequencePlayMode::Forward);
+			}
+			else {
+				PlayAnimation(FlipAnim, 0.f, 1, EUMGSequencePlayMode::Reverse);
+			}
+			bIsFaceUp = !bIsFaceUp;
+			return FReply::Handled();
+		}
+	}
+	return Super::NativeOnMouseButtonDown(MyGeometry, MouseEvent);
 }

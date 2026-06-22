@@ -57,4 +57,19 @@ protected:
 
 public:
 	void UpdateWidget();
+
+protected:
+	UPROPERTY(meta = (BindWidgetAnim), Transient)
+	class UWidgetAnimation* HoverAnim;
+	UPROPERTY(meta = (BindWidgetAnim), Transient)
+	class UWidgetAnimation* FlipAnim;
+
+	virtual void NativeOnMouseEnter(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& MouseEvent) override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
+
+private:
+	bool bIsFaceUp = true;
+public:
+	bool GetbIsFaceUp() { return bIsFaceUp; };
 };

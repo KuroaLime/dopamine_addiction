@@ -6,8 +6,9 @@
 #include "GameFramework/PlayerController.h"
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "Game/InGame/Card/Data/SeotdaTypes.h"
-#include "MainPlayerController.generated.h"
+#include "Game/Protocol_Client/Protocol_InGame.h"
 
+#include "MainPlayerController.generated.h"
 class UInputHandler;
 class UUIHandler;
 class ACardDropActor;
@@ -58,6 +59,7 @@ private:
 	void InitHandler();
 	void SetupHandlerInput();
 
+	
 public:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_SwitchMode(EGamePhase NewPhase);
@@ -91,8 +93,8 @@ public:
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_PopMode();
 
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestUpgrade(int32 ItemID);
+	/*UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestUpgrade(int32 ItemID);*/
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestPickupCard(ACardDropActor* TargetCard);
@@ -118,12 +120,25 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_SelectUpgradeOption(int32 SelectedIndex);
 
+	UFUNCTION()
+	EUpgradeType GetStaticUpgradeTypeFromIndex(int32 Index);
+	UFUNCTION()
+	int32 GetStaticUpgradeCost(EUpgradeType Type, int32 CurrentLevel);
+	// 현재 레벨을 조회하는 헬퍼
+	UFUNCTION()
+	int32 GetCurrentUpgradeLevel(class AMainPlayerState* PS, EUpgradeType Type);
+
 	UPROPERTY()
 	TArray<FRandomCardOption> CurrentUpgradeOptions;
+	
+	UFUNCTION(Server, Reliable)
+	void Server_SelectStaticUpgradeOption(int32 SelectedIndex);
 
 	UFUNCTION(Server, Reliable)
 	void Server_SetUITimer(int32 time);
 
 	UFUNCTION(Client, Reliable)
 	void Client_SetUITimer(int32 time);
+
+	
 };

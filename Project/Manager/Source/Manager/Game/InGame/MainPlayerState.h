@@ -84,4 +84,15 @@ public:
 	void Server_ApplyUpgrad_Implementation(EUpgradeType Type);
 
 	void ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledStats);
+
+	FAccumulatedUpgrades GetAccumulatedUpgrades() const { return AccumulatedUpgrades; };
+public:
+	float GetFinalMaxHP(float BaseMaxHP) const;
+	float GetFinalRegenRate(float BaseRegen) const;
+	float GetFinalMoveSpeed(float BaseMoveSpeed) const;
+	float GetFinalWeaponDamageMultiplier() const;
+	float GetFinalFireDelayMultiplier() const;
+	float GetFinalWeaponRangeMultiplier() const;
+	float GetFinalMaxMagazine(float BaseMaxAmmo) const;
+	float GetFinalReloadTimeMultiplier() const;
 };

@@ -222,6 +222,8 @@ void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 		if (PlayerData.LvHealth < MaxUpgradeLevel)
 		{
 			PlayerData.LvHealth++;
+			CurPlayerData.CurrentHP += 1;
+
 		}
 		break;
 	case EUpgradeType::Player_MoveSpeed:
@@ -318,4 +320,30 @@ void AMainPlayerState::ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledS
 	}
 
 	ForceNetUpdate();
+}
+
+
+float AMainPlayerState::GetFinalMaxHP(float BaseMaxHP) const {
+	return BaseMaxHP + (PlayerData.LvHealth * 20.0f) + AccumulatedUpgrades.LvHealth;
+}
+float AMainPlayerState::GetFinalRegenRate(float BaseRegen) const {
+	return BaseRegen + (PlayerData.LvHealthRegeneration * 1.0f) + AccumulatedUpgrades.LvHealthRegen;
+}
+float AMainPlayerState::GetFinalMoveSpeed(float BaseMoveSpeed) const {
+	return BaseMoveSpeed + (PlayerData.LvMovementSpeed * 36.0f) + AccumulatedUpgrades.LvMoveSpeed;
+}
+float AMainPlayerState::GetFinalWeaponDamageMultiplier() const {
+	return 1.0f + (WeaponData.LvDamage * 0.15f) + AccumulatedUpgrades.LvWeaponDamage;
+}
+float AMainPlayerState::GetFinalFireDelayMultiplier() const {
+	return 1.0f + (WeaponData.LvFireRate * 0.10f) + AccumulatedUpgrades.LvWeaponFireRate;
+}
+float AMainPlayerState::GetFinalWeaponRangeMultiplier() const {
+	return 1.0f + (WeaponData.LvRange * 0.15f) + AccumulatedUpgrades.LvWeaponRange;
+}
+float AMainPlayerState::GetFinalMaxMagazine(float BaseMaxAmmo) const {
+	return BaseMaxAmmo + (WeaponData.LvMagazineCapacity * 4.0f) + AccumulatedUpgrades.LvWeaponMagazine;
+}
+float AMainPlayerState::GetFinalReloadTimeMultiplier() const {
+	return 1.0f + (WeaponData.LvReloadTime * 0.12f) + AccumulatedUpgrades.LvWeaponReload;
 }

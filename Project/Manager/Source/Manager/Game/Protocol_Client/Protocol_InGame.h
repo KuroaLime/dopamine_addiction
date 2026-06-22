@@ -63,6 +63,7 @@ enum class ECardTypeData : uint8
 #define Max_UpgradeLevel 10
 UENUM(BlueprintType)
 enum class EUpgradeType : uint8 {
+    None,
     Player_Health,
     Player_MoveSpeed,
     Player_HealthRegeneration,

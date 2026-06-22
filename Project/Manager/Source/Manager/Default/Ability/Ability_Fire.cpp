@@ -11,12 +11,13 @@
 #include "GameFramework/GameStateBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/MainPlayerState.h"
 
 UAbility_Fire::UAbility_Fire()
 {
 	AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire")));
 
-	CooldownDuration = 0.5f;
+	CooldownDuration = 0.0;
 	CooldownTags.AddTag(FGameplayTag::RequestGameplayTag(FName("State.Cooldown.Fire")));
 
 	ActivationOwnedTags.AddTag(FGameplayTag::RequestGameplayTag(FName("State.Movement.Firing")));
@@ -35,11 +36,19 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 		IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
 		if (!PS_Interface || !GS_Interface) return;
 
-		int32 FireRate = GS_Interface->GetWeaponBaseData(
-			PS_Interface->GetWeaponID(),
-			EWeaponBaseStatType::FireRate);
+		
 
-		float finalFireRate = FireRate * 0.1f;
+		AMainPlayerState* MainPS = OwnerCharacter ? Cast<AMainPlayerState>(OwnerCharacter->GetPlayerState()) : nullptr;
+		int32 FireRate = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::FireRate);
+		float BaseDelay = FireRate * 0.1f;
+		float finalFireRate = BaseDelay;
+		if (MainPS)
+		{
+			float SpeedBonus = (MainPS->WeaponData.LvFireRate * 0.1f) + MainPS->GetAccumulatedUpgrades().LvWeaponFireRate;
+
+			finalFireRate = BaseDelay / (1.f + SpeedBonus);
+		}
+
 
 		FTimerDelegate Delegate;
 		TWeakObjectPtr<AActor> WeakOwner(InOwner);
@@ -80,11 +89,16 @@ void UAbility_Fire::ActivateAbility()
 
 		if (!Owner || !PS_Interface || !GS_Interface) return;
 
-		int32 FireRate = GS_Interface->GetWeaponBaseData(
-			PS_Interface->GetWeaponID(),
-			EWeaponBaseStatType::FireRate);
+		AMainPlayerState* MainPS = OwnerCharacter ? Cast<AMainPlayerState>(OwnerCharacter->GetPlayerState()) : nullptr;
+		int32 FireRate = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::FireRate);
+		float BaseDelay = FireRate * 0.1f;
+		float finalFireRate = BaseDelay;
+		if (MainPS)
+		{
+			float SpeedBonus = (MainPS->WeaponData.LvFireRate * 0.1f) + MainPS->GetAccumulatedUpgrades().LvWeaponFireRate;
 
-		float finalFireRate = FireRate * 0.1f;
+			finalFireRate = BaseDelay / (1.f + SpeedBonus);
+		}
 
 		bIsServerFire = true;
 		OwnerCharacter->GetWorldTimerManager().SetTimer(
@@ -174,6 +188,12 @@ void UAbility_Fire::Server_ExecuteFire()
 	int32 DamageUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Damage);
 	float FinalDamage = CalculateDamage(BaseDamage, DamageUpgradeLevel);
 
+	if (AMainPlayerState* MainPS = Cast<AMainPlayerState>(OwnerCharacter->GetPlayerState()))
+	{
+		FinalDamage += MainPS->GetAccumulatedUpgrades().LvWeaponDamage;
+		FinalRange += MainPS->GetAccumulatedUpgrades().LvWeaponRange;
+	}
+
 	FVector CamStart = FollowCamera->GetComponentLocation();
 	FRotator CamRot = FollowCamera->GetComponentRotation();
 	FVector CamEnd = CamStart + (CamRot.Vector() * FinalRange);
@@ -182,9 +202,7 @@ void UAbility_Fire::Server_ExecuteFire()
 
 	UE_LOG(LogTemp, Warning, TEXT("[DS] TPS FireAccepted Owner=%s WeaponID=%d Damage=%.2f Range=%.2f"),
 		*OwnerCharacter->GetName(),
-		static_cast<int32>(PS_Interface->GetWeaponID()),
-		FinalDamage,
-		FinalRange);
+		static_cast<int32>(PS_Interface->GetWeaponID()), FinalDamage, FinalRange);
 
 	EquippedGun->Setting->Fire(MuzzleLoc, CamEnd, FinalDamage);
 }

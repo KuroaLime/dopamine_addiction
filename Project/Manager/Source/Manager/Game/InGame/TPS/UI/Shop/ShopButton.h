@@ -32,6 +32,17 @@ private:
 
 	UFUNCTION()
 	void OnPurchaseButtonClicked();
+
+protected:
+	UPROPERTY(meta = (BindWidgetAnim), Transient)
+	class UWidgetAnimation* HoverAnim;
+	UPROPERTY(meta = (BindWidgetAnim), Transient)
+	class UWidgetAnimation* ClickAnim;
+
+	virtual void NativeOnMouseEnter(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
+	virtual void NativeOnMouseLeave(const FPointerEvent& MouseEvent) override;
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
+
 public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnPurchaseButtonClicked OnPurchaseEvent;

@@ -6,7 +6,9 @@
 #include "Framework/Application/SlateApplication.h"
 #include "Game/InGame/TPS/UI/Shop/UpgradeSelectionWidget.h"
 #include "Blueprint/WidgetTree.h"
+#include "Components/Image.h"
 #include "Game/InGame/MainPlayerController.h"
+
 
 void UShopWidget::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
 
@@ -37,7 +39,7 @@ void UShopWidget::NativeConstruct() {
 					Char_UpgradeButtons.Add(FoundButton);
 					int32 GeneratedID = Char_UpgradeButtons.Num() - 1;
 					FoundButton->SetItemID(GeneratedID);
-					FoundButton->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleUpgradePurchase);
+					FoundButton->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleUpgradCharacterState);
 
 				}
 			}
@@ -62,7 +64,8 @@ void UShopWidget::HandleUpgradCharacterState(int32 ItemID)
 {
 	AMainPlayerController* PlayerController = Cast<AMainPlayerController>(GetOwningPlayer());
 	if (PlayerController) {
-		//PlayerController->Server_RequestUpgrade(ItemID);
+
+		PlayerController->Server_SelectStaticUpgradeOption(ItemID);
 	}
 }
 
@@ -73,6 +76,9 @@ void UShopWidget::Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>&
 	if (UpgradeButton00) UpgradeButton00->SetVisibility(ESlateVisibility::Collapsed);
 	for (const auto& Button : Char_UpgradeButtons)
 		Button->SetVisibility(ESlateVisibility::Collapsed);
+	Static_Upgrade_Background->SetVisibility(ESlateVisibility::Collapsed);
+	Background->SetVisibility(ESlateVisibility::Collapsed);
+	//BP_RandomUpgradeInfo->SetVisibility(ESlateVisibility::Collapsed);
 
 	if (CardSelectionPanel)
 	{
@@ -95,6 +101,10 @@ void UShopWidget::ReturnToShopButtons()
 	if (UpgradeButton00) UpgradeButton00->SetVisibility(ESlateVisibility::Visible);
 	for (const auto& Button : Char_UpgradeButtons)
 		Button->SetVisibility(ESlateVisibility::Visible);
+	Static_Upgrade_Background->SetVisibility(ESlateVisibility::Visible);
+	Background->SetVisibility(ESlateVisibility::Visible);
+
+	//BP_RandomUpgradeInfo->SetVisibility(ESlateVisibility::Visible);
 }
 
 void UShopWidget::SendToSelectionCardID(int32 CardID)
