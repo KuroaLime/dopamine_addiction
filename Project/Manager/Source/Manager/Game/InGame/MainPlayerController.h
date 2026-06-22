@@ -27,6 +27,7 @@ public:
 	virtual void PopMode() override;
 	virtual void SetUITimer(int32 time) override;
 	virtual EGamePhase GetCurrentPhase() override;
+	virtual void PickupNearestCard() override;
 
 protected:
 	virtual void BeginPlay() override;

@@ -1,5 +1,4 @@
 #include "Default/Ability/Ability_Fire.h"
-#include "Default/Ability/GAS/PFGASC.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/Interface/PhasePlayerStateInterface.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
@@ -10,8 +9,6 @@
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/GameStateBase.h"
 #include "Kismet/GameplayStatics.h"
-#include "Game/InGame/MainGameMode.h"
-#include "Game/InGame/MainPlayerState.h"
 #include "DrawDebugHelpers.h"
 
 UAbility_Fire::UAbility_Fire()

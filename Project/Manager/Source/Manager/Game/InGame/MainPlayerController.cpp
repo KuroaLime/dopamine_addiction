@@ -149,6 +149,11 @@ void AMainPlayerController::SetupHandlerInput()
 	}
 }
 
+void AMainPlayerController::PickupNearestCard()
+{
+	Server_RequestPickupNearestCard();
+}
+
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Networked Level Streaming
 void AMainPlayerController::Multicast_SwitchMode_Implementation(EGamePhase NewPhase)
@@ -456,19 +461,8 @@ void AMainPlayerController::Client_SetUITimer_Implementation(int32 time)
 		UIHandlerMap[CurrentPhase]->SetUITimer(time);
 }
 
-//bool AMainPlayerController::Server_RequestUpgrade_Validate(int32 ItemID)
-//{
-//	return true;
-//}
-//
-//void AMainPlayerController::Server_RequestUpgrade_Implementation(int32 ItemID)
-//{
-//	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>())
-//	{
-//		PS->Server_ApplyUpgrad_Implementation(static_cast<EUpgradeType>(ItemID));
-//	}
-//}
-
+/////////////////////////////////////////////////////////////////////////////////////////
+// Pick Up Card
 bool AMainPlayerController::Server_RequestPickupCard_Validate(ACardDropActor* TargetCard)
 {
     return true;
