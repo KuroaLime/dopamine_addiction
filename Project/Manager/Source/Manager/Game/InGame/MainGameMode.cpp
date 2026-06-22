@@ -73,7 +73,6 @@ void AMainGameMode::PreLogin(
     //    UE_LOG(LogTemp, Warning, TEXT("[DS] Main PreLogin rejected. Error=%s"), *ErrorMessage);
     //    return;
     //}
-
 }
 
 void AMainGameMode::BeginPlay()

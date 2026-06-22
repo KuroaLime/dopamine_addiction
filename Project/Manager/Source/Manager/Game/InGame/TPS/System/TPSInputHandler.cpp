@@ -171,11 +171,8 @@ void UTPSInputHandler::Input_Shop()
 
 void UTPSInputHandler::Input_PickupCard()
 {
-	AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController);
-	if (!MainPC)
+	if (UPFGASC* ASC = ResolveOwnerASC())
 	{
-		return;
+		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.PickUp")));
 	}
-
-	MainPC->Server_RequestPickupNearestCard();
 }
