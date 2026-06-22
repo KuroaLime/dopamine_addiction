@@ -129,7 +129,7 @@ void UAbility_Fire::Client_ExecuteFire(AActor* InOwner)
 	if (!EquippedGun || !EquippedGun->Setting || !EquippedGun->m_pMesh) return;
 
 	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
-	EquippedGun->Setting->Fire(MuzzleLoc);
+	//EquippedGun->Setting->Fire(MuzzleLoc);
 }
 
 void UAbility_Fire::Server_ExecuteFire()
@@ -178,6 +178,12 @@ void UAbility_Fire::Server_ExecuteFire()
 		DrawDebugLine(World, CamStart, CamEnd, FColor::Red, false, 2.0f, 0, 1.5f);
 	}
 
+	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
+	if (!EquippedGun || !EquippedGun->Setting || !EquippedGun->m_pMesh) return;
+
+	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
+	EquippedGun->Setting->Multicast_PlayFireFeedback(MuzzleLoc);
+
 	int32 BaseDamage = GS_Interface->GetWeaponBaseData(
 		PS_Interface->GetWeaponID(), EWeaponBaseStatType::Damage);
 	int32 LvDamage = PS_Interface->GetWeaponStatLV(EWeaponStatType::Damage);
@@ -192,12 +198,6 @@ void UAbility_Fire::Server_ExecuteFire()
 		OwnerCharacter,
 		nullptr
 	);
-
-	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
-	if (!EquippedGun || !EquippedGun->Setting || !EquippedGun->m_pMesh) return;
-
-	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
-	EquippedGun->Setting->Fire(MuzzleLoc);
 }
 
 float UAbility_Fire::CalculateDamage(int32 Base, int32 Level) const

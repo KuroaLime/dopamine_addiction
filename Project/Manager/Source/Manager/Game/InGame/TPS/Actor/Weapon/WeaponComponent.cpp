@@ -30,3 +30,12 @@ void UWeaponComponent::Fire(const FVector& MuzzleLocation)
         UGameplayStatics::PlaySoundAtLocation(this, m_FireSound, MuzzleLocation);
     }
 }
+
+void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& MuzzleLocation)
+{
+
+    if (m_FireSound)
+    {
+        UGameplayStatics::PlaySoundAtLocation(GetWorld(), m_FireSound, MuzzleLocation);
+    }
+}

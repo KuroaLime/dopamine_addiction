@@ -26,6 +26,9 @@ public:
 
 	virtual void Fire(const FVector& MuzzleLocation);
 
+	UFUNCTION(NetMulticast, Reliable)
+	virtual void Multicast_PlayFireFeedback(const FVector& MuzzleLocation);
+
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	USoundBase* m_FireSound;
