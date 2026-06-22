@@ -108,9 +108,6 @@ public:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestSeotdaBetAction(EBettingAction Action);
 
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_TPSFireFromClient(FVector ViewLocation, FRotator ViewRotation);
-
 	UFUNCTION(Server, Reliable)
 	void Server_RequestRandomUpgradeOptions();
 

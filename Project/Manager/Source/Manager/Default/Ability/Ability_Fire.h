@@ -37,4 +37,5 @@ private:
 	void Client_ExecuteFire(AActor* InOwner);
 	float CalculateDamage(int32 Base, int32 Level) const;
 	float CalculateRange(int32 Base, int32 Level) const;
+	float CalculateFireRate(int32 Base, int32 Level) const;
 };
