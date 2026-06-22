@@ -35,11 +35,12 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 		IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
 		if (!PS_Interface || !GS_Interface) return;
 
-		int32 FireRate = GS_Interface->GetWeaponBaseData(
+		int32 BaseFireRate = GS_Interface->GetWeaponBaseData(
 			PS_Interface->GetWeaponID(),
 			EWeaponBaseStatType::FireRate);
+		int32 LvFireRate = PS_Interface->GetWeaponStatLV(EWeaponStatType::FireRate);
 
-		float finalFireRate = FireRate * 0.5;
+		float FireRate = CalculateFireRate(BaseFireRate, LvFireRate);
 
 		FTimerDelegate Delegate;
 		TWeakObjectPtr<AActor> WeakOwner(InOwner);
@@ -52,7 +53,7 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 		Character->GetWorldTimerManager().SetTimer(
 			ClientFireTimerHandle,
 			Delegate,
-			finalFireRate,
+			FireRate,
 			true
 		);
 		bIsClientFire = true;
@@ -80,18 +81,19 @@ void UAbility_Fire::ActivateAbility()
 
 		if (!Owner || !PS_Interface || !GS_Interface) return;
 
-		int32 FireRate = GS_Interface->GetWeaponBaseData(
+		int32 BaseFireRate = GS_Interface->GetWeaponBaseData(
 			PS_Interface->GetWeaponID(),
 			EWeaponBaseStatType::FireRate);
+		int32 LvFireRate = PS_Interface->GetWeaponStatLV(EWeaponStatType::FireRate);
 
-		float finalFireRate = FireRate * 0.5;
+		float FireRate = CalculateFireRate(BaseFireRate, LvFireRate);
 
 		bIsServerFire = true;
 		OwnerCharacter->GetWorldTimerManager().SetTimer(
 			ServerFireTimerHandle,
 			this,
 			&UAbility_Fire::Server_ExecuteFire,
-			finalFireRate,
+			FireRate,
 			true
 		);
 
@@ -136,12 +138,12 @@ void UAbility_Fire::Server_ExecuteFire()
 	if (!FollowCamera) return;
 
 	int32 BaseRange = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::Range);
-	int32 RangeUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Range);
-	float FinalRange = CalculateRange(BaseRange, RangeUpgradeLevel);
+	int32 LvRange = PS_Interface->GetWeaponStatLV(EWeaponStatType::Range);
+	float Range = CalculateRange(BaseRange, LvRange);
 
 	FVector CamStart = FollowCamera->GetComponentLocation();
 	FRotator CamRot = FollowCamera->GetComponentRotation();
-	FVector CamEnd = CamStart + (CamRot.Vector() * FinalRange);
+	FVector CamEnd = CamStart + (CamRot.Vector() * Range);
 
 	FHitResult CamHit;
 	FCollisionQueryParams Params;
@@ -167,18 +169,24 @@ void UAbility_Fire::Server_ExecuteFire()
 
 	int32 BaseDamage = GS_Interface->GetWeaponBaseData(
 		PS_Interface->GetWeaponID(), EWeaponBaseStatType::Damage);
-	int32 DamageUpgradeLevel = PS_Interface->GetWeaponStatLV(EWeaponStatType::Damage);
-	float FinalDamage = CalculateDamage(BaseDamage, DamageUpgradeLevel);
+	int32 LvDamage = PS_Interface->GetWeaponStatLV(EWeaponStatType::Damage);
+	float Damage = CalculateDamage(BaseDamage, LvDamage);
 
 	if (!bCamHit || !CamHit.GetActor()) return;
 
 	UGameplayStatics::ApplyDamage(
 		CamHit.GetActor(),
-		FinalDamage,
+		Damage,
 		OwnerCharacter ? OwnerCharacter->GetController() : nullptr,
 		OwnerCharacter,
 		nullptr
 	);
+
+	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
+	if (!EquippedGun || !EquippedGun->Setting || !EquippedGun->m_pMesh) return;
+
+	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
+	EquippedGun->Setting->Fire(MuzzleLoc);
 }
 
 float UAbility_Fire::CalculateDamage(int32 Base, int32 Level) const
@@ -190,4 +198,14 @@ float UAbility_Fire::CalculateRange(int32 Base, int32 Level) const
 {
 	float Range = static_cast<float>(Base);
 	return Range + (Range * (Level * 0.1f));
+}
+
+float UAbility_Fire::CalculateFireRate(int32 Base, int32 Level) const
+{
+	float BaseDelay = Base * 0.1f;
+	float FireRate = BaseDelay;
+	float SpeedBonus = (Level * 0.1f) + Base;
+	FireRate = BaseDelay / (1.f + SpeedBonus);
+
+	return FireRate;
 }
