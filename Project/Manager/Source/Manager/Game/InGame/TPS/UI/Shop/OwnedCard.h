@@ -22,6 +22,10 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	class UButton* Selection_Button = nullptr;
 
+	int32 SelectionIndex = -1;
+
+	int32 CurCardValue;
+
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Card | Setup")
 	class UTexture2D* CardBackTexture = nullptr;
@@ -40,27 +44,11 @@ protected:
 	UPROPERTY(meta = (BindWidgetAnim), Transient)
 	class UWidgetAnimation* ClickAnim;
 
-	UPROPERTY(meta = (BindWidgetAnim), Transient)
-	class UWidgetAnimation* CardFlipAnim;
-
 	virtual void NativeOnMouseEnter(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 	virtual void NativeOnMouseLeave(const FPointerEvent& MouseEvent) override;
-	UFUNCTION()
-	void OnCardButtonClicked();
+	virtual FReply NativeOnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
+
 public:
 	void SetUpgradeType(int32 CardValue, int32 Index);
-public:
-	void SetCardData(const FOwnedCardInfo& CardInfo, class UTexture2D* CardTexture);
-	void ClearCard();
-protected:
-	UFUNCTION(BlueprintCallable, Category = "Card")
-	void OnCardFlipMidpoint();
-	UFUNCTION()
-	void PlayFlipAnimation();
-private:
-	FOwnedCardInfo CachedCardInfo;
 
-	bool bIsFaceUp = true;
-	FTimerHandle ClickSequenceTimerHandle;
-	FTimerHandle FlipTimerHandle;
 };
