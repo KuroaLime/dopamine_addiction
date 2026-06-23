@@ -74,6 +74,7 @@ void ACardDropActor::OnRep_CardVisual()
 {
     RefreshVisual();
 }
+
 void ACardDropActor::RefreshVisual()
 {
     if (!CardMesh)

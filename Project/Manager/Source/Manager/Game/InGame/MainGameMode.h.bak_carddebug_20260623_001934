@@ -195,8 +195,6 @@ private:
     int32 SeotdaCurrentBet = 0;
     int32 SeotdaCurrentTurnIndex = 0;
     bool bSeotdaBettingActive = false;
-    bool bSeotdaRoundResolved = false;
-    FString LastSeotdaRoundResultSummary = TEXT("Pending");
 
 
 private:
@@ -221,7 +219,6 @@ private:
     void ClearServerPhaseTimer();
     void SetServerRemainingTime(int32 NewTime);
 
-    FString GetOwnedCardsDebugString(const AMainPlayerState* PS) const;
     TArray<ECardID> BuildCardBundleIDs() const;
     void ShuffleCardIDs(TArray<ECardID>& CardIDs) const;
     FVector GetDistributedCardDropLocation(int32 Index, int32 TotalCount) const;
@@ -242,7 +239,6 @@ private:
     void StartSeotdaBettingRound();
     void AdvanceSeotdaBettingTurn();
     void ResolveSeotdaRoundResult(const TCHAR* Reason);
-    void BroadcastSeotdaState() const;
     AMainPlayerState* GetCurrentSeotdaTurnPlayer() const;
     int32 GetSeotdaPlayerMoney(const AMainPlayerState* TargetPS) const;
     int32 PaySeotdaBet(AMainPlayerState* TargetPS, int32 Amount);

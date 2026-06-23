@@ -60,48 +60,6 @@ enum class ECardTypeData : uint8
 
 //////////////////////////////////////////////////////////
 // PlayerState Data
-
-namespace CardDebug
-{
-    static FORCEINLINE FString ToString(ECardID CardID)
-    {
-        switch (CardID)
-        {
-        case ECardID::Jan_Gwang: return TEXT("Jan_Gwang(M=1,T=Gwang)");
-        case ECardID::Jan_Pi:    return TEXT("Jan_Pi(M=1,T=Pi)");
-
-        case ECardID::Feb_Yul:   return TEXT("Feb_Yul(M=2,T=Yul)");
-        case ECardID::Feb_Ddi:   return TEXT("Feb_Ddi(M=2,T=Ddi)");
-
-        case ECardID::Mar_Gwang: return TEXT("Mar_Gwang(M=3,T=Gwang)");
-        case ECardID::Mar_Ddi:   return TEXT("Mar_Ddi(M=3,T=Ddi)");
-
-        case ECardID::Apr_Yul:   return TEXT("Apr_Yul(M=4,T=Yul)");
-        case ECardID::Apr_Pi:    return TEXT("Apr_Pi(M=4,T=Pi)");
-
-        case ECardID::May_Yul:   return TEXT("May_Yul(M=5,T=Yul)");
-        case ECardID::May_Ddi:   return TEXT("May_Ddi(M=5,T=Ddi)");
-
-        case ECardID::Jun_Yul:   return TEXT("Jun_Yul(M=6,T=Yul)");
-        case ECardID::Jun_Ddi:   return TEXT("Jun_Ddi(M=6,T=Ddi)");
-
-        case ECardID::Jul_Yul:   return TEXT("Jul_Yul(M=7,T=Yul)");
-        case ECardID::Jul_Ddi:   return TEXT("Jul_Ddi(M=7,T=Ddi)");
-
-        case ECardID::Aug_Gwang: return TEXT("Aug_Gwang(M=8,T=Gwang)");
-        case ECardID::Aug_Yul:   return TEXT("Aug_Yul(M=8,T=Yul)");
-
-        case ECardID::Sep_Yul:   return TEXT("Sep_Yul(M=9,T=Yul)");
-        case ECardID::Sep_Ddi:   return TEXT("Sep_Ddi(M=9,T=Ddi)");
-
-        case ECardID::Oct_Gwang: return TEXT("Oct_Gwang(M=10,T=Gwang)");
-        case ECardID::Oct_Yul:   return TEXT("Oct_Yul(M=10,T=Yul)");
-
-        default:
-            return TEXT("None");
-        }
-    }
-}
 #define Max_UpgradeLevel 10
 UENUM(BlueprintType)
 enum class EUpgradeType : uint8 {
@@ -173,7 +131,7 @@ struct FAccumulatedUpgrades
     float LvWeaponReload = 0.f;
 };
 //////////////////////////////////////////////////////////
-// ï¿½Ç½Ã°ï¿½ ï¿½Ã·ï¿½ï¿½Ì¾ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
+// ½Ç½Ã°£ ÇÃ·¹ÀÌ¾î µ¥ÀÌÅÍ
 USTRUCT(BlueprintType)
 struct FCurPlayerData
 {

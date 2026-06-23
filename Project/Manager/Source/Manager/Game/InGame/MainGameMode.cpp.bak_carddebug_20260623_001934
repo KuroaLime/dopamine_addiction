@@ -396,18 +396,13 @@ void AMainGameMode::StartResultPhase()
     }
 
     EndPhase();
-
-    if (!bSeotdaRoundResolved && SeotdaRoundStates.Num() > 0)
-    {
-        ResolveSeotdaRoundResult(TEXT("ResultPhaseFallback"));
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] RoundResult Round=%d Summary=%s"),
+    UE_LOG(LogTemp, Warning, TEXT("[DS] RoundResult Round=%d Winner=%s MoneySummary=%s"),
         CurrentRound,
-        *LastSeotdaRoundResultSummary);
-
+        TEXT("Pending"),
+        TEXT("Pending"));
     StartTimedServerPhase(EDediServerPhase::Result, GetResultDuration());
 }
+
 void AMainGameMode::StartTransitionToBattlePhase()
 {
     if (bGameEndReached)
@@ -433,119 +428,22 @@ void AMainGameMode::StartGameEndPhase()
 
     bGameEndReached = true;
     bGameStarted = false;
-
     EndPhase();
     ClearCardDrops();
-    ClearRoundCardsForAllPlayers();
     ClearServerPhaseTimer();
-
     CurrentServerPhase = EDediServerPhase::GameEnd;
     RemainingPhaseSeconds = 0;
     SetServerRemainingTime(0);
-
     SetPlayerPawnGameplayEnabled(false, TEXT("GameEnd"));
-
-    FString WinnerName = TEXT("None");
-    FString MoneySummary = TEXT("None");
-
-    int32 BestMoney = MIN_int32;
-    int32 BestMoneyPlayerCount = 0;
-
-    TArray<FString> MoneyParts;
-
-    if (GetWorld())
-    {
-        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-        {
-            AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
-            if (!MPC)
-            {
-                continue;
-            }
-
-            AMainPlayerState* PS = MPC->GetPlayerState<AMainPlayerState>();
-            if (!PS)
-            {
-                continue;
-            }
-
-            const int32 Money = GetSeotdaPlayerMoney(PS);
-            const FString PlayerName = PS->GetPlayerName();
-
-            MoneyParts.Add(FString::Printf(TEXT("%s=%d"), *PlayerName, Money));
-
-            if (Money > BestMoney)
-            {
-                BestMoney = Money;
-                BestMoneyPlayerCount = 1;
-                WinnerName = PlayerName;
-            }
-            else if (Money == BestMoney)
-            {
-                BestMoneyPlayerCount++;
-            }
-        }
-    }
-
-    if (MoneyParts.Num() > 0)
-    {
-        MoneySummary = FString::Join(MoneyParts, TEXT(", "));
-    }
-
-    if (BestMoneyPlayerCount >= 2)
-    {
-        WinnerName = FString::Printf(TEXT("Tie(%d players, Money=%d)"), BestMoneyPlayerCount, BestMoney);
-    }
 
     UE_LOG(LogTemp, Warning, TEXT("[DS] GameEnd RoomId=%d Round=%d MaxRound=%d Winner=%s MoneySummary=%s"),
         DediRoomId,
         CurrentRound,
         MaxRoundCount,
-        *WinnerName,
-        *MoneySummary);
-
-    const FString FinalResultText = FString::Printf(
-        TEXT("[MATCH END]\nWinner=%s\nRound=%d/%d\nMoney=%s"),
-        *WinnerName,
-        CurrentRound,
-        MaxRoundCount,
-        *MoneySummary
-    );
-
-    if (GetWorld())
-    {
-        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-        {
-            AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
-            if (MPC)
-            {
-                MPC->Client_ShowSeotdaResult(FinalResultText);
-            }
-        }
-    }
+        TEXT("Pending"),
+        TEXT("Pending"));
 }
 
-
-FString AMainGameMode::GetOwnedCardsDebugString(const AMainPlayerState* PS) const
-{
-    if (!PS)
-    {
-        return TEXT("None");
-    }
-
-    TArray<FString> Parts;
-
-    for (const FOwnedCardInfo& CardInfo : PS->OwnedCards)
-    {
-        Parts.Add(FString::Printf(
-            TEXT("#%d:%s"),
-            CardInfo.CardInstanceId,
-            *CardDebug::ToString(CardInfo.CardID)
-        ));
-    }
-
-    return Parts.Num() > 0 ? FString::Join(Parts, TEXT(", ")) : TEXT("Empty");
-}
 
 bool AMainGameMode::TryPickupCard(AMainPlayerController* RequestingPC, ACardDropActor* TargetCard)
 {
@@ -586,11 +484,10 @@ bool AMainGameMode::TryPickupCard(AMainPlayerController* RequestingPC, ACardDrop
 
     if (PS->OwnedCards.Num() >= MaxCardsPerPlayerPerRound)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=CardLimit Player=%s Owned=%d Max=%d OwnedCards=[%s]"),
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=CardLimit Player=%s Owned=%d Max=%d"),
             *RequestingPC->GetName(),
             PS->OwnedCards.Num(),
-            MaxCardsPerPlayerPerRound,
-            *GetOwnedCardsDebugString(PS));
+            MaxCardsPerPlayerPerRound);
         return false;
     }
 
@@ -640,13 +537,11 @@ bool AMainGameMode::TryPickupCard(AMainPlayerController* RequestingPC, ACardDrop
     });
     TargetCard->Destroy();
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupOK Player=%s Instance=%d Card=%d Name=%s OwnedCount=%d OwnedCards=[%s]"),
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupOK Player=%s Instance=%d Card=%d OwnedCount=%d"),
         *PS->GetPlayerName(),
         CardInfo.CardInstanceId,
         static_cast<int32>(CardInfo.CardID),
-        *CardDebug::ToString(CardInfo.CardID),
-        PS->PublicCardCount,
-        *GetOwnedCardsDebugString(PS));
+        PS->PublicCardCount);
 
     return true;
 }
@@ -725,7 +620,6 @@ bool AMainGameMode::SubmitSeotdaSelection(AMainPlayerController* RequestingPC, b
     FSeotdaPlayerRoundState NewState;
     NewState.PlayerState = PS;
     NewState.bSubmitted = true;
-    BroadcastSeotdaState();
     NewState.HandResult = HandResult;
     NewState.SelectedCardInstanceIds = HandResult.UsedCardInstanceIds;
     SeotdaRoundStates.Add(PS, NewState);
@@ -741,22 +635,14 @@ bool AMainGameMode::SubmitSeotdaSelection(AMainPlayerController* RequestingPC, b
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitOK Player=%s Selected=[#%d:%s, #%d:%s] Combo=%s Rank=%d SubRank=%d AllCards=[%s]"),
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitOK Player=%s Cards=%d,%d Combo=%s Rank=%d SubRank=%d"),
         *PS->GetPlayerName(),
-
-        SelectedCards[0].CardInstanceId,
-        *CardDebug::ToString(SelectedCards[0].CardID),
-
-        SelectedCards[1].CardInstanceId,
-        *CardDebug::ToString(SelectedCards[1].CardID),
-
+        HandResult.UsedCardInstanceIds.Num() > 0 ? HandResult.UsedCardInstanceIds[0] : 0,
+        HandResult.UsedCardInstanceIds.Num() > 1 ? HandResult.UsedCardInstanceIds[1] : 0,
         *HandResult.Name,
         HandResult.Rank,
-        HandResult.SubRank,
+        HandResult.SubRank);
 
-        *GetOwnedCardsDebugString(PS));
-
-    BroadcastSeotdaState();
     TryResolveSeotdaRoundIfReady();
     return true;
 }
@@ -769,8 +655,6 @@ void AMainGameMode::ResetSeotdaRoundStates()
     SeotdaCurrentBet = 0;
     SeotdaCurrentTurnIndex = 0;
     bSeotdaBettingActive = false;
-    bSeotdaRoundResolved = false;
-    LastSeotdaRoundResultSummary = TEXT("Pending");
     UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda Reset Round=%d"), CurrentRound);
 }
 
@@ -814,7 +698,6 @@ void AMainGameMode::TryResolveSeotdaRoundIfReady()
     }
 
     StartSeotdaBettingRound();
-    BroadcastSeotdaState();
 }
 
 void AMainGameMode::StartSeotdaBettingRound()
@@ -828,25 +711,7 @@ void AMainGameMode::StartSeotdaBettingRound()
     SeotdaPot = 0;
     SeotdaCurrentBet = 0;
     SeotdaCurrentTurnIndex = 0;
-    for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-{
-FSeotdaPlayerRoundState& State = Pair.Value;
-
-if (!State.PlayerState.IsValid())
-{
-continue;
-}
-
-if (!State.bSubmitted)
-{
-continue;
-}
-
-State.bActedThisBetRound = false;
-State.BetMoney = 0;
-}
-
-bSeotdaBettingActive = true;
+    bSeotdaBettingActive = true;
 
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
@@ -892,8 +757,6 @@ bSeotdaBettingActive = true;
         SeotdaCurrentTurnIndex,
         SeotdaPot,
         SeotdaCurrentBet);
-
-    BroadcastSeotdaState();
 }
 
 bool AMainGameMode::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, EBettingAction Action)
@@ -1031,13 +894,6 @@ bool AMainGameMode::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, E
     if (GetActiveSeotdaPlayerCount() <= 1 || AreSeotdaBetsSettled())
     {
         ResolveSeotdaRoundResult(TEXT("BetSettled"));
-        BroadcastSeotdaState();
-
-        if (CurrentServerPhase == EDediServerPhase::CardGame)
-        {
-            FinishCurrentServerPhase(TEXT("SeotdaBetSettled"));
-        }
-
         return true;
     }
 
@@ -1066,8 +922,6 @@ void AMainGameMode::AdvanceSeotdaBettingTurn()
                 SeotdaPot,
                 SeotdaCurrentBet,
                 FMath::Max(0, SeotdaCurrentBet - State->BetMoney));
-            
-    BroadcastSeotdaState();
             return;
         }
     }
@@ -1082,15 +936,7 @@ void AMainGameMode::ResolveSeotdaRoundResult(const TCHAR* Reason)
         return;
     }
 
-    if (bSeotdaRoundResolved)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda ResultSkip AlreadyResolved Summary=%s"),
-            *LastSeotdaRoundResultSummary);
-        return;
-    }
-
     FSeotdaPlayerRoundState* BestState = nullptr;
-
     for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
     {
         FSeotdaPlayerRoundState& State = Pair.Value;
@@ -1108,22 +954,12 @@ void AMainGameMode::ResolveSeotdaRoundResult(const TCHAR* Reason)
 
     if (!BestState || !BestState->PlayerState.IsValid())
     {
-        LastSeotdaRoundResultSummary = FString::Printf(
-            TEXT("Winner=None Combo=None Pot=%d Reason=%s"),
-            SeotdaPot,
-            Reason ? Reason : TEXT("<NULL>")
-        );
-
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda ResultFailed Reason=%s Pot=%d"), Reason ? Reason : TEXT("<NULL>"), SeotdaPot);
         bSeotdaBettingActive = false;
-        bSeotdaRoundResolved = true;
-    BroadcastSeotdaState();
-
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda ResultFailed %s"), *LastSeotdaRoundResultSummary);
         return;
     }
 
     bool bTie = false;
-
     for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
     {
         const FSeotdaPlayerRoundState& State = Pair.Value;
@@ -1132,8 +968,7 @@ void AMainGameMode::ResolveSeotdaRoundResult(const TCHAR* Reason)
             continue;
         }
 
-        if (State.HandResult.Rank == BestState->HandResult.Rank &&
-            State.HandResult.SubRank == BestState->HandResult.SubRank)
+        if (State.HandResult.Rank == BestState->HandResult.Rank && State.HandResult.SubRank == BestState->HandResult.SubRank)
         {
             bTie = true;
             break;
@@ -1141,14 +976,12 @@ void AMainGameMode::ResolveSeotdaRoundResult(const TCHAR* Reason)
     }
 
     AMainPlayerState* WinnerPS = BestState->PlayerState.Get();
-
     if (WinnerPS && SeotdaPot > 0)
     {
         WinnerPS->AddGold(SeotdaPot);
     }
 
-    LastSeotdaRoundResultSummary = FString::Printf(
-        TEXT("Winner=%s Combo=%s Rank=%d SubRank=%d Pot=%d Tie=%d Reason=%s Money=%d"),
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda Winner Player=%s Combo=%s Rank=%d SubRank=%d Pot=%d Tie=%d Reason=%s Money=%d"),
         WinnerPS ? *WinnerPS->GetPlayerName() : TEXT("<NULL>"),
         *BestState->HandResult.Name,
         BestState->HandResult.Rank,
@@ -1156,87 +989,11 @@ void AMainGameMode::ResolveSeotdaRoundResult(const TCHAR* Reason)
         SeotdaPot,
         bTie ? 1 : 0,
         Reason ? Reason : TEXT("<NULL>"),
-        WinnerPS ? GetSeotdaPlayerMoney(WinnerPS) : 0
-    );
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda Winner %s"), *LastSeotdaRoundResultSummary);
+        WinnerPS ? GetSeotdaPlayerMoney(WinnerPS) : 0);
 
     bSeotdaBettingActive = false;
-    bSeotdaRoundResolved = true;
-    BroadcastSeotdaState();
-
-    const FString ClientResultText = FString::Printf(
-        TEXT("[ROUND %d RESULT] %s"),
-        CurrentRound,
-        *LastSeotdaRoundResultSummary
-    );
-
-    if (GetWorld())
-    {
-        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-        {
-            AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
-            if (MPC)
-            {
-                MPC->Client_ShowSeotdaResult(ClientResultText);
-            }
-        }
-    }
-}
-void AMainGameMode::BroadcastSeotdaState() const
-{
-if (!HasAuthority() || !GetWorld())
-{
-return;
 }
 
-AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
-const FString TurnName = TurnPS ? TurnPS->GetPlayerName() : TEXT("None");
-
-for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-{
-AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
-if (!MPC)
-{
-continue;
-}
-
-AMainPlayerState* PS = MPC->GetPlayerState<AMainPlayerState>();
-
-bool bMySubmitted = false;
-bool bMyFolded = false;
-int32 MyBetMoney = 0;
-int32 NeedCall = 0;
-bool bMyTurn = false;
-
-if (PS)
-{
-bMyTurn = (TurnPS == PS);
-
-if (const FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS))
-{
-bMySubmitted = State->bSubmitted;
-bMyFolded = State->bFolded;
-MyBetMoney = State->BetMoney;
-NeedCall = FMath::Max(0, SeotdaCurrentBet - MyBetMoney);
-}
-}
-
-MPC->Client_UpdateSeotdaState(
-CurrentRound,
-bSeotdaBettingActive,
-TurnName,
-SeotdaPot,
-SeotdaCurrentBet,
-MyBetMoney,
-NeedCall,
-bMyTurn,
-bMySubmitted,
-bMyFolded,
-bSeotdaRoundResolved
-);
-}
-}
 AMainPlayerState* AMainGameMode::GetCurrentSeotdaTurnPlayer() const
 {
     if (SeotdaTurnOrder.Num() <= 0 || !SeotdaTurnOrder.IsValidIndex(SeotdaCurrentTurnIndex))
@@ -1284,72 +1041,26 @@ int32 AMainGameMode::GetActiveSeotdaPlayerCount() const
 
 bool AMainGameMode::AreSeotdaBetsSettled() const
 {
-int32 ActiveSubmittedCount = 0;
-int32 ActedCount = 0;
+    if (!bSeotdaBettingActive)
+    {
+        return false;
+    }
 
-for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-{
-const FSeotdaPlayerRoundState& State = Pair.Value;
+    for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
+    {
+        const FSeotdaPlayerRoundState& State = Pair.Value;
+        if (!State.bSubmitted || State.bFolded)
+        {
+            continue;
+        }
 
-if (!State.PlayerState.IsValid())
-{
-continue;
-}
+        if (!State.bActedThisBetRound || State.BetMoney < SeotdaCurrentBet)
+        {
+            return false;
+        }
+    }
 
-if (!State.bSubmitted)
-{
-continue;
-}
-
-if (State.bFolded)
-{
-continue;
-}
-
-ActiveSubmittedCount++;
-
-if (!State.bActedThisBetRound)
-{
-UE_LOG(LogTemp, Warning,
-TEXT("[DS] Seotda SettleCheck Result=0 Reason=NotActed Player=%s Active=%d Acted=%d CurrentBet=%d PlayerBet=%d"),
-*State.PlayerState->GetPlayerName(),
-ActiveSubmittedCount,
-ActedCount,
-SeotdaCurrentBet,
-State.BetMoney
-);
-
-return false;
-}
-
-if (State.BetMoney < SeotdaCurrentBet)
-{
-UE_LOG(LogTemp, Warning,
-TEXT("[DS] Seotda SettleCheck Result=0 Reason=NeedCall Player=%s Active=%d Acted=%d CurrentBet=%d PlayerBet=%d"),
-*State.PlayerState->GetPlayerName(),
-ActiveSubmittedCount,
-ActedCount,
-SeotdaCurrentBet,
-State.BetMoney
-);
-
-return false;
-}
-
-ActedCount++;
-}
-
-const bool bSettled = ActiveSubmittedCount >= 2 && ActedCount == ActiveSubmittedCount;
-
-UE_LOG(LogTemp, Warning,
-TEXT("[DS] Seotda SettleCheck Result=%d Active=%d Acted=%d CurrentBet=%d"),
-bSettled ? 1 : 0,
-ActiveSubmittedCount,
-ActedCount,
-SeotdaCurrentBet
-);
-
-return bSettled;
+    return GetActiveSeotdaPlayerCount() > 0;
 }
 
 AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedCardInfo& FirstCard, const FOwnedCardInfo& SecondCard) const
@@ -1588,11 +1299,9 @@ bool AMainGameMode::TryPickupNearestCard(AMainPlayerController* RequestingPC)
         return false;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearest Player=%s Instance=%d Card=%d Name=%s Distance=%.2f"),
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearest Player=%s Instance=%d Distance=%.2f"),
         *RequestingPC->GetName(),
         BestCard->GetCardInstanceId(),
-        static_cast<int32>(BestCard->GetCardID()),
-        *CardDebug::ToString(BestCard->GetCardID()),
         FMath::Sqrt(BestDistanceSq));
 
     return TryPickupCard(RequestingPC, BestCard);
@@ -1681,10 +1390,9 @@ int32 AMainGameMode::CreateCardInstance(ECardID CardID)
 
     ServerCardRecords.Add(NewInstanceId, Record);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Create Instance=%d Card=%d Name=%s Round=%d"),
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Create Instance=%d Card=%d Round=%d"),
         NewInstanceId,
         static_cast<int32>(CardID),
-        *CardDebug::ToString(CardID),
         CurrentRound);
 
     return NewInstanceId;
@@ -1729,10 +1437,9 @@ ACardDropActor* AMainGameMode::SpawnCardDrop(ECardID CardID, const FVector& Spaw
         Record->DropActor = CardActor;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Drop Instance=%d Card=%d Name=%s Actor=%s Location=%s Round=%d"),
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Drop Instance=%d Card=%d Actor=%s Location=%s Round=%d"),
         InstanceId,
         static_cast<int32>(CardID),
-        *CardDebug::ToString(CardID),
         *CardActor->GetName(),
         *SpawnLocation.ToString(),
         CurrentRound);
@@ -1866,12 +1573,11 @@ void AMainGameMode::EnsureThreeCardsForCardGame()
             }
         }
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card EnsureThree Player=%s Count=%d Max=%d Round=%d Cards=[%s]"),
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card EnsureThree Player=%s Count=%d Max=%d Round=%d"),
             *PS->GetPlayerName(),
             PS->OwnedCards.Num(),
             TargetCardCount,
-            CurrentRound,
-            *GetOwnedCardsDebugString(PS));
+            CurrentRound);
         TargetCount++;
     }
 

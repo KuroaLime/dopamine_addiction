@@ -122,7 +122,7 @@ public:
 	EUpgradeType GetStaticUpgradeTypeFromIndex(int32 Index);
 	UFUNCTION()
 	int32 GetStaticUpgradeCost(EUpgradeType Type, int32 CurrentLevel);
-	// ÇöÀç ·¹º§À» Á¶È¸ÇÏ´Â ÇïÆÛ
+	// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½È¸ï¿½Ï´ï¿½ ï¿½ï¿½ï¿½ï¿½
 	UFUNCTION()
 	int32 GetCurrentUpgradeLevel(class AMainPlayerState* PS, EUpgradeType Type);
 
@@ -137,6 +137,57 @@ public:
 
 	UFUNCTION(Client, Reliable)
 	void Client_SetUITimer(int32 time);
+
+	UFUNCTION(Client, Reliable)
+	void Client_ShowSeotdaResult(const FString& ResultText);
+
+UFUNCTION(Client, Reliable)
+void Client_UpdateSeotdaState(
+int32 Round,
+bool bBettingActive,
+const FString& CurrentTurnPlayerName,
+int32 Pot,
+int32 CurrentBet,
+int32 MyBetMoney,
+int32 NeedCall,
+bool bMyTurn,
+bool bMySubmitted,
+bool bMyFolded,
+bool bRoundResolved
+);
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+int32 SeotdaUiRound = 0;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+bool bSeotdaUiBettingActive = false;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+FString SeotdaUiCurrentTurnPlayerName;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+int32 SeotdaUiPot = 0;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+int32 SeotdaUiCurrentBet = 0;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+int32 SeotdaUiMyBetMoney = 0;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+int32 SeotdaUiNeedCall = 0;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+bool bSeotdaUiMyTurn = false;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+bool bSeotdaUiMySubmitted = false;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+bool bSeotdaUiMyFolded = false;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+bool bSeotdaUiRoundResolved = false;
 
 	
 };

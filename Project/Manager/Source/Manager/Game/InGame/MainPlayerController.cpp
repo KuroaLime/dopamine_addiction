@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/MainPlayerController.h"
+#include "Engine/Engine.h"
 #include "EnhancedInputComponent.h"
 #include "Game/InGame/Handler/UIHandler.h"
 #include "Game/InGame/Handler/InputHandler.h"
@@ -129,6 +130,12 @@ void AMainPlayerController::InitHandler()
 		{
 			Handler->RegisterComponent();
 			UIHandlerMap.Add(Pair.Key, Handler);
+			UE_LOG(LogTemp, Warning, TEXT("[%s] UIHandlerInit Phase=%d Class=%s Obj=%s Local=%d"),
+				HasAuthority() ? TEXT("SV") : TEXT("CL"),
+				static_cast<int32>(Pair.Key),
+				*GetNameSafe(Handler->GetClass()),
+				*GetNameSafe(Handler),
+				IsLocalPlayerController() ? 1 : 0);
 		}
 	}
 }
@@ -169,6 +176,27 @@ void AMainPlayerController::Server_SwitchMode_Implementation(EGamePhase NewPhase
 
 void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
 {
+	const bool bHasUIForPhase = UIHandlerMap.Contains(NewPhase);
+	const bool bHasInputForPhase = InputHandlerMap.Contains(NewPhase);
+
+	UE_LOG(LogTemp, Warning, TEXT("[%s] ApplySwitchMode NewPhase=%d HasUI=%d HasInput=%d UIHandlers=%d InputHandlers=%d Local=%d"),
+		HasAuthority() ? TEXT("SV") : TEXT("CL"),
+		static_cast<int32>(NewPhase),
+		bHasUIForPhase ? 1 : 0,
+		bHasInputForPhase ? 1 : 0,
+		UIHandlerMap.Num(),
+		InputHandlerMap.Num(),
+		IsLocalPlayerController() ? 1 : 0);
+
+	if (GEngine && IsLocalPlayerController())
+	{
+		GEngine->AddOnScreenDebugMessage(
+			2026062402,
+			5.0f,
+			FColor::Yellow,
+			FString::Printf(TEXT("[DEBUG] ApplySwitchMode phase=%d HasUI=%d"), static_cast<int32>(NewPhase), bHasUIForPhase ? 1 : 0)
+		);
+	}
 	for (auto& Pair : InputHandlerMap)
 	{
 		if (Pair.Value)
@@ -528,4 +556,60 @@ void AMainPlayerController::Server_RequestSeotdaBetAction_Implementation(EBettin
     }
 
     GM->SubmitSeotdaBetAction(this, Action);
+}
+void AMainPlayerController::Client_ShowSeotdaResult_Implementation(const FString& ResultText)
+{
+UE_LOG(LogTemp, Warning, TEXT("[CL] Seotda Result: %s"), *ResultText);
+
+if (GEngine)
+{
+GEngine->AddOnScreenDebugMessage(
+2026062501,
+8.0f,
+FColor::Green,
+ResultText
+);
+}
+}
+
+void AMainPlayerController::Client_UpdateSeotdaState_Implementation(
+int32 Round,
+bool bBettingActive,
+const FString& CurrentTurnPlayerName,
+int32 Pot,
+int32 CurrentBet,
+int32 MyBetMoney,
+int32 NeedCall,
+bool bMyTurn,
+bool bMySubmitted,
+bool bMyFolded,
+bool bRoundResolved
+)
+{
+SeotdaUiRound = Round;
+bSeotdaUiBettingActive = bBettingActive;
+SeotdaUiCurrentTurnPlayerName = CurrentTurnPlayerName;
+SeotdaUiPot = Pot;
+SeotdaUiCurrentBet = CurrentBet;
+SeotdaUiMyBetMoney = MyBetMoney;
+SeotdaUiNeedCall = NeedCall;
+bSeotdaUiMyTurn = bMyTurn;
+bSeotdaUiMySubmitted = bMySubmitted;
+bSeotdaUiMyFolded = bMyFolded;
+bSeotdaUiRoundResolved = bRoundResolved;
+
+UE_LOG(LogTemp, Warning,
+TEXT("[CL] SeotdaState Round=%d Betting=%d Turn=%s Pot=%d CurrentBet=%d MyBet=%d NeedCall=%d MyTurn=%d Submitted=%d Folded=%d Resolved=%d"),
+SeotdaUiRound,
+bSeotdaUiBettingActive ? 1 : 0,
+*SeotdaUiCurrentTurnPlayerName,
+SeotdaUiPot,
+SeotdaUiCurrentBet,
+SeotdaUiMyBetMoney,
+SeotdaUiNeedCall,
+bSeotdaUiMyTurn ? 1 : 0,
+bSeotdaUiMySubmitted ? 1 : 0,
+bSeotdaUiMyFolded ? 1 : 0,
+bSeotdaUiRoundResolved ? 1 : 0
+);
 }

@@ -4,7 +4,6 @@
 #include "Game/InGame/MainPlayerState.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "Net/UnrealNetwork.h"
-#include "Engine/Engine.h"
 
 AMainPlayerState::AMainPlayerState()
 {
@@ -80,22 +79,6 @@ void AMainPlayerState::SetWeaponID(EWeaponType WeaponID)
 TArray<FOwnedCardInfo> AMainPlayerState::GetOwnedCards() const
 {
 	return OwnedCards;
-}
-
-FString AMainPlayerState::GetOwnedCardsDebugString() const
-{
-    TArray<FString> Parts;
-
-    for (const FOwnedCardInfo& CardInfo : OwnedCards)
-    {
-        Parts.Add(FString::Printf(
-            TEXT("#%d:%s"),
-            CardInfo.CardInstanceId,
-            *CardDebug::ToString(CardInfo.CardID)
-        ));
-    }
-
-    return Parts.Num() > 0 ? FString::Join(Parts, TEXT(", ")) : TEXT("Empty");
 }
 
 bool AMainPlayerState::HasOwnedCardInstance(int32 CardInstanceId) const
@@ -217,33 +200,9 @@ void AMainPlayerState::OnRep_CurPlayerData(FCurPlayerData OldCurPlayerData)
 
 void AMainPlayerState::OnRep_OwnedCards()
 {
-    OnOwnedCardsChangedNative.Broadcast(OwnedCards);
-
-    const FString CardList = GetOwnedCardsDebugString();
-
-    UE_LOG(LogTemp, Warning, TEXT("[CL] OwnedCardsChanged Player=%s Count=%d Cards=[%s]"),
-        *GetPlayerName(),
-        OwnedCards.Num(),
-        *CardList);
-
-    if (GEngine)
-    {
-        constexpr int32 MyCardsDebugMessageKey = 20260623;
-
-        const FString Message = FString::Printf(
-            TEXT("[MY CARDS %d/3]\n%s"),
-            OwnedCards.Num(),
-            *CardList
-        );
-
-        GEngine->AddOnScreenDebugMessage(
-            MyCardsDebugMessageKey,
-            9999.0f,
-            FColor::Cyan,
-            Message
-        );
-    }
+	OnOwnedCardsChangedNative.Broadcast(OwnedCards);
 }
+
 void AMainPlayerState::OnRep_PublicCardCount()
 {
 }
@@ -316,7 +275,7 @@ void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 	ForceNetUpdate();
 }
 
-//ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï¸ï¿½ ï¿½Éµï¿½
+//¿©±â Àû¿ë°úÁ¤ ¼öÁ¤ÇÏ¸é µÉµí
 void AMainPlayerState::ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledStats)
 {
 	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("ApplyCardUpgrade")));
