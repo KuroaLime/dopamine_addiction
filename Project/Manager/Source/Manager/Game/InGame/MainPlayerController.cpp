@@ -407,6 +407,22 @@ void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 Sele
 
 	CurrentUpgradeOptions.Empty();
 }
+
+bool AMainPlayerController::Server_RequestDiscardCard_Validate(int32 CardInstanceId)
+{
+	return true;
+}
+
+void AMainPlayerController::Server_RequestDiscardCard_Implementation(int32 CardInstanceId)
+{
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	if (PS)
+	{
+		FOwnedCardInfo RemovedCard;
+		PS->RemoveOwnedCardByInstanceId(CardInstanceId, RemovedCard);
+	}
+}
+
 EUpgradeType AMainPlayerController::GetStaticUpgradeTypeFromIndex(int32 Index)
 {
 	// UI에 고정 능력치 상승 버튼들이 배치된 순서대로 대응시킵니다.
@@ -648,3 +664,4 @@ void AMainPlayerController::ReturnToLobbyFromMatchEnd()
 
     UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/Lobby/System/Lobby_Stage")), true);
 }
+
