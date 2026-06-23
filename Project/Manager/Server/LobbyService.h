@@ -29,6 +29,8 @@ public:
 
     void OnPacket(ClientContext* c, uint16_t type, const char* payload, uint16_t payloadLen);
 
+    void HandleDediMatchEndNotify(ClientContext* c, const char* payload, uint16_t payloadLen);
+
 
 private:
     // =======================================================================

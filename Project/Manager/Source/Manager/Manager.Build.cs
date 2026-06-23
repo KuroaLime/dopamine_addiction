@@ -23,7 +23,9 @@ public class Manager : ModuleRules
 			"SlateCore",
             "GameplayTags",
             "AnimGraphRuntime",
-			"Niagara"
+			"Niagara",
+            "Sockets",
+            "Networking"
         });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

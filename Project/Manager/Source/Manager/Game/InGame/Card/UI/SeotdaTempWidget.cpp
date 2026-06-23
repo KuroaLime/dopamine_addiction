@@ -21,6 +21,10 @@ void USeotdaTempWidget::NativeConstruct()
 Super::NativeConstruct();
 
 BindButtonEvents();
+    if (LobbyButton)
+    {
+        LobbyButton->OnClicked.AddDynamic(this, &USeotdaTempWidget::OnLobbyClicked);
+    }
 RefreshFromPlayerState();
 
 UE_LOG(LogTemp, Warning, TEXT("[CL] SeotdaTempWidget NativeConstruct Root=%s RootBox=%s"),
@@ -98,6 +102,12 @@ BetRow->AddChildToHorizontalBox(DieButton);
 
 ResultText = MakeText(TEXT("ResultText"), TEXT("Result: None"), 16);
 RootBox->AddChildToVerticalBox(ResultText);
+    LobbyButton = MakeButton(TEXT("LobbyButton"), LobbyText, TEXT("로비로"));
+    if (LobbyButton)
+    {
+        LobbyButton->SetVisibility(ESlateVisibility::Collapsed);
+        RootBox->AddChildToVerticalBox(LobbyButton);
+    }
 
 SetBetButtonsEnabled(false);
 
@@ -267,7 +277,19 @@ StatusText->SetText(FText::FromString(TEXT("Status: Missing owning player contro
 return;
 }
 
-AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+    if (LobbyButton)
+    {
+        const bool bShowLobbyButton = PC->bSeotdaUiMatchEnded;
+        LobbyButton->SetVisibility(bShowLobbyButton ? ESlateVisibility::Visible : ESlateVisibility::Collapsed);
+        LobbyButton->SetIsEnabled(bShowLobbyButton);
+    }
+
+    if (ResultText && PC->bSeotdaUiMatchEnded && !PC->SeotdaUiLastResultText.IsEmpty())
+    {
+        ResultText->SetText(FText::FromString(PC->SeotdaUiLastResultText));
+    }
+
+    AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
 if (!PS)
 {
 if (StatusText)
@@ -587,4 +609,15 @@ RequestBetAction(EBettingAction::Half);
 void USeotdaTempWidget::OnDieClicked()
 {
 RequestBetAction(EBettingAction::Die);
+}
+
+void USeotdaTempWidget::OnLobbyClicked()
+{
+    AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
+    if (!PC)
+    {
+        return;
+    }
+
+    PC->ReturnToLobbyFromMatchEnd();
 }

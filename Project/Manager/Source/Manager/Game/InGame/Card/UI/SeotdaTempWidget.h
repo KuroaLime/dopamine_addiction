@@ -1,4 +1,4 @@
-﻿#pragma once
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Blueprint/UserWidget.h"
@@ -82,6 +82,9 @@ TObjectPtr<UButton> HalfButton = nullptr;
 UPROPERTY()
 TObjectPtr<UButton> DieButton = nullptr;
 
+    UPROPERTY()
+    TObjectPtr<UButton> LobbyButton = nullptr;
+
 UPROPERTY()
 TObjectPtr<UTextBlock> SubmitText = nullptr;
 
@@ -96,6 +99,9 @@ TObjectPtr<UTextBlock> HalfText = nullptr;
 
 UPROPERTY()
 TObjectPtr<UTextBlock> DieText = nullptr;
+
+    UPROPERTY()
+    TObjectPtr<UTextBlock> LobbyText = nullptr;
 
 bool bSelected0 = false;
 bool bSelected1 = false;
@@ -148,4 +154,7 @@ void OnHalfClicked();
 
 UFUNCTION()
 void OnDieClicked();
+
+    UFUNCTION()
+    void OnLobbyClicked();
 };

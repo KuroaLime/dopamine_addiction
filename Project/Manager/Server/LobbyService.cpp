@@ -472,7 +472,8 @@ void LobbyService::OnPacket(ClientContext* c, uint16_t type, const char* payload
     bool allowedWithoutLogin =
         (pktType == PacketType::C2S_LOGIN_REQ) ||
         (pktType == PacketType::C2S_REGISTER_REQ) ||
-        (pktType == PacketType::C2S_PING);
+        (pktType == PacketType::C2S_PING) ||
+        (pktType == PacketType::D2L_MATCH_END_NOTIFY);
 
     bool isLoggedIn = false;
 
@@ -496,6 +497,10 @@ void LobbyService::OnPacket(ClientContext* c, uint16_t type, const char* payload
 
     switch (pktType)
     {
+    case PacketType::D2L_MATCH_END_NOTIFY:
+        HandleDediMatchEndNotify(c, payload, payloadLen);
+        break;
+
     case PacketType::C2S_LOGIN_REQ:
         HandleLoginReq(c, payload, payloadLen);
         break;
@@ -1638,4 +1643,91 @@ bool LobbyService::ReadU32(const char* payload, uint16_t payloadLen, uint32_t& o
 
     outHost = ntohl(net);
     return true;
+}
+void LobbyService::HandleDediMatchEndNotify(ClientContext* c, const char* payload, uint16_t payloadLen)
+{
+    if (!payload || payloadLen < 5)
+    {
+        printf("[DEDI] MATCH_END_NOTIFY bad payload len=%u\n", payloadLen);
+        return;
+    }
+
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(payload);
+
+    uint32_t roomId = 0;
+    roomId |= static_cast<uint32_t>(p[0]) << 24;
+    roomId |= static_cast<uint32_t>(p[1]) << 16;
+    roomId |= static_cast<uint32_t>(p[2]) << 8;
+    roomId |= static_cast<uint32_t>(p[3]);
+
+    uint16_t offset = 4;
+
+    uint8_t winnerLen = p[offset++];
+    if (offset + winnerLen > payloadLen)
+    {
+        printf("[DEDI] MATCH_END_NOTIFY bad winner roomId=%u len=%u payloadLen=%u\n",
+            roomId, winnerLen, payloadLen);
+        return;
+    }
+
+    std::string winner(payload + offset, payload + offset + winnerLen);
+    offset += winnerLen;
+
+    std::string summary;
+    if (offset < payloadLen)
+    {
+        uint8_t summaryLen = p[offset++];
+
+        if (offset + summaryLen <= payloadLen)
+        {
+            summary.assign(payload + offset, payload + offset + summaryLen);
+            offset += summaryLen;
+        }
+    }
+
+    bool shouldBroadcast = false;
+    uint16_t oldPort = 0;
+    size_t memberCount = 0;
+
+    AcquireSRWLockExclusive(&m_lock);
+
+    auto itRoom = m_rooms.find(roomId);
+    if (itRoom != m_rooms.end())
+    {
+        Room& r = itRoom->second;
+
+        oldPort = r.dedicatedPort;
+        memberCount = r.members.size();
+
+        if (r.dedicatedPort != 0)
+        {
+            FreePort(r.dedicatedPort);
+            r.dedicatedPort = 0;
+        }
+
+        r.state = RoomState::WAITING;
+
+        for (uint32_t sid : r.members)
+        {
+            r.readyStatus[sid] = (sid == r.hostId);
+        }
+
+        shouldBroadcast = true;
+    }
+
+    ReleaseSRWLockExclusive(&m_lock);
+
+    printf("[DEDI] MATCH_END_NOTIFY roomId=%u winner=%s summary=%s oldPort=%u members=%zu result=%s\n",
+        roomId,
+        winner.c_str(),
+        summary.c_str(),
+        oldPort,
+        memberCount,
+        shouldBroadcast ? "OK" : "ROOM_NOT_FOUND");
+
+    if (shouldBroadcast)
+    {
+        BroadcastRoomList();
+        BroadcastRoomMemberList(roomId);
+    }
 }

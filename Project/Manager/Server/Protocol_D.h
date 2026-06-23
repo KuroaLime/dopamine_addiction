@@ -32,6 +32,8 @@ enum class PacketType : uint16_t
     S2C_ROOM_START_RES = 151,
 
     S2C_GAME_START = 200,
+
+    D2L_MATCH_END_NOTIFY = 300,
 };
 
 struct PacketHeader

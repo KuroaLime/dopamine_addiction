@@ -141,6 +141,9 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_ShowSeotdaResult(const FString& ResultText);
 
+    UFUNCTION(BlueprintCallable, Category = "Seotda")
+    void ReturnToLobbyFromMatchEnd();
+
 UFUNCTION(Client, Reliable)
 void Client_UpdateSeotdaState(
 int32 Round,
@@ -188,6 +191,12 @@ bool bSeotdaUiMyFolded = false;
 
 UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
 bool bSeotdaUiRoundResolved = false;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+    bool bSeotdaUiMatchEnded = false;
+
+    UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+    FString SeotdaUiLastResultText;
 
 	
 };

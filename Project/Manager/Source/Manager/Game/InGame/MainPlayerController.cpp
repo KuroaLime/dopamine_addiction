@@ -561,6 +561,9 @@ void AMainPlayerController::Client_ShowSeotdaResult_Implementation(const FString
 {
 UE_LOG(LogTemp, Warning, TEXT("[CL] Seotda Result: %s"), *ResultText);
 
+    SeotdaUiLastResultText = ResultText;
+    bSeotdaUiMatchEnded = ResultText.Contains(TEXT("[MATCH END]"));
+
 if (GEngine)
 {
 GEngine->AddOnScreenDebugMessage(
@@ -612,4 +615,19 @@ bSeotdaUiMySubmitted ? 1 : 0,
 bSeotdaUiMyFolded ? 1 : 0,
 bSeotdaUiRoundResolved ? 1 : 0
 );
+}
+
+void AMainPlayerController::ReturnToLobbyFromMatchEnd()
+{
+    if (!IsLocalController())
+    {
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[CL] ReturnToLobbyFromMatchEnd"));
+
+    bSeotdaUiMatchEnded = false;
+    SeotdaUiLastResultText.Empty();
+
+    ConsoleCommand(TEXT("open /Game/Lobby/Lobby_Stage"));
 }

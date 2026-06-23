@@ -19,7 +19,7 @@
 #include "LobbyService.h"
 
 // ===========================================================================
-// µð¹ö±ë¿ë Ãâ·Â
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½
 // ===========================================================================
 const char* PacketTypeToString(uint16_t type) {
     switch (static_cast<PacketType>(type)) {
@@ -51,12 +51,13 @@ const char* PacketTypeToString(uint16_t type) {
     case PacketType::S2C_ROOM_START_RES:  return "S2C_ROOM_START_RES";
 
     case PacketType::S2C_GAME_START:      return "S2C_GAME_START";
+    case PacketType::D2L_MATCH_END_NOTIFY: return "D2L_MATCH_END_NOTIFY";
     default:                              return "UNKNOWN_PACKET";
     }
 }
 
 // ===========================================================================
-// Àü¿ª ¼³Á¤ ¹× º¯¼ö
+// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 // ===========================================================================
 static const char* LISTEN_IP = "0.0.0.0";
 static const uint16_t LISTEN_PORT = 9000;
@@ -69,7 +70,7 @@ static std::atomic<bool> g_running{ true };
 enum class IOType : uint8_t { RECV, SEND };
 
 // ===========================================================================
-// µ¥ÀÌÅÍ ±¸Á¶Ã¼
+// ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ã¼
 // ===========================================================================
 struct PerIoContext {
     OVERLAPPED ol{};
@@ -77,7 +78,7 @@ struct PerIoContext {
     IOType type = IOType::RECV;
     char buffer[RECV_BUF_SIZE]{};
 
-    // Send¿ë ¹öÆÛ
+    // Sendï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     std::vector<char> dynBuffer;
     size_t dynOffset = 0;
 
@@ -97,10 +98,10 @@ struct ClientContext {
     std::atomic<long> ioRef{ 0 };
     std::atomic<bool> closing{ false };
 
-    // ¼ö½Å ´©Àû ¹öÆÛ (TCP °æ°è Ã³¸®¿ë)
+    // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ (TCP ï¿½ï¿½ï¿½ Ã³ï¿½ï¿½ï¿½ï¿½)
     std::vector<char> streamBuf;
 
-    // ¼Û½Å Å¥
+    // ï¿½Û½ï¿½ Å¥
     SRWLOCK sendLock{};
     std::deque<std::vector<char>> sendQueue;
     bool sendInFlight = false;
@@ -113,7 +114,7 @@ struct ClientContext {
 };
 
 // ===========================================================================
-// ±Û·Î¹ú °´Ã¼ ¹× ÇïÆÛ ÇÔ¼ö
+// ï¿½Û·Î¹ï¿½ ï¿½ï¿½Ã¼ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ô¼ï¿½
 // ===========================================================================
 void SendPacket(ClientContext* c, uint16_t type, const void* payload, uint16_t payloadLen);
 
@@ -133,7 +134,7 @@ void ReleaseIO(ClientContext* c) {
 }
 
 // ===========================================================================
-// ¼Û½Å ·ÎÁ÷
+// ï¿½Û½ï¿½ ï¿½ï¿½ï¿½ï¿½
 // ===========================================================================
 void SendPacket(ClientContext* c, uint16_t type, const void* payload, uint16_t payloadLen) {
     const uint16_t totalSize = static_cast<uint16_t>(sizeof(PacketHeader) + payloadLen);
@@ -149,7 +150,7 @@ void SendPacket(ClientContext* c, uint16_t type, const void* payload, uint16_t p
         std::memcpy(pkt.data() + sizeof(hdr), payload, payloadLen);
     }
 
-    // µð¹ö±ë¿ë Ãâ·Â
+    // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½
     printf("[SEND] to=%d.%d.%d.%d type=%s(%u) payloadLen=%u totalSize=%u\n",
         c->addr.sin_addr.S_un.S_un_b.s_b1,
         c->addr.sin_addr.S_un.S_un_b.s_b2,
@@ -163,7 +164,7 @@ void SendPacket(ClientContext* c, uint16_t type, const void* payload, uint16_t p
     AcquireSRWLockExclusive(&c->sendLock);
     c->sendQueue.push_back(std::move(pkt));
 
-    // ÇöÀç ÁøÇà ÁßÀÎ Send°¡ ¾ø´Ù¸é ¹Ù·Î ½ÃÀÛ
+    // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ Sendï¿½ï¿½ ï¿½ï¿½ï¿½Ù¸ï¿½ ï¿½Ù·ï¿½ ï¿½ï¿½ï¿½ï¿½
     if (!c->sendInFlight) {
         c->sendInFlight = true;
 
@@ -212,7 +213,7 @@ void WorkerThread() {
         ClientContext* client = reinterpret_cast<ClientContext*>(completionKey);
         PerIoContext* ioCtx = CONTAINING_RECORD(overlapped, PerIoContext, ol);
 
-        // [¿¡·¯ ¹× Á¾·á Ã³¸®]
+        // [ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ Ã³ï¿½ï¿½]
         if (!ret || (bytesTransferred == 0 && ioCtx->type == IOType::RECV)) {
             if (!client->closing.exchange(true)) {
                 g_lobby.OnClientDisconnected(client);
@@ -223,14 +224,14 @@ void WorkerThread() {
             continue;
         }
 
-        // [¼ö½Å Ã³¸®]
+        // [ï¿½ï¿½ï¿½ï¿½ Ã³ï¿½ï¿½]
         if (ioCtx->type == IOType::RECV) {
             bool closeClient = false;
 
-            // 1. ¹ÞÀº µ¥ÀÌÅÍ¸¦ streamBuf¿¡ ´©Àû
+            // 1. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Í¸ï¿½ streamBufï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
             client->streamBuf.insert(client->streamBuf.end(), ioCtx->buffer, ioCtx->buffer + bytesTransferred);
 
-            // 2. ÆÐÅ¶ Çì´õ(4¹ÙÀÌÆ®)¸¦ ÀÐÀ» ¼ö ÀÖÀ» ¸¸Å­ µ¥ÀÌÅÍ°¡ ½×¿´´ÂÁö È®ÀÎ
+            // 2. ï¿½ï¿½Å¶ ï¿½ï¿½ï¿½(4ï¿½ï¿½ï¿½ï¿½Æ®)ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Å­ ï¿½ï¿½ï¿½ï¿½ï¿½Í°ï¿½ ï¿½×¿ï¿½ï¿½ï¿½ï¿½ï¿½ È®ï¿½ï¿½
             while (client->streamBuf.size() >= sizeof(PacketHeader)) {
                 PacketHeader hdr;
                 std::memcpy(&hdr, client->streamBuf.data(), sizeof(PacketHeader));
@@ -238,7 +239,7 @@ void WorkerThread() {
                 uint16_t totalSize = ntohs(hdr.size);
                 uint16_t type = ntohs(hdr.type);
 
-                // Çì´õ °ËÁõ
+                // ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
                 if (totalSize < sizeof(PacketHeader) || totalSize > PACKET_SIZE_MAX) {
                     if (!client->closing.exchange(true)) {
                         g_lobby.OnClientDisconnected(client);
@@ -248,7 +249,7 @@ void WorkerThread() {
                     break;
                 }
 
-                // 3. ÇÏ³ªÀÇ ¿ÂÀüÇÑ ÆÐÅ¶ÀÌ ´Ù µé¾î¿Ô´Ù¸é?
+                // 3. ï¿½Ï³ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Å¶ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½Ô´Ù¸ï¿½?
                 if (client->streamBuf.size() >= totalSize) {
                     uint16_t payloadLen = totalSize - static_cast<uint16_t>(sizeof(PacketHeader));
                     const char* payload = client->streamBuf.data() + sizeof(PacketHeader);
@@ -269,18 +270,18 @@ void WorkerThread() {
                         client->streamBuf.begin() + totalSize);
                 }
                 else {
-                    // ÆÐÅ¶ÀÌ ¾ÆÁ÷ ´ú ¿ÔÀ¸¸é ·çÇÁ Å»ÃâÇØ¼­ ´õ ¹ÞÀ½
+                    // ï¿½ï¿½Å¶ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ Å»ï¿½ï¿½ï¿½Ø¼ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
                     break;
                 }
             }
 
-            // ºñÁ¤»ó Çì´õ·Î Å¬¶ó¸¦ ´Ý¾Æ¾ß ÇÏ¸é, ÇöÀç I/O¸¸ Á¤¸®ÇÏ°í ´ÙÀ½ GQCS·Î ³Ñ¾î°¨
+            // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ Å¬ï¿½ï¿½ ï¿½Ý¾Æ¾ï¿½ ï¿½Ï¸ï¿½, ï¿½ï¿½ï¿½ï¿½ I/Oï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ï°ï¿½ ï¿½ï¿½ï¿½ï¿½ GQCSï¿½ï¿½ ï¿½Ñ¾î°¨
             if (closeClient) {
                 ReleaseIO(client);
                 continue;
             }
 
-            // 4. ´ÙÀ½ µ¥ÀÌÅÍ¸¦ ¹Þ±â À§ÇØ ´Ù½Ã Recv ¿äÃ»
+            // 4. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Í¸ï¿½ ï¿½Þ±ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ù½ï¿½ Recv ï¿½ï¿½Ã»
             ioCtx->ResetRecv();
             DWORD flags = 0;
             if (WSARecv(client->sock, &ioCtx->wsaBuf, 1, NULL, &flags, &ioCtx->ol, NULL) == SOCKET_ERROR) {
@@ -293,11 +294,11 @@ void WorkerThread() {
                 }
             }
         }
-        // [¼Û½Å Ã³¸®]
+        // [ï¿½Û½ï¿½ Ã³ï¿½ï¿½]
         else if (ioCtx->type == IOType::SEND) {
             ioCtx->dynOffset += bytesTransferred;
 
-            // ¾ÆÁ÷ ´ú º¸³½ µ¥ÀÌÅÍ°¡ ÀÖ´Ù¸é (ºÎºÐ Àü¼Û ¹ß»ý)
+            // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Í°ï¿½ ï¿½Ö´Ù¸ï¿½ (ï¿½Îºï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ß»ï¿½)
             if (ioCtx->dynOffset < ioCtx->dynBuffer.size()) {
                 ioCtx->wsaBuf.buf = ioCtx->dynBuffer.data() + ioCtx->dynOffset;
                 ioCtx->wsaBuf.len = (ULONG)(ioCtx->dynBuffer.size() - ioCtx->dynOffset);
@@ -313,7 +314,7 @@ void WorkerThread() {
                     }
                 }
             }
-            // ´Ù º¸³Â´Ù¸é Å¥¿¡¼­ ´ÙÀ½ ÆÐÅ¶ È®ÀÎ
+            // ï¿½ï¿½ ï¿½ï¿½ï¿½Â´Ù¸ï¿½ Å¥ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Å¶ È®ï¿½ï¿½
             else {
                 delete ioCtx;
 
@@ -356,7 +357,7 @@ int main() {
     g_iocp = CreateIoCompletionPort(INVALID_HANDLE_VALUE, NULL, 0, 0);
     if (!g_iocp) return 1;
 
-    // ¿öÄ¿ ½º·¹µå 4°³ ½ÇÇà
+    // ï¿½ï¿½Ä¿ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 4ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
     std::vector<std::thread> workers;
     for (int i = 0; i < 4; ++i) workers.emplace_back(WorkerThread);
 
@@ -372,7 +373,7 @@ int main() {
 
     printf("[Server] Listening on %s:%d...\n", LISTEN_IP, LISTEN_PORT);
 
-    // Accept ·çÇÁ
+    // Accept ï¿½ï¿½ï¿½ï¿½
     while (g_running.load()) {
         sockaddr_in clientAddr{};
         int addrLen = sizeof(clientAddr);

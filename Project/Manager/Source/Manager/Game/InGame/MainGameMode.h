@@ -211,6 +211,7 @@ private:
     void StartResultPhase();
     void StartTransitionToBattlePhase();
     void StartGameEndPhase();
+    void NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary) const;
 
     void SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context);
     void ClearPlayerPawnMovementBases(const TCHAR* Context);

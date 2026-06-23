@@ -29,17 +29,37 @@ enum class EBulletType : uint8
 UENUM(BlueprintType)
 enum class ECardID : uint8
 {
-    None        = 0,
-    Jan_Gwang   = 1,    Jan_Pi  = 2,
-    Feb_Yul     = 3,    Feb_Ddi = 4,
-    Mar_Gwang   = 5,    Mar_Ddi = 6,
-    Apr_Yul     = 7,    Apr_Pi  = 8,
-    May_Yul     = 9,    May_Ddi = 10,
-    Jun_Yul     = 11,   Jun_Ddi = 12,
-    Jul_Yul     = 13,   Jul_Ddi = 14,
-    Aug_Gwang   = 15,   Aug_Yul = 16,
-    Sep_Yul     = 17,   Sep_Ddi = 18,
-    Oct_Gwang   = 19,   Oct_Yul = 20,
+    None = 0,
+
+    Jan_Gwang = 1,
+    Jan_HongDdi = 2,
+
+    Feb_Yul = 3,
+    Feb_HongDdi = 4,
+
+    Mar_Gwang = 5,
+    Mar_HongDdi = 6,
+
+    Apr_Yul = 7,
+    Apr_ChoDdi = 8,
+
+    May_Yul = 9,
+    May_ChoDdi = 10,
+
+    Jun_Yul = 11,
+    Jun_CheongDdi = 12,
+
+    Jul_Yul = 13,
+    Jul_ChoDdi = 14,
+
+    Aug_Gwang = 15,
+    Aug_Yul = 16,
+
+    Sep_Yul = 17,
+    Sep_CheongDdi = 18,
+
+    Oct_Yul = 19,
+    Oct_CheongDdi = 20,
 };
 
 UENUM(BlueprintType)
@@ -64,43 +84,42 @@ enum class ECardTypeData : uint8
 namespace CardDebug
 {
     static FORCEINLINE FString ToString(ECardID CardID)
+{
+    switch (CardID)
     {
-        switch (CardID)
-        {
-        case ECardID::Jan_Gwang: return TEXT("Jan_Gwang(M=1,T=Gwang)");
-        case ECardID::Jan_Pi:    return TEXT("Jan_Pi(M=1,T=Pi)");
+    case ECardID::Jan_Gwang:      return TEXT("Jan_Gwang");
+    case ECardID::Jan_HongDdi:    return TEXT("Jan_HongDdi");
 
-        case ECardID::Feb_Yul:   return TEXT("Feb_Yul(M=2,T=Yul)");
-        case ECardID::Feb_Ddi:   return TEXT("Feb_Ddi(M=2,T=Ddi)");
+    case ECardID::Feb_Yul:        return TEXT("Feb_Yul");
+    case ECardID::Feb_HongDdi:    return TEXT("Feb_HongDdi");
 
-        case ECardID::Mar_Gwang: return TEXT("Mar_Gwang(M=3,T=Gwang)");
-        case ECardID::Mar_Ddi:   return TEXT("Mar_Ddi(M=3,T=Ddi)");
+    case ECardID::Mar_Gwang:      return TEXT("Mar_Gwang");
+    case ECardID::Mar_HongDdi:    return TEXT("Mar_HongDdi");
 
-        case ECardID::Apr_Yul:   return TEXT("Apr_Yul(M=4,T=Yul)");
-        case ECardID::Apr_Pi:    return TEXT("Apr_Pi(M=4,T=Pi)");
+    case ECardID::Apr_Yul:        return TEXT("Apr_Yul");
+    case ECardID::Apr_ChoDdi:     return TEXT("Apr_ChoDdi");
 
-        case ECardID::May_Yul:   return TEXT("May_Yul(M=5,T=Yul)");
-        case ECardID::May_Ddi:   return TEXT("May_Ddi(M=5,T=Ddi)");
+    case ECardID::May_Yul:        return TEXT("May_Yul");
+    case ECardID::May_ChoDdi:     return TEXT("May_ChoDdi");
 
-        case ECardID::Jun_Yul:   return TEXT("Jun_Yul(M=6,T=Yul)");
-        case ECardID::Jun_Ddi:   return TEXT("Jun_Ddi(M=6,T=Ddi)");
+    case ECardID::Jun_Yul:        return TEXT("Jun_Yul");
+    case ECardID::Jun_CheongDdi:  return TEXT("Jun_CheongDdi");
 
-        case ECardID::Jul_Yul:   return TEXT("Jul_Yul(M=7,T=Yul)");
-        case ECardID::Jul_Ddi:   return TEXT("Jul_Ddi(M=7,T=Ddi)");
+    case ECardID::Jul_Yul:        return TEXT("Jul_Yul");
+    case ECardID::Jul_ChoDdi:     return TEXT("Jul_ChoDdi");
 
-        case ECardID::Aug_Gwang: return TEXT("Aug_Gwang(M=8,T=Gwang)");
-        case ECardID::Aug_Yul:   return TEXT("Aug_Yul(M=8,T=Yul)");
+    case ECardID::Aug_Gwang:      return TEXT("Aug_Gwang");
+    case ECardID::Aug_Yul:        return TEXT("Aug_Yul");
 
-        case ECardID::Sep_Yul:   return TEXT("Sep_Yul(M=9,T=Yul)");
-        case ECardID::Sep_Ddi:   return TEXT("Sep_Ddi(M=9,T=Ddi)");
+    case ECardID::Sep_Yul:        return TEXT("Sep_Yul");
+    case ECardID::Sep_CheongDdi:  return TEXT("Sep_CheongDdi");
 
-        case ECardID::Oct_Gwang: return TEXT("Oct_Gwang(M=10,T=Gwang)");
-        case ECardID::Oct_Yul:   return TEXT("Oct_Yul(M=10,T=Yul)");
+    case ECardID::Oct_Yul:        return TEXT("Oct_Yul");
+    case ECardID::Oct_CheongDdi:  return TEXT("Oct_CheongDdi");
 
-        default:
-            return TEXT("None");
-        }
+    default:                      return TEXT("None");
     }
+}
 }
 #define Max_UpgradeLevel 10
 UENUM(BlueprintType)

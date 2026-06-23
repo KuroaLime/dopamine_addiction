@@ -1,4 +1,8 @@
 #include "Game/InGame/MainGameMode.h"
+#include "Sockets.h"
+#include "SocketSubsystem.h"
+#include "IPAddress.h"
+#include "Containers/StringConv.h"
 
 #include "Game/InGame/PhaseStrategy.h"
 #include "Game/InGame/MainPlayerController.h"
@@ -383,7 +387,14 @@ void AMainGameMode::StartCardGamePhase()
     EnsureThreeCardsForCardGame();
     ResetSeotdaRoundStates();
     BroadcastSwitchMode(EGamePhase::Card);
-    StartTimedServerPhase(EDediServerPhase::CardGame, GetCardGameDuration());
+    ClearServerPhaseTimer();
+    CurrentServerPhase = EDediServerPhase::CardGame;
+    RemainingPhaseSeconds = 0;
+    SetServerRemainingTime(0);
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseStart Round=%d Phase=%s Duration=0 ManualCardGame=1"),
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
     BeginPhase(EGamePhase::Card);
 }
 
@@ -503,6 +514,8 @@ void AMainGameMode::StartGameEndPhase()
         MaxRoundCount,
         *WinnerName,
         *MoneySummary);
+
+    NotifyIocpMatchEnd(WinnerName, MoneySummary);
 
     const FString FinalResultText = FString::Printf(
         TEXT("[MATCH END]\nWinner=%s\nRound=%d/%d\nMoney=%s"),
@@ -847,6 +860,15 @@ State.BetMoney = 0;
 }
 
 bSeotdaBettingActive = true;
+
+    ClearServerPhaseTimer();
+    RemainingPhaseSeconds = 0;
+    SetServerRemainingTime(0);
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BettingTimerDisabled Round=%d Pot=%d CurrentBet=%d"),
+        CurrentRound,
+        SeotdaPot,
+        SeotdaCurrentBet);
 
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
@@ -1358,53 +1380,95 @@ AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedC
     Result.UsedCardInstanceIds.Add(FirstCard.CardInstanceId);
     Result.UsedCardInstanceIds.Add(SecondCard.CardInstanceId);
 
-    const int32 FirstMonth = GetSeotdaCardMonth(FirstCard.CardID);
-    const int32 SecondMonth = GetSeotdaCardMonth(SecondCard.CardID);
+    const ECardID FirstCardID = FirstCard.CardID;
+    const ECardID SecondCardID = SecondCard.CardID;
+
+    const int32 FirstMonth = GetSeotdaCardMonth(FirstCardID);
+    const int32 SecondMonth = GetSeotdaCardMonth(SecondCardID);
+
     if (FirstMonth <= 0 || SecondMonth <= 0)
     {
+        Result.Rank = -1;
+        Result.SubRank = 0;
         Result.Name = TEXT("Invalid");
         return Result;
     }
 
-    const bool bFirstGwang = IsSeotdaGwang(FirstCard.CardID);
-    const bool bSecondGwang = IsSeotdaGwang(SecondCard.CardID);
+    const bool bFirstGwang = IsSeotdaGwang(FirstCardID);
+    const bool bSecondGwang = IsSeotdaGwang(SecondCardID);
     const bool bBothGwang = bFirstGwang && bSecondGwang;
+
+    auto IsYulCard = [](ECardID CardID) -> bool
+    {
+        switch (CardID)
+        {
+        case ECardID::Feb_Yul:
+        case ECardID::Apr_Yul:
+        case ECardID::May_Yul:
+        case ECardID::Jun_Yul:
+        case ECardID::Jul_Yul:
+        case ECardID::Aug_Yul:
+        case ECardID::Sep_Yul:
+        case ECardID::Oct_Yul:
+            return true;
+        default:
+            return false;
+        }
+    };
+
+    const bool bBothYul = IsYulCard(FirstCardID) && IsYulCard(SecondCardID);
 
     if (bBothGwang && HasSeotdaMonths(FirstMonth, SecondMonth, 3, 8))
     {
-        Result.Rank = 10000;
+        Result.Rank = 12000;
         Result.SubRank = 38;
-        Result.Name = TEXT("38GwangDdang");
+        Result.Name = TEXT("SamPalGwangDdang");
         return Result;
     }
 
-    if (bBothGwang && HasSeotdaMonths(FirstMonth, SecondMonth, 1, 3))
+    if (bBothGwang)
     {
-        Result.Rank = 9000;
-        Result.SubRank = 13;
-        Result.Name = TEXT("13GwangDdang");
-        return Result;
-    }
-
-    if (bBothGwang && HasSeotdaMonths(FirstMonth, SecondMonth, 1, 8))
-    {
-        Result.Rank = 9000;
-        Result.SubRank = 18;
-        Result.Name = TEXT("18GwangDdang");
+        Result.Rank = 11000;
+        Result.SubRank = FirstMonth + SecondMonth;
+        Result.Name = TEXT("GwangDdang");
         return Result;
     }
 
     if (FirstMonth == SecondMonth)
     {
-        Result.Rank = 8000 + FirstMonth;
+        Result.Rank = 10000 + FirstMonth;
         Result.SubRank = FirstMonth;
         Result.Name = FString::Printf(TEXT("%dDdang"), FirstMonth);
         return Result;
     }
 
+    if (HasSeotdaMonths(FirstMonth, SecondMonth, 3, 7))
+    {
+        Result.Rank = 500;
+        Result.SubRank = 37;
+        Result.Name = TEXT("TtaengJabi");
+        return Result;
+    }
+
+    if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 7))
+    {
+        Result.Rank = 500;
+        Result.SubRank = 47;
+        Result.Name = TEXT("AmhaengEosa");
+        return Result;
+    }
+
+    if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 9))
+    {
+        Result.Rank = 400;
+        Result.SubRank = 49;
+        Result.Name = bBothYul ? TEXT("MeongteongguriGusa") : TEXT("Gusa");
+        return Result;
+    }
+
     if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 2))
     {
-        Result.Rank = 7000;
+        Result.Rank = 9000;
         Result.SubRank = 12;
         Result.Name = TEXT("Ali");
         return Result;
@@ -1412,7 +1476,7 @@ AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedC
 
     if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 4))
     {
-        Result.Rank = 6900;
+        Result.Rank = 8000;
         Result.SubRank = 14;
         Result.Name = TEXT("Doksa");
         return Result;
@@ -1420,7 +1484,7 @@ AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedC
 
     if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 9))
     {
-        Result.Rank = 6800;
+        Result.Rank = 7000;
         Result.SubRank = 19;
         Result.Name = TEXT("Guping");
         return Result;
@@ -1428,7 +1492,7 @@ AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedC
 
     if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 10))
     {
-        Result.Rank = 6700;
+        Result.Rank = 6000;
         Result.SubRank = 110;
         Result.Name = TEXT("Jangping");
         return Result;
@@ -1436,7 +1500,7 @@ AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedC
 
     if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 10))
     {
-        Result.Rank = 6600;
+        Result.Rank = 5000;
         Result.SubRank = 410;
         Result.Name = TEXT("Jangsa");
         return Result;
@@ -1444,26 +1508,27 @@ AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedC
 
     if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 6))
     {
-        Result.Rank = 6500;
+        Result.Rank = 4000;
         Result.SubRank = 46;
         Result.Name = TEXT("Seryuk");
         return Result;
     }
 
-    if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 9))
+    const int32 Gut = (FirstMonth + SecondMonth) % 10;
+
+    if (Gut == 9)
     {
-        Result.Rank = 100;
-        Result.SubRank = 49;
-        Result.Name = TEXT("Mangtong");
+        Result.Rank = 3000;
+        Result.SubRank = 9;
+        Result.Name = TEXT("GapOh");
         return Result;
     }
 
-    const int32 Gut = (FirstMonth + SecondMonth) % 10;
-    if (Gut == 9)
+    if (Gut == 0)
     {
-        Result.Rank = 6000;
-        Result.SubRank = 9;
-        Result.Name = TEXT("GapOh");
+        Result.Rank = 0;
+        Result.SubRank = 0;
+        Result.Name = TEXT("Mangtong");
         return Result;
     }
 
@@ -1478,35 +1543,45 @@ int32 AMainGameMode::GetSeotdaCardMonth(ECardID CardID) const
     switch (CardID)
     {
     case ECardID::Jan_Gwang:
-    case ECardID::Jan_Pi:
+    case ECardID::Jan_HongDdi:
         return 1;
+
     case ECardID::Feb_Yul:
-    case ECardID::Feb_Ddi:
+    case ECardID::Feb_HongDdi:
         return 2;
+
     case ECardID::Mar_Gwang:
-    case ECardID::Mar_Ddi:
+    case ECardID::Mar_HongDdi:
         return 3;
+
     case ECardID::Apr_Yul:
-    case ECardID::Apr_Pi:
+    case ECardID::Apr_ChoDdi:
         return 4;
+
     case ECardID::May_Yul:
-    case ECardID::May_Ddi:
+    case ECardID::May_ChoDdi:
         return 5;
+
     case ECardID::Jun_Yul:
-    case ECardID::Jun_Ddi:
+    case ECardID::Jun_CheongDdi:
         return 6;
+
     case ECardID::Jul_Yul:
-    case ECardID::Jul_Ddi:
+    case ECardID::Jul_ChoDdi:
         return 7;
+
     case ECardID::Aug_Gwang:
     case ECardID::Aug_Yul:
         return 8;
+
     case ECardID::Sep_Yul:
-    case ECardID::Sep_Ddi:
+    case ECardID::Sep_CheongDdi:
         return 9;
-    case ECardID::Oct_Gwang:
+
     case ECardID::Oct_Yul:
+    case ECardID::Oct_CheongDdi:
         return 10;
+
     default:
         return 0;
     }
@@ -1516,8 +1591,7 @@ bool AMainGameMode::IsSeotdaGwang(ECardID CardID) const
 {
     return CardID == ECardID::Jan_Gwang ||
         CardID == ECardID::Mar_Gwang ||
-        CardID == ECardID::Aug_Gwang ||
-        CardID == ECardID::Oct_Gwang;
+        CardID == ECardID::Aug_Gwang;
 }
 
 bool AMainGameMode::HasSeotdaMonths(int32 FirstMonth, int32 SecondMonth, int32 A, int32 B) const
@@ -1600,23 +1674,37 @@ bool AMainGameMode::TryPickupNearestCard(AMainPlayerController* RequestingPC)
 
 TArray<ECardID> AMainGameMode::BuildCardBundleIDs() const
 {
-    TArray<ECardID> CardIDs;
+    return TArray<ECardID>{
+        ECardID::Jan_Gwang,
+        ECardID::Jan_HongDdi,
 
-    if (AMainGameState* GS = GetGameState<AMainGameState>())
-    {
-        GS->CardDataMap.GetKeys(CardIDs);
-        CardIDs.Remove(ECardID::None);
-    }
+        ECardID::Feb_Yul,
+        ECardID::Feb_HongDdi,
 
-    if (CardIDs.Num() == 0)
-    {
-        for (int32 CardValue = static_cast<int32>(ECardID::Jan_Gwang); CardValue <= static_cast<int32>(ECardID::Oct_Yul); ++CardValue)
-        {
-            CardIDs.Add(static_cast<ECardID>(CardValue));
-        }
-    }
+        ECardID::Mar_Gwang,
+        ECardID::Mar_HongDdi,
 
-    return CardIDs;
+        ECardID::Apr_Yul,
+        ECardID::Apr_ChoDdi,
+
+        ECardID::May_Yul,
+        ECardID::May_ChoDdi,
+
+        ECardID::Jun_Yul,
+        ECardID::Jun_CheongDdi,
+
+        ECardID::Jul_Yul,
+        ECardID::Jul_ChoDdi,
+
+        ECardID::Aug_Gwang,
+        ECardID::Aug_Yul,
+
+        ECardID::Sep_Yul,
+        ECardID::Sep_CheongDdi,
+
+        ECardID::Oct_Yul,
+        ECardID::Oct_CheongDdi
+    };
 }
 
 void AMainGameMode::ShuffleCardIDs(TArray<ECardID>& CardIDs) const
@@ -2284,4 +2372,118 @@ const TCHAR* AMainGameMode::GetServerPhaseName(EDediServerPhase Phase) const
     default:
         return TEXT("None");
     }
+}
+
+namespace
+{
+    static void ManagerAppendU8(TArray<uint8>& Out, uint8 Value)
+    {
+        Out.Add(Value);
+    }
+
+    static void ManagerAppendU16BE(TArray<uint8>& Out, uint16 Value)
+    {
+        Out.Add(static_cast<uint8>((Value >> 8) & 0xFF));
+        Out.Add(static_cast<uint8>(Value & 0xFF));
+    }
+
+    static void ManagerAppendU32BE(TArray<uint8>& Out, uint32 Value)
+    {
+        Out.Add(static_cast<uint8>((Value >> 24) & 0xFF));
+        Out.Add(static_cast<uint8>((Value >> 16) & 0xFF));
+        Out.Add(static_cast<uint8>((Value >> 8) & 0xFF));
+        Out.Add(static_cast<uint8>(Value & 0xFF));
+    }
+
+    static void ManagerAppendUtf8Limited(TArray<uint8>& Out, const FString& Text, int32 MaxLen)
+    {
+        FTCHARToUTF8 Converted(*Text);
+
+        const int32 RawLen = Converted.Length();
+        const int32 UseLen = FMath::Clamp(RawLen, 0, MaxLen);
+
+        Out.Add(static_cast<uint8>(UseLen));
+
+        if (UseLen > 0)
+        {
+            const uint8* Data = reinterpret_cast<const uint8*>(Converted.Get());
+            Out.Append(Data, UseLen);
+        }
+    }
+}
+
+void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary) const
+{
+    constexpr uint16 MatchEndPacketType = 300;
+    constexpr TCHAR IocpHost[] = TEXT("127.0.0.1");
+    constexpr int32 IocpPort = 9000;
+
+    if (DediRoomId <= 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] IOCP MatchEndNotify skipped. Invalid RoomId=%d Winner=%s"),
+            DediRoomId,
+            *WinnerName);
+        return;
+    }
+
+    TArray<uint8> Payload;
+    ManagerAppendU32BE(Payload, static_cast<uint32>(DediRoomId));
+    ManagerAppendUtf8Limited(Payload, WinnerName, 96);
+    ManagerAppendUtf8Limited(Payload, MoneySummary, 180);
+
+    TArray<uint8> Packet;
+    const uint16 TotalSize = static_cast<uint16>(4 + Payload.Num());
+
+    ManagerAppendU16BE(Packet, TotalSize);
+    ManagerAppendU16BE(Packet, MatchEndPacketType);
+    Packet.Append(Payload);
+
+    ISocketSubsystem* SocketSubsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
+    if (!SocketSubsystem)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] IOCP MatchEndNotify failed. No SocketSubsystem RoomId=%d"), DediRoomId);
+        return;
+    }
+
+    TSharedRef<FInternetAddr> Addr = SocketSubsystem->CreateInternetAddr();
+
+    bool bIpValid = false;
+    Addr->SetIp(IocpHost, bIpValid);
+    Addr->SetPort(IocpPort);
+
+    if (!bIpValid)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] IOCP MatchEndNotify failed. Invalid IP=%s"), IocpHost);
+        return;
+    }
+
+    FSocket* Socket = SocketSubsystem->CreateSocket(NAME_Stream, TEXT("ManagerIocpMatchEndNotify"), false);
+    if (!Socket)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] IOCP MatchEndNotify failed. CreateSocket RoomId=%d"), DediRoomId);
+        return;
+    }
+
+    Socket->SetNonBlocking(false);
+
+    bool bConnected = Socket->Connect(*Addr);
+    int32 BytesSent = 0;
+    bool bSent = false;
+
+    if (bConnected)
+    {
+        bSent = Socket->Send(Packet.GetData(), Packet.Num(), BytesSent);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] IOCP MatchEndNotify RoomId=%d Winner=%s Money=%s Connected=%d Sent=%d Bytes=%d/%d"),
+        DediRoomId,
+        *WinnerName,
+        *MoneySummary,
+        bConnected ? 1 : 0,
+        bSent ? 1 : 0,
+        BytesSent,
+        Packet.Num());
+
+    Socket->Close();
+    SocketSubsystem->DestroySocket(Socket);
 }
