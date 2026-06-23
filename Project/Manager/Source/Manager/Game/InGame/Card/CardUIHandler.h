@@ -1,6 +1,6 @@
+// Fill out your copyright notice in the Description page of Project Settings.
 
-﻿#pragma once
-
+#pragma once
 
 #include "CoreMinimal.h"
 #include "Game/InGame/Handler/UIHandler.h"
@@ -11,24 +11,24 @@ class USeotdaTempWidget;
 UCLASS(Blueprintable, BlueprintType, meta = (BlueprintSpawnableComponent))
 class MANAGER_API UCardUIHandler : public UUIHandler
 {
-GENERATED_BODY()
+	GENERATED_BODY()
 
 public:
-UCardUIHandler();
+	UCardUIHandler();
 
-virtual void BeginPlay() override;
+	virtual void BeginPlay() override;
 
 public:
-virtual void UIActivate() override;
-virtual void UIDeactivate() override;
-virtual void SetUITimer(int32 time) override;
+	virtual void UIActivate() override;
+	virtual void UIDeactivate() override;
+	virtual void SetUITimer(int32 time) override;
 
 protected:
-virtual void CreateHUD() override;
-virtual void ShowHUD() override;
-virtual void HideHUD() override;
+	virtual void CreateHUD() override;
+	virtual void ShowHUD() override;
+	virtual void HideHUD() override;
 
 private:
-UPROPERTY(Transient)
-TObjectPtr<USeotdaTempWidget> SeotdaTempWidget = nullptr;
+	UPROPERTY(Transient)
+	TObjectPtr<USeotdaTempWidget> SeotdaTempWidget = nullptr;
 };

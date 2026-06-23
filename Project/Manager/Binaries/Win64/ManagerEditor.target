@@ -19,9 +19,8 @@
 		"CompatibleChangelist": 47537391,
 		"IsLicenseeVersion": 0,
 		"IsPromotedBuild": 0,
-		"BranchName": "UE5",
-		"BuildId": "696b5604-e624-4dd9-a115-e58624cbf2e8"
-
+		"BranchName": "++UE5+Release-5.7",
+		"BuildId": "47537391"
 	},
 	"BuildProducts": [
 		{

@@ -1,8 +1,8 @@
+// Fill out your copyright notice in the Description page of Project Settings.
 
-﻿#include "Game/InGame/Card/CardUIHandler.h"
-
+#include "Game/InGame/Card/CardUIHandler.h"
 #include "Blueprint/UserWidget.h"
-#include "Engine/Engine.h"
+#include "Engine/Engine.h" 
 #include "Game/InGame/Card/UI/SeotdaTempWidget.h"
 #include "GameFramework/PlayerController.h"
 
