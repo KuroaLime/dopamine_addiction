@@ -153,9 +153,6 @@ void UAbility_Fire::Server_ExecuteFire()
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(OwnerCharacter);
 
-
-
-
 	UWorld* World = OwnerCharacter->GetWorld();
 	bool bCamHit = World->LineTraceSingleByChannel(CamHit, CamStart, CamEnd, ECC_Pawn, Params);
 

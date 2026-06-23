@@ -5,11 +5,14 @@
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerState.h"
 #include "Game/InGame/Interface/PhasePlayerStateInterface.h"
+#include "Game/Protocol_Client/Protocol_InGame.h"
 #include "MainPlayerState.generated.h"
 
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnGoldChangedNative, float NewGold);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnHPChangedNative, float NewHP);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnOwnedCardsChangedNative, const TArray<FOwnedCardInfo>&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnPlayerDataChangedNative, const FPlayerData&);
+DECLARE_MULTICAST_DELEGATE_OneParam(FOnAccumulatedUpgradesChangedNative, const FAccumulatedUpgrades&);
 
 UCLASS()
 class MANAGER_API AMainPlayerState : public APlayerState,
@@ -38,8 +41,11 @@ protected:
 public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Weapon Data")
 	FWeaponData WeaponData;
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player Data")
+	UPROPERTY(ReplicatedUsing = OnRep_PlayerData, BlueprintReadOnly, Category = "Player Data")
 	FPlayerData PlayerData;
+
+	UFUNCTION()
+	void OnRep_PlayerData();
 
 	UPROPERTY(ReplicatedUsing = OnRep_CurPlayerData, BlueprintReadOnly, Category = "Current Player Data")
 	FCurPlayerData CurPlayerData;
@@ -47,27 +53,36 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_OwnedCards, BlueprintReadOnly, Category = "Card Data")
 	TArray<FOwnedCardInfo> OwnedCards;
 
-UPROPERTY(ReplicatedUsing = OnRep_PublicCardCount, BlueprintReadOnly, Category = "Card Data")
-int32 PublicCardCount = 0;
+	UPROPERTY(ReplicatedUsing = OnRep_PublicCardCount, BlueprintReadOnly, Category = "Card Data")
+	int32 PublicCardCount = 0;
 
-UFUNCTION(BlueprintPure, Category = "Card")
-TArray<FOwnedCardInfo> GetOwnedCards() const;
+	UFUNCTION(BlueprintPure, Category = "Card")
+	TArray<FOwnedCardInfo> GetOwnedCards() const;
 
-FString GetOwnedCardsDebugString() const;
+	FString GetOwnedCardsDebugString() const;
 
-UFUNCTION(BlueprintPure, Category = "Card")
-bool HasOwnedCardInstance(int32 CardInstanceId) const;
+	UFUNCTION(BlueprintPure, Category = "Card")
+	bool HasOwnedCardInstance(int32 CardInstanceId) const;
 
-void AddOwnedCard(const FOwnedCardInfo& CardInfo);
-bool RemoveOwnedCardByInstanceId(int32 CardInstanceId, FOwnedCardInfo& OutRemovedCard);
-void ClearOwnedCards();
-FOnOwnedCardsChangedNative OnOwnedCardsChangedNative;
-void AddGold(float Amount);
+	void AddOwnedCard(const FOwnedCardInfo& CardInfo);
+	bool RemoveOwnedCardByInstanceId(int32 CardInstanceId, FOwnedCardInfo& OutRemovedCard);
+	void ClearOwnedCards();
+	FOnOwnedCardsChangedNative OnOwnedCardsChangedNative;
+	void AddGold(float Amount);
 
 	FOnGoldChangedNative OnGoldChnageNative;
 
 	void ApplyDamage(float ActualDamage);
 	FOnHPChangedNative OnHPChnageNative;
+
+	FOnPlayerDataChangedNative OnPlayerDataChangedNative;
+	FOnAccumulatedUpgradesChangedNative OnAccumulatedUpgradesChangedNative;
+
+	UPROPERTY(ReplicatedUsing = OnRep_AccumulatedUpgrades, BlueprintReadOnly, Category = "Player Upgrades")
+	FAccumulatedUpgrades AccumulatedUpgrades;
+
+	UFUNCTION()
+	void OnRep_AccumulatedUpgrades();
 
 protected:
 	UFUNCTION()
@@ -78,9 +93,6 @@ protected:
 
 	UFUNCTION()
 	void OnRep_PublicCardCount();
-
-	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player Upgrades")
-	FAccumulatedUpgrades AccumulatedUpgrades;
 public:
 	UFUNCTION()
 	void Server_ApplyUpgrad_Implementation(EUpgradeType Type);
