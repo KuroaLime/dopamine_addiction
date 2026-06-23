@@ -7,7 +7,7 @@
 #include "Game/Protocol_Client/Protocol_InGame.h" // EWeaponType 정의 위치
 #include "MainAnimInstance.generated.h"
 
-class AManagerCharacter;
+class AMainCharacter;
 
 /**
  * AManagerCharacter의 데이터를 매 프레임 캐싱하여
@@ -33,7 +33,7 @@ public:
 protected:
 	/** 캐릭터 참조 (최초 1회 캐싱하여 매 프레임 Cast 방지) */
 	UPROPERTY(BlueprintReadOnly, Category = "Reference")
-	AManagerCharacter* OwningCharacter;
+	AMainCharacter* OwningCharacter;
 
 	//================ 이동(하체) ================
 	/** 속도 풀 벡터 — 점프/추락 판정용 Z 포함 (To Falling 컨듀잇에서 Velocity.Z 분기) */

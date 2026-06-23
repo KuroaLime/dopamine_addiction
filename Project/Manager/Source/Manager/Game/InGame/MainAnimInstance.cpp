@@ -2,7 +2,7 @@
 
 
 #include "Game/InGame/MainAnimInstance.h"
-#include "Game/InGame/ManagerCharacter.h"
+#include "Game/InGame/MainCharacter.h"
 #include "Game/InGame/MainPlayerState.h"
 #include "Default/Data/CharacterStateComponent.h"
 #include "Default/Ability/GAS/PFGASC.h"
@@ -37,14 +37,14 @@ void UMainAnimInstance::NativeInitializeAnimation()
 	Super::NativeInitializeAnimation();
 
 	// 무거운 Cast를 피하려고 최초 1회만 캐싱
-	OwningCharacter = Cast<AManagerCharacter>(TryGetPawnOwner());
+	OwningCharacter = Cast<AMainCharacter>(TryGetPawnOwner());
 }
 
 bool UMainAnimInstance::EnsureOwner()
 {
 	if (OwningCharacter == nullptr)
 	{
-		OwningCharacter = Cast<AManagerCharacter>(TryGetPawnOwner());
+		OwningCharacter = Cast<AMainCharacter>(TryGetPawnOwner());
 	}
 	return OwningCharacter != nullptr;
 }
