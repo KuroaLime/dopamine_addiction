@@ -536,6 +536,21 @@ void AMainGameMode::StartGameEndPhase()
             }
         }
     }
+
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().SetTimer(
+            MatchEndShutdownTimerHandle,
+            this,
+            &AMainGameMode::ShutdownDedicatedServerAfterMatchEnd,
+            10.0f,
+            false
+        );
+
+        UE_LOG(LogTemp, Warning, TEXT("[DS] MatchEndShutdownScheduled Delay=10.0 RoomId=%d Round=%d"),
+            DediRoomId,
+            CurrentRound);
+    }
 }
 
 
@@ -1111,20 +1126,44 @@ void AMainGameMode::ResolveSeotdaRoundResult(const TCHAR* Reason)
         return;
     }
 
+    for (int32 RedealAttempt = 0; RedealAttempt < 8 && ShouldForceSeotdaRedeal(); ++RedealAttempt)
+    {
+        if (!TryApplySeotdaRedealFromRemainingCards(Reason))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealStop Reason=NotEnoughRemainingCards Attempt=%d"), RedealAttempt);
+            break;
+        }
+    }
+
     FSeotdaPlayerRoundState* BestState = nullptr;
+    bool bTie = false;
 
     for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
     {
         FSeotdaPlayerRoundState& State = Pair.Value;
-        if (!State.bSubmitted || State.bFolded || !State.PlayerState.IsValid())
+
+        if (!State.bSubmitted || State.bFolded)
         {
             continue;
         }
 
-        if (!BestState || State.HandResult.Rank > BestState->HandResult.Rank ||
-            (State.HandResult.Rank == BestState->HandResult.Rank && State.HandResult.SubRank > BestState->HandResult.SubRank))
+        if (!BestState)
         {
             BestState = &State;
+            bTie = false;
+            continue;
+        }
+
+        const int32 CompareResult = CompareSeotdaHands(State.HandResult, BestState->HandResult);
+
+        if (CompareResult > 0)
+        {
+            BestState = &State;
+            bTie = false;
+        }
+        else if (CompareResult == 0)
+        {
+            bTie = true;
         }
     }
 
@@ -1138,28 +1177,10 @@ void AMainGameMode::ResolveSeotdaRoundResult(const TCHAR* Reason)
 
         bSeotdaBettingActive = false;
         bSeotdaRoundResolved = true;
-    BroadcastSeotdaState();
+        BroadcastSeotdaState();
 
         UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda ResultFailed %s"), *LastSeotdaRoundResultSummary);
         return;
-    }
-
-    bool bTie = false;
-
-    for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-    {
-        const FSeotdaPlayerRoundState& State = Pair.Value;
-        if (&State == BestState || !State.bSubmitted || State.bFolded)
-        {
-            continue;
-        }
-
-        if (State.HandResult.Rank == BestState->HandResult.Rank &&
-            State.HandResult.SubRank == BestState->HandResult.SubRank)
-        {
-            bTie = true;
-            break;
-        }
     }
 
     AMainPlayerState* WinnerPS = BestState->PlayerState.Get();
@@ -1447,6 +1468,7 @@ AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedC
         Result.Rank = 500;
         Result.SubRank = 37;
         Result.Name = TEXT("TtaengJabi");
+        Result.SpecialRule = ESeotdaSpecialRule::TtaengJabi;
         return Result;
     }
 
@@ -1455,6 +1477,7 @@ AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedC
         Result.Rank = 500;
         Result.SubRank = 47;
         Result.Name = TEXT("AmhaengEosa");
+        Result.SpecialRule = ESeotdaSpecialRule::AmhaengEosa;
         return Result;
     }
 
@@ -1463,6 +1486,8 @@ AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedC
         Result.Rank = 400;
         Result.SubRank = 49;
         Result.Name = bBothYul ? TEXT("MeongteongguriGusa") : TEXT("Gusa");
+        Result.SpecialRule = bBothYul ? ESeotdaSpecialRule::MeongteongguriGusa : ESeotdaSpecialRule::Gusa;
+        Result.bForcesRedeal = true;
         return Result;
     }
 
@@ -2486,4 +2511,228 @@ void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString&
 
     Socket->Close();
     SocketSubsystem->DestroySocket(Socket);
+}
+
+int32 AMainGameMode::CompareSeotdaHands(const FSeotdaHandResult& A, const FSeotdaHandResult& B) const
+{
+    auto IsSamPalGwangDdang = [](const FSeotdaHandResult& H) -> bool
+    {
+        return H.Rank == 12000;
+    };
+
+    auto IsGwangDdang = [](const FSeotdaHandResult& H) -> bool
+    {
+        return H.Rank == 11000;
+    };
+
+    auto IsNormalDdang = [](const FSeotdaHandResult& H) -> bool
+    {
+        return H.Rank >= 10001 && H.Rank <= 10010;
+    };
+
+    if (IsSamPalGwangDdang(A) || IsSamPalGwangDdang(B))
+    {
+        if (IsSamPalGwangDdang(A) && !IsSamPalGwangDdang(B)) return 1;
+        if (!IsSamPalGwangDdang(A) && IsSamPalGwangDdang(B)) return -1;
+    }
+
+    if (A.SpecialRule == ESeotdaSpecialRule::AmhaengEosa && IsGwangDdang(B))
+    {
+        return 1;
+    }
+
+    if (B.SpecialRule == ESeotdaSpecialRule::AmhaengEosa && IsGwangDdang(A))
+    {
+        return -1;
+    }
+
+    if (A.SpecialRule == ESeotdaSpecialRule::TtaengJabi && IsNormalDdang(B))
+    {
+        return 1;
+    }
+
+    if (B.SpecialRule == ESeotdaSpecialRule::TtaengJabi && IsNormalDdang(A))
+    {
+        return -1;
+    }
+
+    if (A.Rank != B.Rank)
+    {
+        return A.Rank > B.Rank ? 1 : -1;
+    }
+
+    if (A.SubRank != B.SubRank)
+    {
+        return A.SubRank > B.SubRank ? 1 : -1;
+    }
+
+    return 0;
+}
+
+bool AMainGameMode::ShouldForceSeotdaRedeal() const
+{
+    for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
+    {
+        const FSeotdaPlayerRoundState& State = Pair.Value;
+
+        if (!State.bSubmitted || State.bFolded)
+        {
+            continue;
+        }
+
+        if (State.HandResult.bForcesRedeal)
+        {
+            return true;
+        }
+    }
+
+    return false;
+}
+
+bool AMainGameMode::TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reason)
+{
+    if (!HasAuthority() || !GetWorld())
+    {
+        return false;
+    }
+
+    TArray<AMainPlayerState*> ActivePlayers;
+
+    for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
+    {
+        AMainPlayerState* PS = Pair.Key;
+        FSeotdaPlayerRoundState& State = Pair.Value;
+
+        if (!PS || !State.bSubmitted || State.bFolded)
+        {
+            continue;
+        }
+
+        ActivePlayers.Add(PS);
+    }
+
+    const int32 NeedCardCount = ActivePlayers.Num() * 2;
+    if (NeedCardCount <= 0)
+    {
+        return false;
+    }
+
+    TArray<int32> RemainingRecordIds;
+
+    for (const TPair<int32, FServerCardRecord>& Pair : ServerCardRecords)
+    {
+        const FServerCardRecord& Record = Pair.Value;
+
+        if (Record.CreatedRound == CurrentRound &&
+            Record.State == ECardRuntimeState::WorldDrop &&
+            Record.CardID != ECardID::None)
+        {
+            RemainingRecordIds.Add(Pair.Key);
+        }
+    }
+
+    for (int32 Index = RemainingRecordIds.Num() - 1; Index > 0; --Index)
+    {
+        const int32 SwapIndex = FMath::RandRange(0, Index);
+        RemainingRecordIds.Swap(Index, SwapIndex);
+    }
+
+    if (RemainingRecordIds.Num() < NeedCardCount)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealReject Reason=NotEnoughCards Need=%d Remain=%d Round=%d"),
+            NeedCardCount,
+            RemainingRecordIds.Num(),
+            CurrentRound);
+        return false;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealStart Reason=%s ActivePlayers=%d NeedCards=%d RemainCards=%d Round=%d Pot=%d"),
+        Reason ? Reason : TEXT("<NULL>"),
+        ActivePlayers.Num(),
+        NeedCardCount,
+        RemainingRecordIds.Num(),
+        CurrentRound,
+        SeotdaPot);
+
+    int32 DrawIndex = 0;
+
+    for (AMainPlayerState* PS : ActivePlayers)
+    {
+        if (!PS)
+        {
+            continue;
+        }
+
+        const int32 FirstRecordId = RemainingRecordIds[DrawIndex++];
+        const int32 SecondRecordId = RemainingRecordIds[DrawIndex++];
+
+        FServerCardRecord* FirstRecord = ServerCardRecords.Find(FirstRecordId);
+        FServerCardRecord* SecondRecord = ServerCardRecords.Find(SecondRecordId);
+
+        if (!FirstRecord || !SecondRecord)
+        {
+            continue;
+        }
+
+        FOwnedCardInfo FirstInfo;
+        FirstInfo.CardInstanceId = FirstRecordId;
+        FirstInfo.CardID = FirstRecord->CardID;
+
+        FOwnedCardInfo SecondInfo;
+        SecondInfo.CardInstanceId = SecondRecordId;
+        SecondInfo.CardID = SecondRecord->CardID;
+
+        FirstRecord->State = ECardRuntimeState::Used;
+        FirstRecord->OwnerPlayerState = PS;
+
+        SecondRecord->State = ECardRuntimeState::Used;
+        SecondRecord->OwnerPlayerState = PS;
+
+        if (FirstRecord->DropActor.IsValid())
+        {
+            FirstRecord->DropActor->Destroy();
+            FirstRecord->DropActor.Reset();
+        }
+
+        if (SecondRecord->DropActor.IsValid())
+        {
+            SecondRecord->DropActor->Destroy();
+            SecondRecord->DropActor.Reset();
+        }
+
+        FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
+        if (!State)
+        {
+            continue;
+        }
+
+        State->SelectedCardInstanceIds.Empty();
+        State->SelectedCardInstanceIds.Add(FirstRecordId);
+        State->SelectedCardInstanceIds.Add(SecondRecordId);
+        State->HandResult = EvaluateSeotdaHand(FirstInfo, SecondInfo);
+        State->bSubmitted = true;
+        State->bActedThisBetRound = true;
+
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealCard Player=%s Cards=%d:%s,%d:%s Combo=%s Rank=%d SubRank=%d"),
+            *PS->GetPlayerName(),
+            FirstRecordId,
+            *CardDebug::ToString(FirstInfo.CardID),
+            SecondRecordId,
+            *CardDebug::ToString(SecondInfo.CardID),
+            *State->HandResult.Name,
+            State->HandResult.Rank,
+            State->HandResult.SubRank);
+    }
+
+    return true;
+}
+
+void AMainGameMode::ShutdownDedicatedServerAfterMatchEnd()
+{
+    UE_LOG(LogTemp, Warning, TEXT("[DS] ShutdownDedicatedServerAfterMatchEnd RoomId=%d Round=%d Phase=%s"),
+        DediRoomId,
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+
+    FPlatformMisc::RequestExit(false);
 }

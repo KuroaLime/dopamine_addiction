@@ -624,10 +624,13 @@ void AMainPlayerController::ReturnToLobbyFromMatchEnd()
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[CL] ReturnToLobbyFromMatchEnd"));
+    UE_LOG(LogTemp, Warning, TEXT("[CL] ReturnToLobbyFromMatchEnd OpenLevel /Game/Lobby/System/Lobby_Stage"));
 
     bSeotdaUiMatchEnded = false;
     SeotdaUiLastResultText.Empty();
 
-    ConsoleCommand(TEXT("open /Game/Lobby/Lobby_Stage"));
+    bShowMouseCursor = true;
+    SetInputMode(FInputModeGameAndUI());
+
+    UGameplayStatics::OpenLevel(this, FName(TEXT("/Game/Lobby/System/Lobby_Stage")), true);
 }

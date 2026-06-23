@@ -150,6 +150,7 @@ protected:
 
 private:
     FTimerHandle PhaseTimerHandle;
+    FTimerHandle MatchEndShutdownTimerHandle;
     EDediServerPhase CurrentServerPhase = EDediServerPhase::None;
     bool bGameEndReached = false;
 
@@ -170,12 +171,23 @@ private:
     TArray<TObjectPtr<ACardDropActor>> ActiveCardDrops;
 
 
+    enum class ESeotdaSpecialRule : uint8
+    {
+        None = 0,
+        TtaengJabi,
+        Gusa,
+        MeongteongguriGusa,
+        AmhaengEosa
+    };
+
     struct FSeotdaHandResult
     {
         int32 Rank = 0;
         int32 SubRank = 0;
         FString Name;
         TArray<int32> UsedCardInstanceIds;
+        ESeotdaSpecialRule SpecialRule = ESeotdaSpecialRule::None;
+        bool bForcesRedeal = false;
     };
 
     struct FSeotdaPlayerRoundState
@@ -211,6 +223,7 @@ private:
     void StartResultPhase();
     void StartTransitionToBattlePhase();
     void StartGameEndPhase();
+    void ShutdownDedicatedServerAfterMatchEnd();
     void NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary) const;
 
     void SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context);
@@ -253,6 +266,9 @@ private:
     int32 GetSeotdaCardMonth(ECardID CardID) const;
     bool IsSeotdaGwang(ECardID CardID) const;
     bool HasSeotdaMonths(int32 FirstMonth, int32 SecondMonth, int32 A, int32 B) const;
+    int32 CompareSeotdaHands(const FSeotdaHandResult& A, const FSeotdaHandResult& B) const;
+    bool ShouldForceSeotdaRedeal() const;
+    bool TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reason);
 
     int32 GetReadyDuration() const;
     int32 GetBattleRoyaleDuration() const;
