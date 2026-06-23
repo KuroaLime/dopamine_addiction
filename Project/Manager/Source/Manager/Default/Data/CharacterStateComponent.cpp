@@ -73,7 +73,6 @@ float UCharacterStateComponent::GetAttack() {
 	return 10.0f;
 
 }
-
 float UCharacterStateComponent::GetHPRatio() {
 	float MaxHP = GetMaxHP();
 	if (MaxHP < KINDA_SMALL_NUMBER)

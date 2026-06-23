@@ -249,16 +249,6 @@ void AMainPlayerState::OnRep_PublicCardCount()
 {
 }
 
-void AMainPlayerState::OnRep_PlayerData()
-{
-	OnPlayerDataChangedNative.Broadcast(PlayerData);
-}
-
-void AMainPlayerState::OnRep_AccumulatedUpgrades()
-{
-	OnAccumulatedUpgradesChangedNative.Broadcast(AccumulatedUpgrades);
-}
-
 void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 {
 	if (!HasAuthority())
@@ -275,6 +265,7 @@ void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 		{
 			PlayerData.LvHealth++;
 			CurPlayerData.CurrentHP += 1;
+
 		}
 		break;
 	case EUpgradeType::Player_MoveSpeed:
@@ -287,6 +278,36 @@ void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 		if (PlayerData.LvHealthRegeneration < MaxUpgradeLevel)
 		{
 			PlayerData.LvHealthRegeneration++;
+		}
+		break;
+	case EUpgradeType::Weapon_Damage:
+		if (WeaponData.LvDamage < MaxUpgradeLevel)
+		{
+			WeaponData.LvDamage++;
+		}
+		break;
+	case EUpgradeType::Weapon_FireRate:
+		if (WeaponData.LvFireRate < MaxUpgradeLevel)
+		{
+			WeaponData.LvFireRate++;
+		}
+		break;
+	case EUpgradeType::Weapon_Range:
+		if (WeaponData.LvRange < MaxUpgradeLevel)
+		{
+			WeaponData.LvRange++;
+		}
+		break;
+	case EUpgradeType::Weapon_Magazine:
+		if (WeaponData.LvMagazineCapacity < MaxUpgradeLevel)
+		{
+			WeaponData.LvMagazineCapacity++;
+		}
+		break;
+	case EUpgradeType::Weapon_Reload:
+		if (WeaponData.LvReloadTime < MaxUpgradeLevel)
+		{
+			WeaponData.LvReloadTime++;
 		}
 		break;
 	default:

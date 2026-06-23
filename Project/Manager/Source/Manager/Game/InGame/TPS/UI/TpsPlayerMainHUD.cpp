@@ -4,24 +4,19 @@
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/CanvasPanelSlot.h"
-#include "Materials/MaterialInstanceDynamic.h"
+
 #include "Animation/WidgetAnimation.h"
 #include "Camera/CameraComponent.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
-#include "Game/InGame/MainPlayerState.h"      
-
-const FName UTpsPlayerMainHUD::HPRadialWipeParamName(TEXT("Radial_wipe"));
-const FName UTpsPlayerMainHUD::LvLinearWipeParamName(TEXT("Linear_wipe"));
+#include "Game/InGame/MainPlayerState.h"          // �߰�
 
 void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacterState)
 {
     CurrentCharacterState = NewCharacterState;
     NewCharacterState->OnHPChanged.AddUObject(this, &UTpsPlayerMainHUD::UpdateHPWidget);
-    NewCharacterState->OnLEVELChanged.AddUObject(this, &UTpsPlayerMainHUD::UpdateLevel);
 
     StaticUI();
     UpdateHPWidget();
-    UpdateLevel();
     bNeedPlayerStateBind = true;
     TryBindPlayerState();
 }
@@ -30,17 +25,7 @@ void UTpsPlayerMainHUD::NativeConstruct()
 {
     Super::NativeConstruct();
 
-    HP_Image = Cast<UImage>(GetWidgetFromName(TEXT("HP_Circle")));
-    if (HP_Image)
-    {
-        UMaterialInterface* BaseMaterial = HP_Image->GetDynamicMaterial();
-        HPCircleMID = Cast<UMaterialInstanceDynamic>(BaseMaterial);
-
-        if (HPCircleMID)
-        {
-            HPCircleMID->SetScalarParameterValue(HPRadialWipeParamName, 0.f);
-        }
-    }
+    HPProgressBar = Cast<UProgressBar>(GetWidgetFromName(TEXT("HP_Bar")));
     MaxHPTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("MaxHP_Text")));
     HPTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("HP_Text")));
 
@@ -49,28 +34,6 @@ void UTpsPlayerMainHUD::NativeConstruct()
     CardImage[0] = Cast<UImage>(GetWidgetFromName(TEXT("Card00")));
     CardImage[1] = Cast<UImage>(GetWidgetFromName(TEXT("Card01")));
     CardImage[2] = Cast<UImage>(GetWidgetFromName(TEXT("Card02")));
-
-    Lv_Image[0] = Cast<UImage>(GetWidgetFromName(TEXT("LvHealth")));
-    Lv_Image[1] = Cast<UImage>(GetWidgetFromName(TEXT("LvHealthRegen")));
-    Lv_Image[2] = Cast<UImage>(GetWidgetFromName(TEXT("LvMoveSpeed")));
-    Lv_Image[3] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponDamage")));
-    Lv_Image[4] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponFireRate")));
-    Lv_Image[5] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponRange")));
-    Lv_Image[6] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponMagazine")));
-    Lv_Image[7] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponReload")));
-    for (int32 i = 0; i < LvTotalNumber; ++i)
-    {
-        UMaterialInterface* BaseMaterial = Lv_Image[i]->GetDynamicMaterial();
-        LvLinearMID[i] = Cast<UMaterialInstanceDynamic>(BaseMaterial);
-
-        if (LvLinearMID[i])
-        {
-            LvLinearMID[i]->SetScalarParameterValue(LvLinearWipeParamName, 0.f);
-        }
-    }
-
-
-    Aim_Image = Cast<UImage>(GetWidgetFromName(TEXT("Aim_Icon")));
 
     TPS_Compass = Cast<UUserWidget>(GetWidgetFromName(TEXT("Compass")));
 
@@ -97,7 +60,7 @@ void UTpsPlayerMainHUD::UpdateHPWidget()
 {
     if (CurrentCharacterState.IsValid())
     {
-        if (HP_Image)      HPCircleMID->SetScalarParameterValue(HPRadialWipeParamName, CurrentCharacterState->GetHPRatio());
+        if (HPProgressBar) HPProgressBar->SetPercent(CurrentCharacterState->GetHPRatio());
         if (HPTxt)         HPTxt->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentHP()));
         if (MaxHPTxt)      MaxHPTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
     }
@@ -139,25 +102,21 @@ void UTpsPlayerMainHUD::OnOwnedCardsChanged(const TArray<FOwnedCardInfo>& NewCar
 
 void UTpsPlayerMainHUD::TryBindPlayerState()
 {
-    if (CachedPlayerState.IsValid()) return;
+    if (CachedPlayerState.IsValid()) return; // �̹� ��ϵ�
 
     APlayerController* PC = GetOwningPlayer();
     if (!PC) return;
 
     AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
-    if (!PS) return;
+    if (!PS) return; // ���� ���ø����̼� �� �� �� Tick���� ��õ�
 
     CachedPlayerState = PS;
     PS->OnOwnedCardsChangedNative.AddUObject(this, &UTpsPlayerMainHUD::OnOwnedCardsChanged);
 
-    // 플레이어 데이터, 누적 업그레이드 변경 감지
-    PS->OnPlayerDataChangedNative.AddUObject(this, &UTpsPlayerMainHUD::UpdateLevel);
-    PS->OnAccumulatedUpgradesChangedNative.AddUObject(this, &UTpsPlayerMainHUD::UpdateLevel);
-
     if (PS->OwnedCards.Num() > 0)
         OnOwnedCardsChanged(PS->OwnedCards);
 
-    bNeedPlayerStateBind = false;
+    bNeedPlayerStateBind = false; // ���� �� ��õ� �ߴ�
 }
 
 void UTpsPlayerMainHUD::TriggerCardFlip()
@@ -200,30 +159,6 @@ void UTpsPlayerMainHUD::UpdateWeaponCountWidget()
     {
         if (WEAPONMaxTxt)  WEAPONMaxTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
         if (WEAPONCountxt) WEAPONCountxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
-    }
-}
-
-void UTpsPlayerMainHUD::UpdateAim()
-{
-    if (Aim_Image) Aim_Image->SetBrushFromTexture(Aim_Images);
-}
-
-void UTpsPlayerMainHUD::UpdateLevel()
-{
-    if (CachedPlayerState.IsValid())
-    {
-        const FAccumulatedUpgrades& Upgrades = CachedPlayerState->GetAccumulatedUpgrades();
-
-        // 각 레벨 아이콘 업데이트
-        // 0: Health, 1: HealthRegen, 2: MoveSpeed, 3: WeaponDamage, 4: FireRate, 5: Range, 6: Magazine, 7: Reload
-        if (Lv_Image[0]) LvLinearMID[0]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvHealth + Upgrades.LvHealth) * 0.2f);
-        if (Lv_Image[1]) LvLinearMID[1]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvHealthRegeneration + Upgrades.LvHealthRegen) * 0.2f);
-        if (Lv_Image[2]) LvLinearMID[2]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvMovementSpeed + Upgrades.LvMoveSpeed) * 0.2f);
-        if (Lv_Image[3]) LvLinearMID[3]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponDamage * 0.2f);
-        if (Lv_Image[4]) LvLinearMID[4]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponFireRate * 0.2f);
-        if (Lv_Image[5]) LvLinearMID[5]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponRange * 0.2f);
-        if (Lv_Image[6]) LvLinearMID[6]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponMagazine * 0.2f);
-        if (Lv_Image[7]) LvLinearMID[7]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponReload * 0.2f);
     }
 }
 

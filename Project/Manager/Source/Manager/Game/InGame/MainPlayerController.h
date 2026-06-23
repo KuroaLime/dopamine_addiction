@@ -132,9 +132,6 @@ public:
 	UFUNCTION(Server, Reliable)
 	void Server_SelectStaticUpgradeOption(int32 SelectedIndex);
 
-	UFUNCTION(Server, Reliable, WithValidation)
-	void Server_RequestDiscardCard(int32 CardInstanceId);
-
 	UFUNCTION(Server, Reliable)
 	void Server_SetUITimer(int32 time);
 
@@ -201,4 +198,5 @@ bool bSeotdaUiRoundResolved = false;
 
     UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
     FString SeotdaUiLastResultText;
+	
 };

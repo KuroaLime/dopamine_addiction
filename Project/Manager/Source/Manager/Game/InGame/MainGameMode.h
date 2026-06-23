@@ -143,46 +143,6 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Bundle")
     float CardBundleDropJitterRatio = 0.1f;
 
-    // 맵에 배치한 TriggerBox/BoxActor 등에 이 Actor Tag를 붙이면
-    // 해당 액터의 Bounds 안에서 섬별 카드 드랍 위치를 뽑는다.
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    FName CardIslandDropZoneTag = TEXT("CardIslandDropZone");
-
-    // 테스트 맵처럼 BPP_MAP_Summer/Spring/Autumn/Winter PackedLevelActor를
-    // 임시 드랍 영역으로 자동 인식할지 여부.
-    // 실전에서는 TriggerBox DropZone을 쓰는 쪽이 더 안전하다.
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    bool bAutoDetectSeasonIslandActorsAsDropZones = false;
-
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    int32 CardIslandDropExpectedZoneCount = 4;
-
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    int32 CardIslandDropMaxAttemptsPerCard = 80;
-
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    float CardIslandGroundTraceHalfHeight = 5000.0f;
-
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    float CardIslandGroundOffsetZ = 25.0f;
-
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    float CardIslandMinCardDistance = 250.0f;
-
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    bool bProjectCardDropsToNavigation = true;
-
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    FVector CardIslandNavProjectExtent = FVector(200.0f, 200.0f, 500.0f);
-
-    // 이 각도보다 가파른 표면에는 카드를 놓지 않는다.
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    float CardIslandMaxGroundSlopeDegrees = 35.0f;
-
-    // 카드가 차지하는 대략적인 공간. 이 박스가 지형물/장애물과 겹치면 해당 위치는 버린다.
-    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    FVector CardIslandOverlapBoxExtent = FVector(80.0f, 80.0f, 60.0f);
-
     UPROPERTY()
     TMap<EGamePhase, TObjectPtr<UPhaseStrategy>> StrategyMap;
 
@@ -204,13 +164,6 @@ private:
         TWeakObjectPtr<AMainPlayerState> OwnerPlayerState;
         TWeakObjectPtr<ACardDropActor> DropActor;
         int32 CreatedRound = 0;
-    };
-
-    struct FCardIslandDropZone
-    {
-        TWeakObjectPtr<AActor> ZoneActor;
-        FBox Bounds;
-        FVector Center = FVector::ZeroVector;
     };
 
     int32 NextCardInstanceId = 1;
@@ -290,18 +243,6 @@ private:
     TArray<ECardID> BuildCardBundleIDs() const;
     void ShuffleCardIDs(TArray<ECardID>& CardIDs) const;
     FVector GetDistributedCardDropLocation(int32 Index, int32 TotalCount) const;
-
-    TArray<TArray<ECardID>> BuildBalancedIslandCardGroups() const;
-    int32 GetCardIslandBalanceValue(ECardID CardID) const;
-    int32 GetCardIslandGroupBalanceValue(const TArray<ECardID>& CardIDs) const;
-    TArray<FCardIslandDropZone> FindCardIslandDropZones() const;
-    bool IsSeasonIslandActorName(const FString& ActorName) const;
-    bool TryResolveIslandCardDropLocation(const FCardIslandDropZone& DropZone, const FVector2D& CandidateXY, const TArray<FVector>& ExistingIslandLocations, FVector& OutLocation) const;
-    bool IsCardIslandSurfaceWalkable(const FHitResult& Hit) const;
-    bool IsCardDropLocationClear(const FVector& CandidateLocation) const;
-    bool IsFarEnoughFromIslandCards(const FVector& CandidateLocation, const TArray<FVector>& ExistingIslandLocations) const;
-    FVector PickIslandCardDropLocation(const FCardIslandDropZone& DropZone, const TArray<FVector>& ExistingIslandLocations) const;
-
     int32 CreateCardInstance(ECardID CardID);
     ACardDropActor* SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation);
     void SpawnRoundCardBundleForBattleRoyale();

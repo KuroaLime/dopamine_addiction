@@ -8,7 +8,6 @@
 #include "TpsPlayerMainHUD.generated.h"
 
 #define CardTotalNumber 3
-#define LvTotalNumber 8
 /**
  * 
  */
@@ -28,15 +27,11 @@ protected:
 	virtual void StaticUI() override;
 protected:
 	void UpdateHPWidget();
-	void UpdateNameWidget();
+	void UpdateNameWidget();	
 	void UpdateCardWidget();
 	void UpdateWeaponIconWidget();
 	void UpdateWeaponCountWidget();
 	void ChangeCompassSize(float ZRotation, class UImage* PSU_Compass);
-	void UpdateAim();
-	void UpdateLevel();
-	void UpdateLevel(const struct FPlayerData& PlayerData) { UpdateLevel(); }
-	void UpdateLevel(const struct FAccumulatedUpgrades& Upgrades) { UpdateLevel(); }
 	void UpdateCompass();
 
 	void OnOwnedCardsChanged(const TArray<struct FOwnedCardInfo>& NewCards);
@@ -44,10 +39,11 @@ protected:
 	void TriggerCardFlip();
 	
 private:
-	//HPbar
+	//HP progress bar
 	UPROPERTY()
-	UImage* HP_Image = nullptr;
+	class UProgressBar* HPProgressBar = nullptr;
 
+	//HP TXT
 	UPROPERTY()
 	class UTextBlock* HPTxt = nullptr;
 	UPROPERTY()
@@ -72,13 +68,6 @@ private:
 	UPROPERTY()
 	UTextBlock* WEAPONCountxt = nullptr;
 
-	//Aim
-	UPROPERTY()
-	UImage* Aim_Image = nullptr;
-
-	UPROPERTY()
-	UImage*	Lv_Image[LvTotalNumber];
-
 	//Compass
 	UPROPERTY()
 	UUserWidget* TPS_Compass = nullptr;
@@ -94,9 +83,11 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI", meta = (AllowPrivateAccess = "true"))
 	UTexture2D* UsingWeapon_Images = nullptr;
 
+	// ECardID ������� ���ε� �ؽ�ó (��������Ʈ���� ����)
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI", meta = (AllowPrivateAccess = "true"))
 	TMap<ECardID, UTexture2D*> CardTextureMap;
 
+	// ������ ����� �� ǥ���� �⺻ �ؽ�ó
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI", meta = (AllowPrivateAccess = "true"))
 	UTexture2D* EmptyCardTexture = nullptr;
 
@@ -105,17 +96,4 @@ protected:
 
 	UPROPERTY(Transient, meta = (BindWidgetAnim))
 	UWidgetAnimation* CardFlipAnim;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI", meta = (AllowPrivateAccess = "true"))
-	UTexture2D* Aim_Images = nullptr;
-
-	UPROPERTY()
-	class UMaterialInstanceDynamic* HPCircleMID = nullptr;
-
-	static const FName HPRadialWipeParamName;
-
-	UPROPERTY()
-	class UMaterialInstanceDynamic* LvLinearMID[LvTotalNumber];
-
-	static const FName LvLinearWipeParamName;
 };
