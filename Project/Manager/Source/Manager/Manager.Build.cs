@@ -8,11 +8,12 @@ public class Manager : ModuleRules
 	{
 		PCHUsage = PCHUsageMode.UseExplicitOrSharedPCHs;
 
-		PublicDependencyModuleNames.AddRange(new string[] {
+        PublicDependencyModuleNames.AddRange(new string[] {
 			"Core",
 			"CoreUObject",
 			"Engine",
 			"InputCore",
+			"NetCore",
 			"EnhancedInput",
 			"AIModule",
 			"StateTreeModule",

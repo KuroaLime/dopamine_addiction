@@ -1,6 +1,10 @@
 #pragma once
+
 #include <cstdint>
 #include <vector>
+#include <algorithm>
+#include <cstring>
+
 #include "Protocol_D.h"
 
 struct ClientContext;
@@ -10,7 +14,12 @@ struct ClientContext;
 // ===========================================================================
 
 // ServerMain.cpp의 SendPacket과 시그니처가 일치하는 함수 포인터 타입
-typedef void (*SendPacketFn)(ClientContext* c, uint16_t type, const void* payload, uint16_t payloadLen);
+typedef void (*SendPacketFn)(
+    ClientContext* c,
+    uint16_t type,
+    const void* payload,
+    uint16_t payloadLen
+    );
 
 
 // ===========================================================================
@@ -29,9 +38,10 @@ public:
     // -----------------------------------------------------------------------
     void SendWelcome(ClientContext* c, uint32_t sessionId);
     void SendPong(ClientContext* c);
-    
+
+
     // -----------------------------------------------------------------------
-    // [Auth] 로그인/회원가입
+    // [Auth] 로그인 / 회원가입
     // -----------------------------------------------------------------------
     void SendLoginRes(ClientContext* c, LoginResult result);
     void SendRegisterRes(ClientContext* c, LoginResult result);
@@ -45,20 +55,37 @@ public:
 
 
     // -----------------------------------------------------------------------
-    // [Room] 방 입장 및 퇴장
+    // [Room] 방 입장 / 퇴장 / 방 멤버 목록
     // -----------------------------------------------------------------------
     void SendRoomJoinRes(ClientContext* c, RoomResult result, const RoomInfoView* roomOrNull);
     void SendRoomLeaveRes(ClientContext* c, RoomResult result);
-    void SendRoomMemberList(ClientContext* c, uint32_t roomId, const std::vector<RoomMemberInfoView>& members);
+
+    // 방 안에 있는 플레이어 목록 전송
+    // Payload:
+    //   u32 roomId
+    //   u8 memberCount
+    //   반복:
+    //     u32 sessionId
+    //     u8 isHost
+    //     u8 isReady
+    //     u8 nicknameLen
+    //     char nickname[nicknameLen]
+    void SendRoomMemberList(
+        ClientContext* c,
+        uint32_t roomId,
+        const std::vector<RoomMemberInfoView>& members
+    );
+
 
     // -----------------------------------------------------------------------
-    // [Room Action] 방장/레디 시스템
+    // [Room Action] 방장 / 레디 / 시작
     // -----------------------------------------------------------------------
     void SendRoomReadyBrd(ClientContext* c, uint32_t sessionId, bool isReady);
     void SendRoomStartRes(ClientContext* c, RoomResult result);
 
+
     // -----------------------------------------------------------------------
-    // 게임 시작 (Dedicated Server 이동 명령)
+    // [Game] Dedicated Server 이동 명령
     // -----------------------------------------------------------------------
     void SendGameStart(ClientContext* c, const char* ip, uint16_t port, uint32_t ticket);
 
@@ -67,8 +94,9 @@ private:
     // 실제 전송을 담당하는 함수 포인터
     SendPacketFn m_send;
 
+
     // -----------------------------------------------------------------------
-    // 데이터 직렬화 도구
+    // 직렬화 도구
     // -----------------------------------------------------------------------
     static void AppendU8(std::vector<char>& out, uint8_t v);
     static void AppendU16(std::vector<char>& out, uint16_t vNet);
