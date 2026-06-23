@@ -16,6 +16,7 @@ public class Manager : ModuleRules
 			"NetCore",
 			"EnhancedInput",
 			"AIModule",
+			"NavigationSystem",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
