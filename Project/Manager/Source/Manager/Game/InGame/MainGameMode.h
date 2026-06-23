@@ -13,6 +13,7 @@ class AController;
 class AMainPlayerController;
 class AMainPlayerState;
 class ACardDropActor;
+class USpawnManagerComponent;
 
 enum class EDediServerPhase : uint8
 {
@@ -151,6 +152,7 @@ protected:
 private:
     FTimerHandle PhaseTimerHandle;
     FTimerHandle MatchEndShutdownTimerHandle;
+
     EDediServerPhase CurrentServerPhase = EDediServerPhase::None;
     bool bGameEndReached = false;
 
@@ -170,7 +172,6 @@ private:
     UPROPERTY()
     TArray<TObjectPtr<ACardDropActor>> ActiveCardDrops;
 
-
     enum class ESeotdaSpecialRule : uint8
     {
         None = 0,
@@ -188,6 +189,7 @@ private:
         TArray<int32> UsedCardInstanceIds;
         ESeotdaSpecialRule SpecialRule = ESeotdaSpecialRule::None;
         bool bForcesRedeal = false;
+
     };
 
     struct FSeotdaPlayerRoundState
@@ -211,6 +213,7 @@ private:
     FString LastSeotdaRoundResultSummary = TEXT("Pending");
 
 
+
 private:
     void InitStrategy();
     void TryStartGameIfReady();
@@ -225,6 +228,7 @@ private:
     void StartGameEndPhase();
     void ShutdownDedicatedServerAfterMatchEnd();
     void NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary) const;
+
 
     void SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context);
     void ClearPlayerPawnMovementBases(const TCHAR* Context);
@@ -257,6 +261,7 @@ private:
     void AdvanceSeotdaBettingTurn();
     void ResolveSeotdaRoundResult(const TCHAR* Reason);
     void BroadcastSeotdaState() const;
+
     AMainPlayerState* GetCurrentSeotdaTurnPlayer() const;
     int32 GetSeotdaPlayerMoney(const AMainPlayerState* TargetPS) const;
     int32 PaySeotdaBet(AMainPlayerState* TargetPS, int32 Amount);
@@ -270,10 +275,17 @@ private:
     bool ShouldForceSeotdaRedeal() const;
     bool TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reason);
 
+
     int32 GetReadyDuration() const;
     int32 GetBattleRoyaleDuration() const;
     int32 GetTransitionDuration() const;
     int32 GetCardGameDuration() const;
     int32 GetResultDuration() const;
     const TCHAR* GetServerPhaseName(EDediServerPhase Phase) const;
+
+    public:
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameMode|Spawn")
+        USpawnManagerComponent* SpawnManager;
+        virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
+        virtual APawn* SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayer, const FTransform& SpawnTransform) override;
 };

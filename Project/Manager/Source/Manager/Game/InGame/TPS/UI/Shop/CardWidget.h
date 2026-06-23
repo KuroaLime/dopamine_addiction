@@ -44,6 +44,14 @@ private:
 	void OnSelectCardClicked();
 	UFUNCTION()
 	void OnSelectCardHover();
+
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category="Card | Setup")
+	class UTexture2D* CardBackTexture = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Card | Setup")
+	class UTexture2D* CardFrontTexture = nullptr;
+
 public:
 	UPROPERTY(BlueprintAssignable, Category = "Events")
 	FOnCardSelectionButtonClicked OnCardSelectionEvent;
@@ -64,12 +72,25 @@ protected:
 	UPROPERTY(meta = (BindWidgetAnim), Transient)
 	class UWidgetAnimation* FlipAnim;
 
+	UPROPERTY(meta = (BindWidgetAnim), Transient, BlueprintReadOnly)
+	class UWidgetAnimation* SelectAnim;
+
 	virtual void NativeOnMouseEnter(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 	virtual void NativeOnMouseLeave(const FPointerEvent& MouseEvent) override;
 	virtual FReply NativeOnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent) override;
 
 private:
 	bool bIsFaceUp = true;
+	FTimerHandle SelectTimerHandle;
+
+	UFUNCTION()
+	void BroadcastSelectionEvent();
+
 public:
 	bool GetbIsFaceUp() { return bIsFaceUp; };
+
+	UFUNCTION(BlueprintCallable, Category = "Card")
+	void OnFlipAnimMidpoint();
+protected:
+	void DefaultStartState();
 };

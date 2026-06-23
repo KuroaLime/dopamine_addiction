@@ -122,7 +122,7 @@ public:
 	EUpgradeType GetStaticUpgradeTypeFromIndex(int32 Index);
 	UFUNCTION()
 	int32 GetStaticUpgradeCost(EUpgradeType Type, int32 CurrentLevel);
-	// ���� ������ ��ȸ�ϴ� ����
+
 	UFUNCTION()
 	int32 GetCurrentUpgradeLevel(class AMainPlayerState* PS, EUpgradeType Type);
 
@@ -137,6 +137,7 @@ public:
 
 	UFUNCTION(Client, Reliable)
 	void Client_SetUITimer(int32 time);
+
 
 	UFUNCTION(Client, Reliable)
 	void Client_ShowSeotdaResult(const FString& ResultText);
@@ -197,6 +198,5 @@ bool bSeotdaUiRoundResolved = false;
 
     UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
     FString SeotdaUiLastResultText;
-
 	
 };

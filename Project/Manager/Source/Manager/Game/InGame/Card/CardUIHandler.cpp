@@ -1,3 +1,4 @@
+
 ﻿#include "Game/InGame/Card/CardUIHandler.h"
 
 #include "Blueprint/UserWidget.h"
@@ -12,6 +13,7 @@ PrimaryComponentTick.bCanEverTick = true;
 
 void UCardUIHandler::BeginPlay()
 {
+
 Super::BeginPlay();
 
 UE_LOG(LogTemp, Warning, TEXT("[%s] CardUIHandler BeginPlay Owner=%s OwnerController=%s Local=%d"),

@@ -192,7 +192,7 @@ struct FAccumulatedUpgrades
     float LvWeaponReload = 0.f;
 };
 //////////////////////////////////////////////////////////
-// �ǽð� �÷��̾� ������
+
 USTRUCT(BlueprintType)
 struct FCurPlayerData
 {

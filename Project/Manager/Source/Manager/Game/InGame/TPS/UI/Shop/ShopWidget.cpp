@@ -8,6 +8,7 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Image.h"
 #include "Game/InGame/MainPlayerController.h"
+#include "Game/InGame/TPS/UI/Shop/ShopBanner.h"
 
 
 void UShopWidget::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
@@ -17,7 +18,7 @@ void UShopWidget::BindCharacterState(class UCharacterStateComponent* NewCharacte
 void UShopWidget::NativeConstruct() {
 	Super::NativeConstruct();
 
-	//·£´ýÄ«µå
+	//ï¿½ï¿½ï¿½ï¿½Ä«ï¿½ï¿½
 	if (CardSelectionPanel) CardSelectionPanel->SetVisibility(ESlateVisibility::Collapsed);
 
 	if (CardSelectionPanel)
@@ -59,7 +60,7 @@ void UShopWidget::HandleUpgradePurchase(int32 ItemID) {
 	}
 
 }
-//°íÁ¤ Ä³¸¯ÅÍ ½ºÅÈ ¾÷±×·¹ÀÌµå ¹öÆ° ´©¸¦½Ã ¼öÇà
+//ï¿½ï¿½ï¿½ï¿½ Ä³ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½×·ï¿½ï¿½Ìµï¿½ ï¿½ï¿½Æ° ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 void UShopWidget::HandleUpgradCharacterState(int32 ItemID)
 {
 	AMainPlayerController* PlayerController = Cast<AMainPlayerController>(GetOwningPlayer());
@@ -78,12 +79,12 @@ void UShopWidget::Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>&
 		Button->SetVisibility(ESlateVisibility::Collapsed);
 	Static_Upgrade_Background->SetVisibility(ESlateVisibility::Collapsed);
 	Background->SetVisibility(ESlateVisibility::Collapsed);
-	//BP_RandomUpgradeInfo->SetVisibility(ESlateVisibility::Collapsed);
+	BP_ShopBanner->SetVisibility(ESlateVisibility::Collapsed);
 
 	if (CardSelectionPanel)
 	{
-		CardSelectionPanel->SetCardID(Options); //°í¸£´Â Ä«µå ID ¼³Á¤(¿ÀÇØ ¤¤¤¤¿°)
-		CardSelectionPanel->SetVisibility(ESlateVisibility::Visible);//º¸ÀÌ°Ô
+		CardSelectionPanel->SetCardID(Options); //ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Ä«ï¿½ï¿½ ID ï¿½ï¿½ï¿½ï¿½(ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½)
+		CardSelectionPanel->SetVisibility(ESlateVisibility::Visible);//ï¿½ï¿½ï¿½Ì°ï¿½
 	}
 }
 
@@ -103,8 +104,7 @@ void UShopWidget::ReturnToShopButtons()
 		Button->SetVisibility(ESlateVisibility::Visible);
 	Static_Upgrade_Background->SetVisibility(ESlateVisibility::Visible);
 	Background->SetVisibility(ESlateVisibility::Visible);
-
-	//BP_RandomUpgradeInfo->SetVisibility(ESlateVisibility::Visible);
+	BP_ShopBanner->SetVisibility(ESlateVisibility::Visible);
 }
 
 void UShopWidget::SendToSelectionCardID(int32 CardID)

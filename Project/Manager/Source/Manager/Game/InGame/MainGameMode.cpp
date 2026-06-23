@@ -17,10 +17,13 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "TimerManager.h"
+#include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
+#include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 
 AMainGameMode::AMainGameMode()
 {
     CurrentStrategy = nullptr;
+    SpawnManager = CreateDefaultSubobject<USpawnManagerComponent>(TEXT("SpawnManager"));
 }
 
 void AMainGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
@@ -419,6 +422,7 @@ void AMainGameMode::StartResultPhase()
 
     StartTimedServerPhase(EDediServerPhase::Result, GetResultDuration());
 }
+
 void AMainGameMode::StartTransitionToBattlePhase()
 {
     if (bGameEndReached)
@@ -619,6 +623,7 @@ bool AMainGameMode::TryPickupCard(AMainPlayerController* RequestingPC, ACardDrop
             PS->OwnedCards.Num(),
             MaxCardsPerPlayerPerRound,
             *GetOwnedCardsDebugString(PS));
+
         return false;
     }
 
@@ -675,6 +680,7 @@ bool AMainGameMode::TryPickupCard(AMainPlayerController* RequestingPC, ACardDrop
         *CardDebug::ToString(CardInfo.CardID),
         PS->PublicCardCount,
         *GetOwnedCardsDebugString(PS));
+
 
     return true;
 }
@@ -753,7 +759,9 @@ bool AMainGameMode::SubmitSeotdaSelection(AMainPlayerController* RequestingPC, b
     FSeotdaPlayerRoundState NewState;
     NewState.PlayerState = PS;
     NewState.bSubmitted = true;
+
     BroadcastSeotdaState();
+
     NewState.HandResult = HandResult;
     NewState.SelectedCardInstanceIds = HandResult.UsedCardInstanceIds;
     SeotdaRoundStates.Add(PS, NewState);
@@ -785,6 +793,7 @@ bool AMainGameMode::SubmitSeotdaSelection(AMainPlayerController* RequestingPC, b
         *GetOwnedCardsDebugString(PS));
 
     BroadcastSeotdaState();
+
     TryResolveSeotdaRoundIfReady();
     return true;
 }
@@ -799,6 +808,7 @@ void AMainGameMode::ResetSeotdaRoundStates()
     bSeotdaBettingActive = false;
     bSeotdaRoundResolved = false;
     LastSeotdaRoundResultSummary = TEXT("Pending");
+
     UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda Reset Round=%d"), CurrentRound);
 }
 
@@ -843,6 +853,7 @@ void AMainGameMode::TryResolveSeotdaRoundIfReady()
 
     StartSeotdaBettingRound();
     BroadcastSeotdaState();
+
 }
 
 void AMainGameMode::StartSeotdaBettingRound()
@@ -856,6 +867,7 @@ void AMainGameMode::StartSeotdaBettingRound()
     SeotdaPot = 0;
     SeotdaCurrentBet = 0;
     SeotdaCurrentTurnIndex = 0;
+
     for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
 {
 FSeotdaPlayerRoundState& State = Pair.Value;
@@ -884,6 +896,7 @@ bSeotdaBettingActive = true;
         CurrentRound,
         SeotdaPot,
         SeotdaCurrentBet);
+
 
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
@@ -931,6 +944,7 @@ bSeotdaBettingActive = true;
         SeotdaCurrentBet);
 
     BroadcastSeotdaState();
+
 }
 
 bool AMainGameMode::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, EBettingAction Action)
@@ -1103,8 +1117,9 @@ void AMainGameMode::AdvanceSeotdaBettingTurn()
                 SeotdaPot,
                 SeotdaCurrentBet,
                 FMath::Max(0, SeotdaCurrentBet - State->BetMoney));
-            
+
     BroadcastSeotdaState();
+
             return;
         }
     }
@@ -1192,6 +1207,7 @@ void AMainGameMode::ResolveSeotdaRoundResult(const TCHAR* Reason)
 
     LastSeotdaRoundResultSummary = FString::Printf(
         TEXT("Winner=%s Combo=%s Rank=%d SubRank=%d Pot=%d Tie=%d Reason=%s Money=%d"),
+
         WinnerPS ? *WinnerPS->GetPlayerName() : TEXT("<NULL>"),
         *BestState->HandResult.Name,
         BestState->HandResult.Rank,
@@ -2011,6 +2027,7 @@ void AMainGameMode::EnsureThreeCardsForCardGame()
             TargetCardCount,
             CurrentRound,
             *GetOwnedCardsDebugString(PS));
+
         TargetCount++;
     }
 
@@ -2761,4 +2778,29 @@ void AMainGameMode::ShutdownDedicatedServerAfterMatchEnd()
         GetServerPhaseName(CurrentServerPhase));
 
     FPlatformMisc::RequestExit(false);
+}
+
+AActor* AMainGameMode::ChoosePlayerStart_Implementation(AController* Player)
+{
+    if (SpawnManager)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("Initialize Random Spawn..."));
+        if (SpawnManager->GetAvailableSpawnCount() == 0)
+        {
+            SpawnManager->InitializeSpawnPoints();
+        }
+        AA_Spawn* RandomSpawn = SpawnManager->GetUniqueRandomSpawnActor();
+        if (RandomSpawn)
+        {
+            return RandomSpawn;
+        }
+    }
+    return Super::ChoosePlayerStart_Implementation(Player);
+}
+APawn* AMainGameMode::SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayer, const FTransform& SpawnTransform)
+{
+    FTransform OffsetTransform = SpawnTransform;
+    FVector NewLocation = OffsetTransform.GetLocation() + FVector(0.0f, 0.0f, 100.0f);
+    OffsetTransform.SetLocation(NewLocation);
+    return Super::SpawnDefaultPawnAtTransform_Implementation(NewPlayer, OffsetTransform);
 }

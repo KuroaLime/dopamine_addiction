@@ -244,6 +244,7 @@ void AMainPlayerState::OnRep_OwnedCards()
         );
     }
 }
+
 void AMainPlayerState::OnRep_PublicCardCount()
 {
 }
@@ -316,7 +317,6 @@ void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 	ForceNetUpdate();
 }
 
-//���� ������� �����ϸ� �ɵ�
 void AMainPlayerState::ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledStats)
 {
 	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("ApplyCardUpgrade")));

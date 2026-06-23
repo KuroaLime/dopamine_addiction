@@ -63,6 +63,7 @@ bool RemoveOwnedCardByInstanceId(int32 CardInstanceId, FOwnedCardInfo& OutRemove
 void ClearOwnedCards();
 FOnOwnedCardsChangedNative OnOwnedCardsChangedNative;
 void AddGold(float Amount);
+
 	FOnGoldChangedNative OnGoldChnageNative;
 
 	void ApplyDamage(float ActualDamage);

@@ -6,6 +6,8 @@
 #include "Components/Image.h"
 #include "Components/Button.h"
 #include "Game/InGame/MainGameState.h"
+#include "Animation/WidgetAnimation.h"
+#include "TimerManager.h"
 
 
 void UCardWidget::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
@@ -16,6 +18,15 @@ void UCardWidget::NativeConstruct() {
 
 	if (Selection_Button)
 		Selection_Button->OnClicked.AddDynamic(this, &UCardWidget::OnSelectCardClicked);
+
+	bIsFaceUp = true;
+	if (Selection_Backgorund && CardFrontTexture)
+	{
+		Selection_Backgorund->SetBrushFromTexture(CardFrontTexture);
+	}
+	if (Selection_Icon) Selection_Icon->SetVisibility(ESlateVisibility::Collapsed);
+	if (Card_Name) Card_Name->SetVisibility(ESlateVisibility::Collapsed);
+	if (Card_Descriptor) Card_Descriptor->SetVisibility(ESlateVisibility::Collapsed);
 }
 
 
@@ -28,22 +39,44 @@ void UCardWidget::OnSelectCardClicked() {
 		}
 	}
 	else {
-		if (OnCardSelectionEvent.IsBound()) {
-			bIsFaceUp = true;
-			OnCardSelectionEvent.Broadcast(SelectionIndex);
+		if (SelectAnim && !IsAnimationPlaying(SelectAnim)) {
+			PlayAnimationTimeRange(SelectAnim, 0.f, SelectAnim->GetEndTime(), 1, EUMGSequencePlayMode::Forward, 1.f, true);
+
+			float Delay = SelectAnim->GetEndTime();
+			GetWorld()->GetTimerManager().SetTimer(SelectTimerHandle, this, &UCardWidget::BroadcastSelectionEvent, Delay, false);
+		}
+		else {
+			BroadcastSelectionEvent();
 		}
 	}
+}
 
+void UCardWidget::BroadcastSelectionEvent()
+{
+	bIsFaceUp = true;
+	if (OnCardSelectionEvent.IsBound()) {
+		OnCardSelectionEvent.Broadcast(SelectionIndex);
+	}
 }
 void UCardWidget::OnSelectCardHover() {
-	//Ä«µå°¡ Ä¿Á³´ÙÀÛ¾ÆÁ³´Ù~
+	//ì¹´ë“œê°€ ì»¤ì¡Œë‹¤ìž‘ì•„ì¡Œë‹¤~
 }
 void UCardWidget::UpdateWidget() {
-	//¹°°áÀÌ Â÷¿À¸£´Â µíÇÑ Ç¥Çö Ãß°¡ ÇÊ¿ä
+	//ë¬¼ê²°ì´ ì°¨ì˜¤ë¥´ëŠ” ë“¯í•œ í‘œí˜„ ì¶”ê°€ í•„ìš”
 }
 void UCardWidget::SetUpgradeType(const FRandomCardOption& NewOption, int32 Index) {
 	CurrentOption = NewOption;
 	SelectionIndex = Index;
+
+	bIsFaceUp = true;
+	if (Selection_Backgorund && CardFrontTexture)
+	{
+		Selection_Backgorund->SetBrushFromTexture(CardFrontTexture);
+	}
+	DefaultStartState();
+	if (Selection_Icon) Selection_Icon->SetVisibility(ESlateVisibility::Collapsed);
+	if (Card_Name) Card_Name->SetVisibility(ESlateVisibility::Collapsed);
+	if (Card_Descriptor) Card_Descriptor->SetVisibility(ESlateVisibility::Collapsed);
 
     AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
     if (!GS) return;
@@ -100,4 +133,45 @@ FReply UCardWidget::NativeOnMouseButtonDown(const FGeometry& MyGeometry, const F
 		}
 	}
 	return Super::NativeOnMouseButtonDown(MyGeometry, MouseEvent);
+
+}
+
+void UCardWidget::OnFlipAnimMidpoint()
+{
+	if (Selection_Icon) {
+		if (bIsFaceUp) {
+			if (Selection_Backgorund && CardFrontTexture) {
+				Selection_Backgorund->SetBrushFromTexture(CardFrontTexture);
+			}
+			if (Selection_Icon) Selection_Icon->SetVisibility(ESlateVisibility::Collapsed);
+			if (Card_Name) Card_Name->SetVisibility(ESlateVisibility::Collapsed);
+			if (Card_Descriptor) Card_Descriptor->SetVisibility(ESlateVisibility::Collapsed);
+		}
+		else {
+			
+
+			if (Selection_Backgorund && CardBackTexture) {
+				Selection_Backgorund->SetBrushFromTexture(CardBackTexture);
+			}
+			if (Selection_Icon) Selection_Icon->SetVisibility(ESlateVisibility::Visible);
+			if (Card_Name) Card_Name->SetVisibility(ESlateVisibility::Visible);
+			if (Card_Descriptor) Card_Descriptor->SetVisibility(ESlateVisibility::Visible);
+		}
+	}
+}
+
+void UCardWidget::DefaultStartState()
+{
+	if (SelectAnim)
+	{
+		StopAnimation(SelectAnim);
+	}
+	if (FlipAnim)
+	{
+		StopAnimation(FlipAnim);
+	}
+	
+	SetRenderScale(FVector2D(1.f, 1.f));
+	SetRenderOpacity(1.f);
+	SetRenderTranslation(FVector2D(0.f, 0.f));
 }

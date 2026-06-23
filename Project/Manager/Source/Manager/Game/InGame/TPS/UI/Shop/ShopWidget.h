@@ -34,6 +34,9 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	class UImage* Background = nullptr;
 	
+	UPROPERTY(meta = (BindWidget))
+	class UShopBanner* BP_ShopBanner;
+
 protected:
 	UFUNCTION()
 	void HandleUpgradePurchase(int32 ItemID);

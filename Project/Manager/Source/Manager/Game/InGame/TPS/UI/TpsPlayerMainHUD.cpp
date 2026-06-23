@@ -1,142 +1,191 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
-
 #include "Game/InGame/TPS/UI/TpsPlayerMainHUD.h"
 #include "Default/Data/CharacterStateComponent.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/CanvasPanelSlot.h"
+
+#include "Animation/WidgetAnimation.h"
 #include "Camera/CameraComponent.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
+#include "Game/InGame/MainPlayerState.h"          // ï¿½ß°ï¿½
 
-void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacterState) {
+void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacterState)
+{
+    CurrentCharacterState = NewCharacterState;
+    NewCharacterState->OnHPChanged.AddUObject(this, &UTpsPlayerMainHUD::UpdateHPWidget);
 
-	CurrentCharacterState = NewCharacterState;
-	NewCharacterState->OnHPChanged.AddUObject(this, &UTpsPlayerMainHUD::UpdateHPWidget);
-	NewCharacterState->OnLEVELChanged.AddUObject(this, &UTpsPlayerMainHUD::UpdateLevelWidget);
-	StaticUI();
-	UpdateHPWidget();
-	UpdateLevelWidget();
-
+    StaticUI();
+    UpdateHPWidget();
+    bNeedPlayerStateBind = true;
+    TryBindPlayerState();
 }
 
-void UTpsPlayerMainHUD::NativeConstruct() {
-	Super::NativeConstruct();
+void UTpsPlayerMainHUD::NativeConstruct()
+{
+    Super::NativeConstruct();
 
-	HPProgressBar = Cast<UProgressBar>(GetWidgetFromName(TEXT("HP_Bar")));
-	MaxHPTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("MaxHP_Text")));
-	HPTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("HP_Text")));
-	
-	//ÇÃ·¹ÀÌ¾î ¾ÆÀÌÄÜ
-	PLAYERImage = Cast<UImage>(GetWidgetFromName(TEXT("Player_Icon")));
-	//¹«±â
-	WEAPONImage = Cast<UImage>(GetWidgetFromName(TEXT("Weapon_Icon")));
-	//½ºÅ³
-	Skill_Images.SetNum(4);
-	SKILLImage[0] = Cast<UImage>(GetWidgetFromName(TEXT("Skill00")));
-	SKILLImage[1] = Cast<UImage>(GetWidgetFromName(TEXT("Skill01")));
-	SKILLImage[2] = Cast<UImage>(GetWidgetFromName(TEXT("Skill02")));
+    HPProgressBar = Cast<UProgressBar>(GetWidgetFromName(TEXT("HP_Bar")));
+    MaxHPTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("MaxHP_Text")));
+    HPTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("HP_Text")));
 
-	LEVELTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("Level_Text")));
+    WEAPONImage = Cast<UImage>(GetWidgetFromName(TEXT("Weapon_Icon")));
 
-	TPS_Compass = Cast<UUserWidget>(GetWidgetFromName(TEXT("Compass")));
-	//UpdateHPWidget();
+    CardImage[0] = Cast<UImage>(GetWidgetFromName(TEXT("Card00")));
+    CardImage[1] = Cast<UImage>(GetWidgetFromName(TEXT("Card01")));
+    CardImage[2] = Cast<UImage>(GetWidgetFromName(TEXT("Card02")));
+
+    TPS_Compass = Cast<UUserWidget>(GetWidgetFromName(TEXT("Compass")));
+
+    for (int32 i = 0; i < CardTotalNumber; i++)
+    {
+        Cards[i] = ECardID::None;
+    }
 }
 
 void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
-	Super::NativeTick(MyGeometry, InDeltaTime);
-	
-	UpdateCompass();
+    Super::NativeTick(MyGeometry, InDeltaTime);
+    UpdateCompass();
+    if (bNeedPlayerStateBind)
+        TryBindPlayerState();
 }
 
-void UTpsPlayerMainHUD::StaticUI() {
-	UpdatePlayerImageWidget();
-	UpdateSkillWidget();
-	UpdateWeaponIconWidget();
-}
-void UTpsPlayerMainHUD::UpdatePlayerImageWidget() {
-	if (CurrentCharacterState.IsValid()) {
-		if (nullptr != PLAYERImage) PLAYERImage->SetBrushFromTexture(PlayerIcon_Image);
-	}
+void UTpsPlayerMainHUD::StaticUI()
+{
+    UpdateWeaponIconWidget();
 }
 
-//
-void UTpsPlayerMainHUD::UpdateHPWidget() {
-	if (CurrentCharacterState.IsValid()) {
-		if (nullptr != HPProgressBar) HPProgressBar->SetPercent(CurrentCharacterState->GetHPRatio());
-		if (nullptr != HPTxt) HPTxt->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentHP()));
-		if (nullptr != MaxHPTxt) MaxHPTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
-	}
+void UTpsPlayerMainHUD::UpdateHPWidget()
+{
+    if (CurrentCharacterState.IsValid())
+    {
+        if (HPProgressBar) HPProgressBar->SetPercent(CurrentCharacterState->GetHPRatio());
+        if (HPTxt)         HPTxt->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentHP()));
+        if (MaxHPTxt)      MaxHPTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
+    }
 }
 
-//
-void UTpsPlayerMainHUD::UpdateLevelWidget() {
-	if (CurrentCharacterState.IsValid()) {
-		if (nullptr != LEVELTxt) {
-			LEVELTxt->SetText(FText::AsNumber(CurrentCharacterState->GetLevel()));
-		}
-	}
-}
-void UTpsPlayerMainHUD::UpdateNameWidget() {
-	if (CurrentCharacterState.IsValid()) {
-		if (nullptr != NAMETxt) HPProgressBar->SetPercent(CurrentCharacterState->GetHPRatio());
-	}
+void UTpsPlayerMainHUD::UpdateNameWidget()
+{
+    if (CurrentCharacterState.IsValid())
+    {
+        if (NAMETxt) NAMETxt->SetText(FText::FromString(CurrentCharacterState->GetOwner()->GetName()));
+    }
 }
 
-void UTpsPlayerMainHUD::UpdateSkillWidget() {
-	if (CurrentCharacterState.IsValid()) {
-		if (nullptr != SKILLImage)
-			for (int i = 0; i < SkillTotalNumber;i++)
-				SKILLImage[i]->SetBrushFromTexture(Skill_Images[i]);
-	}
+void UTpsPlayerMainHUD::OnOwnedCardsChanged(const TArray<FOwnedCardInfo>& NewCards)
+{
+    for (int32 i = 0; i < CardTotalNumber; i++)
+    {
+        if (!CardImage[i]) continue;
+
+        if (NewCards.IsValidIndex(i))
+        {
+            Cards[i] = NewCards[i].CardID;
+        }
+        else
+        {
+            Cards[i] = ECardID::None;
+
+            UTexture2D** FoundTexture = CardTextureMap.Find(Cards[i]);
+            if (FoundTexture && *FoundTexture)
+            {
+                CardImage[i]->SetBrushFromTexture(*FoundTexture);
+                CardImage[i]->SetVisibility(ESlateVisibility::Visible);
+            }
+        }
+    }
+
+    TriggerCardFlip();
 }
 
-void UTpsPlayerMainHUD::UpdateWeaponIconWidget() {
-	if (CurrentCharacterState.IsValid()) {
-		if (nullptr != WEAPONImage) WEAPONImage->SetBrushFromTexture(UsingWeapon_Images);
-	}
+void UTpsPlayerMainHUD::TryBindPlayerState()
+{
+    if (CachedPlayerState.IsValid()) return; // ï¿½Ì¹ï¿½ ï¿½ï¿½Ïµï¿½
+
+    APlayerController* PC = GetOwningPlayer();
+    if (!PC) return;
+
+    AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+    if (!PS) return; // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ã¸ï¿½ï¿½ï¿½ï¿½Ì¼ï¿½ ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ Tickï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ãµï¿½
+
+    CachedPlayerState = PS;
+    PS->OnOwnedCardsChangedNative.AddUObject(this, &UTpsPlayerMainHUD::OnOwnedCardsChanged);
+
+    if (PS->OwnedCards.Num() > 0)
+        OnOwnedCardsChanged(PS->OwnedCards);
+
+    bNeedPlayerStateBind = false; // ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½Ãµï¿½ ï¿½ß´ï¿½
 }
-void UTpsPlayerMainHUD::UpdateWeaponCountWidget(){
-	if (CurrentCharacterState.IsValid()) {
-		if (nullptr != WEAPONMaxTxt) WEAPONMaxTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
-		if (nullptr != WEAPONCountxt) WEAPONCountxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
-	}
+
+void UTpsPlayerMainHUD::TriggerCardFlip()
+{
+    PlayAnimation(CardFlipAnim);
 }
 
-void UTpsPlayerMainHUD::UpdateEXPWidget() {
-	if (CurrentCharacterState.IsValid()) {
-		if (nullptr != EXPProgressBar) HPProgressBar->SetPercent(CurrentCharacterState->GetHPRatio());
-	}
+void UTpsPlayerMainHUD::OnCardFlipMidpoint()
+{
+    for(int32 i = 0; i < CardTotalNumber; i++)
+    {
+        UTexture2D** FoundTexture = CardTextureMap.Find(Cards[i]);
+        if (FoundTexture && *FoundTexture)
+        {
+            CardImage[i]->SetBrushFromTexture(*FoundTexture);
+            CardImage[i]->SetVisibility(ESlateVisibility::Visible);
+        }
+    }
 }
 
-
-void UTpsPlayerMainHUD::ChangeCompassSize(float ZRotation, UImage* PSU_Compass) {
-	
-	if (PSU_Compass == nullptr)
-		return;
-
-	UCanvasPanelSlot* CompassSlot = Cast<UCanvasPanelSlot>(PSU_Compass->Slot);
-	CompassSlot->SetPosition(FVector2D((ZRotation*(-1.0f))* (PSU_Compass->GetDesiredSize().X / 360.0f),0.0f));
+void UTpsPlayerMainHUD::UpdateCardWidget()
+{
+    if (CachedPlayerState.IsValid())
+    {
+        OnOwnedCardsChanged(CachedPlayerState->OwnedCards);
+    }
 }
-void UTpsPlayerMainHUD::UpdateCompass() {
-	if (CurrentCharacterState.IsValid()) {
-		UImage* PSU_Compass = Cast<UImage>(TPS_Compass->GetWidgetFromName(TEXT("IMG_CompassImage")));
-		APlayerController* PlayerController = GetOwningPlayer();
 
-		if (PlayerController) {
-			IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(PlayerController->GetPawn());
-			if (Owner && Owner->GetFollowCameraComponent()) {
-				float CameraYaw = Owner->GetFollowCameraComponent()->GetComponentRotation().Yaw;
+void UTpsPlayerMainHUD::UpdateWeaponIconWidget()
+{
+    if (CurrentCharacterState.IsValid())
+    {
+        if (WEAPONImage) WEAPONImage->SetBrushFromTexture(UsingWeapon_Images);
+    }
+}
 
-				if (nullptr != PSU_Compass) {
-					ChangeCompassSize(CameraYaw, PSU_Compass);
-				}
-			}
-		}
-		
+void UTpsPlayerMainHUD::UpdateWeaponCountWidget()
+{
+    if (CurrentCharacterState.IsValid())
+    {
+        if (WEAPONMaxTxt)  WEAPONMaxTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
+        if (WEAPONCountxt) WEAPONCountxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
+    }
+}
 
-	}
+void UTpsPlayerMainHUD::ChangeCompassSize(float ZRotation, UImage* PSU_Compass)
+{
+    if (!PSU_Compass) return;
 
+    UCanvasPanelSlot* CompassSlot = Cast<UCanvasPanelSlot>(PSU_Compass->Slot);
+    if (CompassSlot)
+        CompassSlot->SetPosition(FVector2D((ZRotation * -1.0f) * (PSU_Compass->GetDesiredSize().X / 360.0f), 0.0f));
+}
+
+void UTpsPlayerMainHUD::UpdateCompass()
+{
+    if (!CurrentCharacterState.IsValid()) return;
+
+    UImage* PSU_Compass = Cast<UImage>(TPS_Compass->GetWidgetFromName(TEXT("IMG_CompassImage")));
+    APlayerController* PC = GetOwningPlayer();
+
+    if (PC)
+    {
+        IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(PC->GetPawn());
+        if (Owner && Owner->GetFollowCameraComponent())
+        {
+            float CameraYaw = Owner->GetFollowCameraComponent()->GetComponentRotation().Yaw;
+            if (PSU_Compass)
+                ChangeCompassSize(CameraYaw, PSU_Compass);
+        }
+    }
 }

@@ -512,7 +512,6 @@ void LobbyService::OnPacket(ClientContext* c, uint16_t type, const char* payload
     case PacketType::C2S_ROOM_LIST_REQ:
         HandleRoomListReq(c);
         break;
-
     case PacketType::C2S_ROOM_CREATE_REQ:
         HandleRoomCreateReq(c, payload, payloadLen);
         break;
