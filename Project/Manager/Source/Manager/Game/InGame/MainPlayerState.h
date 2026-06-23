@@ -10,8 +10,6 @@
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnGoldChangedNative, float NewGold);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnHPChangedNative, float NewHP);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnOwnedCardsChangedNative, const TArray<FOwnedCardInfo>&);
-DECLARE_MULTICAST_DELEGATE_OneParam(FOnPlayerDataChangedNative, const FPlayerData&);
-DECLARE_MULTICAST_DELEGATE_OneParam(FOnAccumulatedUpgradesChangedNative, const FAccumulatedUpgrades&);
 
 UCLASS()
 class MANAGER_API AMainPlayerState : public APlayerState,
@@ -40,11 +38,8 @@ protected:
 public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Weapon Data")
 	FWeaponData WeaponData;
-	UPROPERTY(ReplicatedUsing = OnRep_PlayerData, BlueprintReadOnly, Category = "Player Data")
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player Data")
 	FPlayerData PlayerData;
-
-	UFUNCTION()
-	void OnRep_PlayerData();
 
 	UPROPERTY(ReplicatedUsing = OnRep_CurPlayerData, BlueprintReadOnly, Category = "Current Player Data")
 	FCurPlayerData CurPlayerData;
@@ -74,9 +69,6 @@ void AddGold(float Amount);
 	void ApplyDamage(float ActualDamage);
 	FOnHPChangedNative OnHPChnageNative;
 
-	FOnPlayerDataChangedNative OnPlayerDataChangedNative;
-	FOnAccumulatedUpgradesChangedNative OnAccumulatedUpgradesChangedNative;
-
 protected:
 	UFUNCTION()
 	void OnRep_CurPlayerData(FCurPlayerData OldCurPlayerData);
@@ -87,11 +79,8 @@ protected:
 	UFUNCTION()
 	void OnRep_PublicCardCount();
 
-	UPROPERTY(ReplicatedUsing = OnRep_AccumulatedUpgrades, BlueprintReadOnly, Category = "Player Upgrades")
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player Upgrades")
 	FAccumulatedUpgrades AccumulatedUpgrades;
-
-	UFUNCTION()
-	void OnRep_AccumulatedUpgrades();
 public:
 	UFUNCTION()
 	void Server_ApplyUpgrad_Implementation(EUpgradeType Type);
