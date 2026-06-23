@@ -1699,37 +1699,51 @@ bool AMainGameMode::TryPickupNearestCard(AMainPlayerController* RequestingPC)
 
 TArray<ECardID> AMainGameMode::BuildCardBundleIDs() const
 {
-    return TArray<ECardID>{
-        ECardID::Jan_Gwang,
-        ECardID::Jan_HongDdi,
+    TArray<ECardID> CardIDs;
+    CardIDs.Reserve(20);
 
-        ECardID::Feb_Yul,
-        ECardID::Feb_HongDdi,
+    // 20-card Seotda deck.
+    // 1월: 광, 홍띠
+    CardIDs.Add(ECardID::Jan_Gwang);
+    CardIDs.Add(ECardID::Jan_HongDdi);
 
-        ECardID::Mar_Gwang,
-        ECardID::Mar_HongDdi,
+    // 2월: 10끗, 홍띠
+    CardIDs.Add(ECardID::Feb_Yul);
+    CardIDs.Add(ECardID::Feb_HongDdi);
 
-        ECardID::Apr_Yul,
-        ECardID::Apr_ChoDdi,
+    // 3월: 광, 홍띠
+    CardIDs.Add(ECardID::Mar_Gwang);
+    CardIDs.Add(ECardID::Mar_HongDdi);
 
-        ECardID::May_Yul,
-        ECardID::May_ChoDdi,
+    // 4월: 10끗, 초띠
+    CardIDs.Add(ECardID::Apr_Yul);
+    CardIDs.Add(ECardID::Apr_ChoDdi);
 
-        ECardID::Jun_Yul,
-        ECardID::Jun_CheongDdi,
+    // 5월: 10끗, 초띠
+    CardIDs.Add(ECardID::May_Yul);
+    CardIDs.Add(ECardID::May_ChoDdi);
 
-        ECardID::Jul_Yul,
-        ECardID::Jul_ChoDdi,
+    // 6월: 10끗, 청띠
+    CardIDs.Add(ECardID::Jun_Yul);
+    CardIDs.Add(ECardID::Jun_CheongDdi);
 
-        ECardID::Aug_Gwang,
-        ECardID::Aug_Yul,
+    // 7월: 10끗, 초띠
+    CardIDs.Add(ECardID::Jul_Yul);
+    CardIDs.Add(ECardID::Jul_ChoDdi);
 
-        ECardID::Sep_Yul,
-        ECardID::Sep_CheongDdi,
+    // 8월: 광, 10끗
+    CardIDs.Add(ECardID::Aug_Gwang);
+    CardIDs.Add(ECardID::Aug_Yul);
 
-        ECardID::Oct_Yul,
-        ECardID::Oct_CheongDdi
-    };
+    // 9월: 10끗, 청띠
+    CardIDs.Add(ECardID::Sep_Yul);
+    CardIDs.Add(ECardID::Sep_CheongDdi);
+
+    // 10월: 10끗, 청띠
+    CardIDs.Add(ECardID::Oct_Yul);
+    CardIDs.Add(ECardID::Oct_CheongDdi);
+
+    return CardIDs;
 }
 
 void AMainGameMode::ShuffleCardIDs(TArray<ECardID>& CardIDs) const
@@ -1751,26 +1765,38 @@ FVector AMainGameMode::GetDistributedCardDropLocation(int32 Index, int32 TotalCo
         return CardBundleDropCenter;
     }
 
-    const float Aspect = CardBundleDropExtent.Y > 1.0f ? CardBundleDropExtent.X / CardBundleDropExtent.Y : 1.0f;
-    const int32 ColumnCount = FMath::Max(1, FMath::CeilToInt(FMath::Sqrt(static_cast<float>(TotalCount) * FMath::Max(0.25f, Aspect))));
-    const int32 RowCount = FMath::Max(1, FMath::CeilToInt(static_cast<float>(TotalCount) / static_cast<float>(ColumnCount)));
+    const float SafeExtentX = FMath::Max(1.0f, CardBundleDropExtent.X);
+    const float SafeExtentY = FMath::Max(1.0f, CardBundleDropExtent.Y);
+    const float Aspect = SafeExtentX / SafeExtentY;
 
-    const int32 Column = Index % ColumnCount;
+    // 기존 방식은 20장일 때 6x4=24칸이 되어 마지막 줄이 치우칠 수 있었다.
+    // 이 방식은 20장 기준 5x4에 가깝게 만들어 전체 영역에 더 고르게 배치한다.
+    const int32 RowCount = FMath::Max(1, FMath::CeilToInt(FMath::Sqrt(static_cast<float>(TotalCount) / FMath::Max(0.25f, Aspect))));
+    const int32 ColumnCount = FMath::Max(1, FMath::CeilToInt(static_cast<float>(TotalCount) / static_cast<float>(RowCount)));
+
     const int32 Row = Index / ColumnCount;
+    const int32 Column = Index % ColumnCount;
+
+    const int32 ItemsInThisRow = FMath::Min(ColumnCount, TotalCount - Row * ColumnCount);
 
     const float FullWidth = CardBundleDropExtent.X * 2.0f;
     const float FullHeight = CardBundleDropExtent.Y * 2.0f;
+
     const float CellWidth = FullWidth / static_cast<float>(ColumnCount);
     const float CellHeight = FullHeight / static_cast<float>(RowCount);
 
     const float MinX = CardBundleDropCenter.X - CardBundleDropExtent.X;
     const float MinY = CardBundleDropCenter.Y - CardBundleDropExtent.Y;
 
-    const float JitterRatio = FMath::Clamp(CardBundleDropJitterRatio, 0.0f, 0.45f);
+    // 마지막 줄이 꽉 차지 않아도 중앙 정렬되게 보정
+    const float RowWidth = CellWidth * static_cast<float>(ItemsInThisRow);
+    const float RowStartX = CardBundleDropCenter.X - RowWidth * 0.5f;
+
+    const float JitterRatio = FMath::Clamp(CardBundleDropJitterRatio, 0.0f, 0.20f);
     const float JitterX = CellWidth * JitterRatio;
     const float JitterY = CellHeight * JitterRatio;
 
-    const float X = MinX + (static_cast<float>(Column) + 0.5f) * CellWidth + FMath::FRandRange(-JitterX, JitterX);
+    const float X = RowStartX + (static_cast<float>(Column) + 0.5f) * CellWidth + FMath::FRandRange(-JitterX, JitterX);
     const float Y = MinY + (static_cast<float>(Row) + 0.5f) * CellHeight + FMath::FRandRange(-JitterY, JitterY);
     const float Z = CardBundleDropCenter.Z;
 

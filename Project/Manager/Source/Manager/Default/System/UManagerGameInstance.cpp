@@ -327,6 +327,8 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
 
         if (ParseRoomMemberList(payload, payloadLen, off, roomId, members))
         {
+            CachedRoomId = roomId;
+            CachedRoomMembers = members;
 
             AsyncTask(ENamedThreads::GameThread, [this, members]() {
                 UE_ASYNC_GUARD
@@ -587,4 +589,43 @@ FABCharacterData* UUManagerGameInstance::GetABCharacterData(int32 Level) {
 bool UUManagerGameInstance::SendRoomStart()
 {
     return SendPacket(PacketType::C2S_ROOM_START_REQ, nullptr, 0);
+}
+
+void UUManagerGameInstance::MarkReturnToRoomAfterMatch()
+{
+    bReturnToRoomAfterMatch = true;
+    bHasEnteredRoom = false;
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOBBY_RETURN] MarkReturnToRoomAfterMatch CachedRoomId=%u CachedMembers=%d"),
+        CachedRoomId,
+        CachedRoomMembers.Num());
+}
+
+bool UUManagerGameInstance::ConsumeReturnToRoomAfterMatch()
+{
+    const bool bResult = bReturnToRoomAfterMatch;
+    bReturnToRoomAfterMatch = false;
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOBBY_RETURN] ConsumeReturnToRoomAfterMatch Result=%d CachedRoomId=%u CachedMembers=%d"),
+        bResult ? 1 : 0,
+        CachedRoomId,
+        CachedRoomMembers.Num());
+
+    return bResult;
+}
+
+void UUManagerGameInstance::BroadcastCachedRoomMembers()
+{
+    if (CachedRoomMembers.Num() <= 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[LOBBY_RETURN] BroadcastCachedRoomMembers skipped. Empty CachedRoomId=%u"),
+            CachedRoomId);
+        return;
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[LOBBY_RETURN] BroadcastCachedRoomMembers RoomId=%u Members=%d"),
+        CachedRoomId,
+        CachedRoomMembers.Num());
+
+    OnRoomMemberListUpdated.Broadcast(CachedRoomMembers);
 }

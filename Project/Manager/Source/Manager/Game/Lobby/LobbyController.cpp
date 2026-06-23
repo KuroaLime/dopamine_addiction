@@ -33,8 +33,20 @@ void ALobbyController::BeginPlay() {
 				}
 			}
 		}
-		ToggleLobbyUI(true, ELobbyState::RoomList);
-		UpdateRoom();
+		        UUManagerGameInstance* GI = GetGameInstance<UUManagerGameInstance>();
+        if (GI && GI->ConsumeReturnToRoomAfterMatch())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[LOBBY_RETURN] LobbyController BeginPlay -> InRoom"));
+            ToggleLobbyUI(true, ELobbyState::InRoom);
+            MoveLobbyCamera(RoomLocation);
+            GI->BroadcastCachedRoomMembers();
+        }
+        else
+        {
+            ToggleLobbyUI(true, ELobbyState::RoomList);
+        }
+
+        UpdateRoom();
 	}
 }
 

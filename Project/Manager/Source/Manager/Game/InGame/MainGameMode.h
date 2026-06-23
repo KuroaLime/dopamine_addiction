@@ -140,7 +140,7 @@ protected:
     FVector2D CardBundleDropExtent = FVector2D(1200.0f, 800.0f);
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Bundle")
-    float CardBundleDropJitterRatio = 0.3f;
+    float CardBundleDropJitterRatio = 0.1f;
 
     UPROPERTY()
     TMap<EGamePhase, TObjectPtr<UPhaseStrategy>> StrategyMap;

@@ -71,6 +71,11 @@ private:
 	void SwitchLobbyState(ELobbyState NewState);
 
 	bool bHasEnteredRoom = false;
+    bool bReturnToRoomAfterMatch = false;
+    uint32 CachedRoomId = 0;
+
+    UPROPERTY()
+    TArray<FRoomMemberInfoView> CachedRoomMembers;
 public:
 	bool SendRegister(const FString& id, const FString& pw);
 	bool SendLogin(const FString& id, const FString& pw);
@@ -81,6 +86,12 @@ public:
 	bool SendReady(bool ready);
 	bool SendRoomStart();
 	uint32_t GetSessionId() const { return m_sessionId; }
+
+    void MarkReturnToRoomAfterMatch();
+    bool ConsumeReturnToRoomAfterMatch();
+    uint32 GetCachedRoomId() const { return CachedRoomId; }
+    const TArray<FRoomMemberInfoView>& GetCachedRoomMembers() const { return CachedRoomMembers; }
+    void BroadcastCachedRoomMembers();
 
 	UPROPERTY(BlueprintAssignable)
 	FOnRoomMemberListUpdated OnRoomMemberListUpdated;

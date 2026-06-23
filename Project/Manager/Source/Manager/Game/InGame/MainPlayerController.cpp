@@ -8,6 +8,7 @@
 #include "Game/InGame/Handler/InputHandler.h"
 #include "Game/InGame/Interface/InterfaceInfo.h"
 #include "Kismet/GameplayStatics.h"
+#include "Default/System/UManagerGameInstance.h"
 #include "Game/InGame/MainPlayerState.h"
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/Card/Actor/CardDropActor.h"
@@ -16,6 +17,7 @@
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
 #include "GameFramework/Pawn.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Game/InGame/TPS/UI/Shop/ShopWidget.h"
 
 #include "Game/InGame/MainGameState.h"
@@ -628,6 +630,18 @@ void AMainPlayerController::ReturnToLobbyFromMatchEnd()
 
     bSeotdaUiMatchEnded = false;
     SeotdaUiLastResultText.Empty();
+
+    if (UUManagerGameInstance* GI = GetGameInstance<UUManagerGameInstance>())
+    {
+        GI->MarkReturnToRoomAfterMatch();
+    }
+
+    if (GEngine)
+    {
+        GEngine->ClearOnScreenDebugMessages();
+    }
+
+    UWidgetLayoutLibrary::RemoveAllWidgets(this);
 
     bShowMouseCursor = true;
     SetInputMode(FInputModeGameAndUI());
