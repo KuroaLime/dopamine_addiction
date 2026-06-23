@@ -115,7 +115,7 @@ void AMainCharacter::BeginPlay()
 		{
 			const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
 			m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
-			m_pEquippedGun->SetActorRelativeRotation(FRotator(0.f, 180.f, 0.f));
+			//m_pEquippedGun->SetActorRelativeRotation(FRotator(0.f, 180.f, 0.f)); // disabled: socket already orients weapon; this extra 180 double-applied and flipped it
 		}
 	}
 
