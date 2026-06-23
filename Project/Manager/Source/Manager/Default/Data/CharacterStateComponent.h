@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Game/Protocol_Client/Protocol_InGame.h"
 #include "CharacterStateComponent.generated.h"
 
 #define MAX_GOLD 10000
@@ -80,21 +81,18 @@ public:
 	FOnComapassChangedDelegate OnCompassChanged;
 	//Gold
 	FOnGoldChangeDelegate OnGoldChanged;
-	
-private:
-	struct FABCharacterData* CurrentStateData = nullptr;
-
-
 
 public:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+
+private:
+	struct FABCharacterData* CurrentStateData = nullptr;
+
 protected:
-	
-
-
 	//Level
 	UPROPERTY(ReplicatedUsing = OnRep_Level, EditInstanceOnly, Category = State, Meta = (AllowPrivateAccess = true))
 	int32 Level;
+
 	UFUNCTION()
 	void OnRep_Level();
 
@@ -106,6 +104,7 @@ protected:
 
 	UFUNCTION()
 	void OnRep_ChangeCurrentHP(float NewHP);
+
 public:
 	UFUNCTION()
 	void BindToPlayerState(class AMainPlayerState* PS);
