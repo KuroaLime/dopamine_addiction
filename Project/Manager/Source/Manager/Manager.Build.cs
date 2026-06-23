@@ -25,7 +25,8 @@ public class Manager : ModuleRules
             "AnimGraphRuntime",
 			"Niagara",
             "Sockets",
-            "Networking"
+            "Networking",
+            "NavigationSystem"
         });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
