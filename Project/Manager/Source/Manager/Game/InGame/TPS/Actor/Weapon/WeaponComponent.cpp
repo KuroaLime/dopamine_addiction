@@ -2,6 +2,8 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
+#include "Default/Animation/PlayerAnimInstance.h"
+#include "GameFramework/Character.h"
 #include "EngineUtils.h"
 
 UWeaponComponent::UWeaponComponent()
@@ -34,8 +36,44 @@ void UWeaponComponent::Fire(const FVector& MuzzleLocation)
 void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& MuzzleLocation)
 {
 
+    
     if (m_FireSound)
     {
         UGameplayStatics::PlaySoundAtLocation(GetWorld(), m_FireSound, MuzzleLocation);
+    }
+    AActor* WeaponActor = GetOwner();
+
+    if (WeaponActor)
+    {
+        
+        APawn* OwnerPawn = Cast<APawn>(WeaponActor->GetOwner());
+        if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
+        {
+            
+            if (UPlayerAnimInstance* PlayerAnim = Cast<UPlayerAnimInstance>(Character->GetMesh()->GetAnimInstance()))
+            {
+                
+                PlayerAnim->PlayFireMontage(WeaponType);
+            }
+        }
+    }
+}
+void UWeaponComponent::Reload()
+{
+    Multicast_PlayReloadFeedback();
+}
+void UWeaponComponent::Multicast_PlayReloadFeedback_Implementation()
+{
+    AActor* WeaponActor = GetOwner();
+    if (WeaponActor)
+    {
+        APawn* OwnerPawn = Cast<APawn>(WeaponActor->GetOwner());
+        if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
+        {
+            if (UPlayerAnimInstance* PlayerAnim = Cast<UPlayerAnimInstance>(Character->GetMesh()->GetAnimInstance()))
+            {
+                PlayerAnim->PlayReloadMontage(WeaponType);
+            }
+        }
     }
 }

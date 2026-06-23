@@ -4,8 +4,8 @@
 
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
+#include "Game/Protocol_Client/Protocol_InGame.h"
 #include "PlayerAnimInstance.generated.h"
-
 class UCharacterMovementComponent;
 /**
  * 
@@ -47,4 +47,26 @@ private:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Player, meta = (AllowPrivateAccess = "true"))
 	bool bIsDeath = false;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Player, meta = (AllowPrivateAccess = "true"))
+	EWeaponType CurrentWeaponType = EWeaponType::None;
+	
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Player, meta = (AllowPrivateAccess = "true"))
+	float AimYaw;
+
+	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Player, meta = (AllowPrivateAccess = "true"))
+	float AimPitch;
+
+public:
+	UFUNCTION(BlueprintCallable,Category="Animation Montage")
+	void PlayFireMontage(EWeaponType WeaponType);
+	UFUNCTION(BlueprintCallable, Category = "Animation Montage")
+	void PlayReloadMontage(EWeaponType WeaponType);
+
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	TMap<EWeaponType, UAnimMontage*> WeaponFireMontages;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	TMap<EWeaponType, UAnimMontage*> WeaponReloadMontages;
 };

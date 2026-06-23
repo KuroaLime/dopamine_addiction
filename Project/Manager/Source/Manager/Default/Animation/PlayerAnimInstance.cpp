@@ -5,8 +5,9 @@
 #include "KismetAnimationLibrary.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Game/InGame/MainPlayerState.h"
 #include "Default/Ability/Interface/AbilityCheckInterface.h"
-
+#include "Kismet/KismetMathLibrary.h"
 void UPlayerAnimInstance::NativeInitializeAnimation()
 {
 	Super::NativeInitializeAnimation();
@@ -55,5 +56,42 @@ void UPlayerAnimInstance::UpdateAnimProperties(float DeltaTime)
 	else
 	{
 		bIsDeath = false;
+	}
+	AMainPlayerState* PS = OwnerNow->GetPlayerState<AMainPlayerState>();
+	if (PS)
+	{
+		CurrentWeaponType = PS->GetWeaponID();
+	}
+	else
+	{
+		CurrentWeaponType = EWeaponType::None;
+	}
+	FRotator ActorRotation = OwnerCharacter->GetActorRotation();
+
+	FRotator ControlRotation = OwnerCharacter->GetBaseAimRotation();
+
+	FRotator DeltaRot = UKismetMathLibrary::NormalizedDeltaRotator(ControlRotation, ActorRotation);
+
+	AimYaw = DeltaRot.Yaw;
+	AimPitch = DeltaRot.Pitch;
+}
+
+void UPlayerAnimInstance::PlayFireMontage(EWeaponType WeaponType)
+{
+	if (WeaponFireMontages.Contains(WeaponType)) {
+		if (UAnimMontage* TargetMontage = WeaponFireMontages[WeaponType]) {
+			if (GEngine)
+				GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Yellow, TEXT("WeaponActorsss"));
+			Montage_Play(TargetMontage);
+		}
+	}
+}
+
+void UPlayerAnimInstance::PlayReloadMontage(EWeaponType WeaponType)
+{
+	if (WeaponReloadMontages.Contains(WeaponType)) {
+		if (UAnimMontage* TargetMontage = WeaponReloadMontages[WeaponType]) {
+			Montage_Play(TargetMontage);
+		}
 	}
 }

@@ -10,12 +10,11 @@ UENUM(BlueprintType)
 enum class EWeaponType : uint8
 {
     None    = 0,
-    HG      = 1,
-    MG      = 2,
-    SMG     = 3,
-    AR      = 4,
-    SR      = 5,
-    SG      = 6,
+    AR      = 1,
+    PISTOL      = 2,
+    SHOTGUN     = 3,
+    SMG      = 4,
+    SNIPER      = 5
 
 };
 

@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "Components/ActorComponent.h"
+#include "Game/Protocol_Client/Protocol_InGame.h"
 #include "WeaponComponent.generated.h"
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
@@ -32,4 +33,14 @@ public:
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	USoundBase* m_FireSound;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Setting")
+	EWeaponType WeaponType = EWeaponType::SMG;
+public:
+
+	virtual void Reload();
+	UFUNCTION(NetMulticast,Reliable)
+	virtual void Multicast_PlayReloadFeedback();
+
+	
 };
