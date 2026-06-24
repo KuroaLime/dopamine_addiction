@@ -115,7 +115,7 @@ void AMainCharacter::BeginPlay()
 		if (m_pEquippedGun)
 		{
 			const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
-			m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("hand_rSocket"));
+			m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
 			//m_pEquippedGun->SetActorRelativeRotation(FRotator(0.f, 180.f, 0.f));
 
 		}

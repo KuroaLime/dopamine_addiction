@@ -69,8 +69,8 @@ void UTPSInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputComponen
 
 	if (IA_Move) EnhancedInputComponent->BindAction(IA_Move, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_Move);
 	if (IA_Look) EnhancedInputComponent->BindAction(IA_Look, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_Look);
-	if (IA_Jump) EnhancedInputComponent->BindAction(IA_Jump, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Jump);
-	if (IA_Crouch)
+	if (IA_Jump) EnhancedInputComponent->BindAction(IA_Jump, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Jump)
+	if (IA_Crouch && !OwnerController->GetPawn()->GetCharacterMovement()->IsFalling())
 	{
 		EnhancedInputComponent->BindAction(IA_Crouch, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Crouch);
 		EnhancedInputComponent->BindAction(IA_Crouch, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_CrouchEnd);
