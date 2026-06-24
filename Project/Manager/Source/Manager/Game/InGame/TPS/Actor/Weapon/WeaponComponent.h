@@ -30,6 +30,7 @@ public:
 	UFUNCTION(NetMulticast, Reliable)
 	virtual void Multicast_PlayFireFeedback(const FVector& MuzzleLocation);
 
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	USoundBase* m_FireSound;
@@ -42,5 +43,19 @@ public:
 	UFUNCTION(NetMulticast,Reliable)
 	virtual void Multicast_PlayReloadFeedback();
 
-	
+protected:
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Weapon | Ammo")
+	int32 CurrentAmmo=30;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon | Ammo")
+	int32 MaxMagazineCapacity = 30;
+public:
+	UFUNCTION(BlueprintPure, Category = "Weapon | Ammo")
+	int32 GetCurrentAmmo() const { return CurrentAmmo; }
+
+	UFUNCTION(BlueprintPure, Category = "Weapon | Ammo")
+	int32 GetMaxMagazineCapacity() const { return MaxMagazineCapacity; }
+
+	UFUNCTION(BlueprintCallable, Category = "Weapon | Ammo")
+	void ConsumeAmmo();
 };

@@ -198,8 +198,8 @@ void UTpsPlayerMainHUD::UpdateWeaponCountWidget()
 {
     if (CurrentCharacterState.IsValid())
     {
-        if (WEAPONMaxTxt)  WEAPONMaxTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
-        if (WEAPONCountxt) WEAPONCountxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
+        if (WEAPONMaxTxt)  WEAPONMaxTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxAmmoCount()));
+        if (WEAPONCountxt) WEAPONCountxt->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentAmmoCount()));
     }
 }
 

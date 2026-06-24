@@ -90,6 +90,28 @@ float UCharacterStateComponent::GetCurrentHP() {
 	}
 	return 0.0f;
 }
+int32 UCharacterStateComponent::GetCurrentAmmoCount() {
+	if (APawn* Pawn = Cast<APawn>(GetOwner())) {
+		if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {
+
+			return PS->GetCarriedAmmoByWeaponType(PS->GetWeaponID());
+
+		}
+	}
+	return 0;
+}
+
+//데이터 테이블 만들어서 수정 필요(하드)
+int32 UCharacterStateComponent::GetMaxAmmoCount() {
+	if (APawn* Pawn = Cast<APawn>(GetOwner())) {
+		if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {
+
+			return PS->GetCarriedAmmoByWeaponType(PS->GetWeaponID());
+
+		}
+	}
+	return 0;
+}
 
 float UCharacterStateComponent::GetMaxHP() {
 	if (CurrentStateData == nullptr) return 100.0f;

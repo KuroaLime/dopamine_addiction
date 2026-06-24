@@ -804,8 +804,13 @@ void AMainGameMode::ResetSeotdaRoundStates()
 {
     SeotdaRoundStates.Empty();
     SeotdaTurnOrder.Empty();
-    SeotdaPot = 0;
-    SeotdaCurrentBet = 0;
+
+    // 기본 판돈은 서버가 넣는다. 플레이어 돈에서는 빠지지 않는다.
+    SeotdaPot = FMath::Max(0, SeotdaServerSeedPot);
+
+    // Call을 눌렀을 때 각 플레이어가 기본 2원을 내도록 시작 기준 베팅을 2로 둔다.
+    SeotdaCurrentBet = FMath::Max(0, SeotdaBaseCallBet);
+
     SeotdaCurrentTurnIndex = 0;
     bSeotdaBettingActive = false;
     bSeotdaRoundResolved = false;
@@ -866,8 +871,13 @@ void AMainGameMode::StartSeotdaBettingRound()
     }
 
     SeotdaTurnOrder.Empty();
-    SeotdaPot = 0;
-    SeotdaCurrentBet = 0;
+
+    // 기본 판돈은 서버가 넣는다. 플레이어 돈에서는 빠지지 않는다.
+    SeotdaPot = FMath::Max(0, SeotdaServerSeedPot);
+
+    // Call을 눌렀을 때 각 플레이어가 기본 2원을 내도록 시작 기준 베팅을 2로 둔다.
+    SeotdaCurrentBet = FMath::Max(0, SeotdaBaseCallBet);
+
     SeotdaCurrentTurnIndex = 0;
 
     for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
@@ -1025,8 +1035,17 @@ bool AMainGameMode::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, E
     case EBettingAction::Call:
         RequestedPay = CallAmount;
         break;
+    case EBettingAction::Quarter:
+        RequestedPay = CallAmount + FMath::Max(1, (SeotdaPot + CallAmount) / 4);
+        break;
     case EBettingAction::Half:
         RequestedPay = CallAmount + FMath::Max(1, (SeotdaPot + CallAmount) / 2);
+        break;
+    case EBettingAction::Ddadang:
+        RequestedPay = CallAmount + FMath::Max(SeotdaBaseCallBet, SeotdaCurrentBet);
+        break;
+    case EBettingAction::Pping:
+        RequestedPay = (CallAmount > 0) ? CallAmount : SeotdaBaseCallBet;
         break;
     case EBettingAction::AllIn:
         RequestedPay = GetSeotdaPlayerMoney(PS);
@@ -3106,14 +3125,67 @@ bool AMainGameMode::ShouldForceSeotdaRedeal() const
 {
     for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
     {
-        const FSeotdaPlayerRoundState& State = Pair.Value;
+        const AMainPlayerState* RedealPS = Pair.Key;
+        const FSeotdaPlayerRoundState& RedealState = Pair.Value;
 
-        if (!State.bSubmitted || State.bFolded)
+        if (!RedealPS || !RedealState.bSubmitted || RedealState.bFolded)
         {
             continue;
         }
 
-        if (State.HandResult.bForcesRedeal)
+        const bool bIsGusa = RedealState.HandResult.SpecialRule == ESeotdaSpecialRule::Gusa;
+        const bool bIsMeongGusa = RedealState.HandResult.SpecialRule == ESeotdaSpecialRule::MeongteongguriGusa;
+
+        if (!bIsGusa && !bIsMeongGusa)
+        {
+            continue;
+        }
+
+        bool bHasOpponent = false;
+        FSeotdaHandResult BestOpponentResult;
+        FString BestOpponentName = TEXT("None");
+
+        for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& OtherPair : SeotdaRoundStates)
+        {
+            const AMainPlayerState* OtherPS = OtherPair.Key;
+            const FSeotdaPlayerRoundState& OtherState = OtherPair.Value;
+
+            if (!OtherPS || OtherPS == RedealPS || !OtherState.bSubmitted || OtherState.bFolded)
+            {
+                continue;
+            }
+
+            if (!bHasOpponent || CompareSeotdaHands(OtherState.HandResult, BestOpponentResult) > 0)
+            {
+                bHasOpponent = true;
+                BestOpponentResult = OtherState.HandResult;
+                BestOpponentName = OtherPS->GetPlayerName();
+            }
+        }
+
+        if (!bHasOpponent)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealRule Skip Player=%s Rule=%s Reason=NoActiveOpponent"),
+                *RedealPS->GetPlayerName(),
+                *RedealState.HandResult.Name);
+            continue;
+        }
+
+        // 일반 구사: 상대 최고 족보가 알리 이하이면 재경기.
+        // 멍구사: 상대 최고 족보가 9땡 이하이면 재경기.
+        const int32 AllowedMaxRank = bIsMeongGusa ? 10009 : 9000;
+        const bool bAllowRedeal = BestOpponentResult.Rank <= AllowedMaxRank;
+
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealRule Check Player=%s Rule=%s Opponent=%s OpponentCombo=%s OpponentRank=%d AllowedMaxRank=%d Redeal=%d"),
+            *RedealPS->GetPlayerName(),
+            *RedealState.HandResult.Name,
+            *BestOpponentName,
+            *BestOpponentResult.Name,
+            BestOpponentResult.Rank,
+            AllowedMaxRank,
+            bAllowRedeal ? 1 : 0);
+
+        if (bAllowRedeal)
         {
             return true;
         }
@@ -3121,7 +3193,6 @@ bool AMainGameMode::ShouldForceSeotdaRedeal() const
 
     return false;
 }
-
 bool AMainGameMode::TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reason)
 {
     if (!HasAuthority() || !GetWorld())
@@ -3255,6 +3326,31 @@ bool AMainGameMode::TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reason)
             *State->HandResult.Name,
             State->HandResult.Rank,
             State->HandResult.SubRank);
+
+        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+        {
+            AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
+            if (!MPC || MPC->GetPlayerState<AMainPlayerState>() != PS)
+            {
+                continue;
+            }
+
+            const FString RedealNotice = FString::Printf(
+                TEXT("[REDEAL] New Cards: #%d:%s, #%d:%s | Combo=%s"),
+                FirstRecordId,
+                *CardDebug::ToString(FirstInfo.CardID),
+                SecondRecordId,
+                *CardDebug::ToString(SecondInfo.CardID),
+                *State->HandResult.Name
+            );
+
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealNotice Player=%s Text=%s"),
+                *PS->GetPlayerName(),
+                *RedealNotice);
+
+            MPC->Client_ShowSeotdaResult(RedealNotice);
+            break;
+        }
     }
 
     return true;
