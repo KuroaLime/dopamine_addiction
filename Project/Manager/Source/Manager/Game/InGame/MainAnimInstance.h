@@ -45,6 +45,10 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Locomotion")
 	FVector LeftIKLocation;
 
+	/** 왼손 IK 알파 (1=완전 적용 / 0=끔). 재장전 중 0으로 부드럽게 보간 → ABP의 Two Bone IK Alpha에 연결 */
+	UPROPERTY(BlueprintReadOnly, Category = "Locomotion")
+	float LeftHandIKAlpha;
+
 	/** 수평 이동 속도 (블렌드스페이스 Y축, 보간됨) */
 	UPROPERTY(BlueprintReadOnly, Category = "Locomotion")
 	float GroundSpeed;
@@ -89,6 +93,10 @@ protected:
 	/** 무기 스탠스 (ABP Blend Poses by int용) — 0 맨손 / 1 권총(HG) / 2 양손총 */
 	UPROPERTY(BlueprintReadOnly, Category = "Combat")
 	int32 WeaponStance;
+
+	/** 재장전 몽타주 재생 중 여부 (왼손 IK 끄기 등에 사용) */
+	UPROPERTY(BlueprintReadOnly, Category = "Combat")
+	bool bIsReloading;
 
 	//================ 전역 상태 ================
 	/** 사망 여부 (HP 0) */
