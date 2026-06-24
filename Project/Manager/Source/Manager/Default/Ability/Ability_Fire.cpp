@@ -165,16 +165,6 @@ void UAbility_Fire::Server_ExecuteFire()
 	//   �ʷ�: ��Ʈ   (���� CamStart �� ImpactPoint + �ڽ�)
 	//   ����: �̽�   (���� CamStart �� CamEnd)
 	// -------------------------------------------------------
-	if (bCamHit && CamHit.GetActor())
-	{
-		DrawDebugLine(World, CamStart, CamHit.ImpactPoint, FColor::Green, false, 2.0f, 0, 0.5f);
-		DrawDebugBox(World, CamHit.ImpactPoint, FVector(15.0f), FColor::Green, false, 2.0f, 0, 2.0f);
-	}
-	else
-	{
-		DrawDebugLine(World, CamStart, CamEnd, FColor::Red, false, 2.0f, 0, 1.5f);
-	}
-
 	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
 	if (!EquippedGun || !EquippedGun->Setting || !EquippedGun->m_pMesh) return;
 
@@ -184,39 +174,19 @@ void UAbility_Fire::Server_ExecuteFire()
 	AMainCharacter* MainChar = Cast<AMainCharacter>(OwnerCharacter);
 	if (MainChar)
 	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] MainChar Called!")));
-		}
 		AWeapon* EquippedWeapon = MainChar->GetEquippedGun();
 		if (EquippedWeapon)
 		{
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] EquippedWeapon Called!")));
-			}
 			UWeaponComponent* WeaponComp = EquippedWeapon->Setting;
 			if (WeaponComp)
 			{
-				if (GEngine)
-				{
-					GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] WeaponComp Called!")));
-				}
 				if (WeaponComp->GetCurrentAmmo() <= 0)
 				{
-					if (GEngine)
-					{
-						GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] eaponComp->GetCurrentAmmo() Called!")));
-					}
 					EndAbility(true);
 					return;
 				}
 				if (OwnerCharacter->HasAuthority())
 				{
-					if (GEngine)
-					{
-						GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] wnerCharacter->HasAuthority Called!")));
-					}
 					WeaponComp->ConsumeAmmo();
 				}
 			}
