@@ -152,7 +152,7 @@ protected:
     // 임시 드랍 영역으로 자동 인식할지 여부.
     // 실전에서는 TriggerBox DropZone을 쓰는 쪽이 더 안전하다.
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    bool bAutoDetectSeasonIslandActorsAsDropZones = false;
+    bool bAutoDetectSeasonIslandActorsAsDropZones = true;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
     int32 CardIslandDropExpectedZoneCount = 4;
@@ -170,7 +170,7 @@ protected:
     float CardIslandMinCardDistance = 250.0f;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
-    bool bProjectCardDropsToNavigation = true;
+    bool bProjectCardDropsToNavigation = false;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
     FVector CardIslandNavProjectExtent = FVector(200.0f, 200.0f, 500.0f);
@@ -290,6 +290,7 @@ private:
     TArray<ECardID> BuildCardBundleIDs() const;
     void ShuffleCardIDs(TArray<ECardID>& CardIDs) const;
     FVector GetDistributedCardDropLocation(int32 Index, int32 TotalCount) const;
+    FVector GetRandomFallbackCardDropLocation(const TArray<FVector>& ExistingLocations) const;
 
     TArray<TArray<ECardID>> BuildBalancedIslandCardGroups() const;
     int32 GetCardIslandBalanceValue(ECardID CardID) const;
