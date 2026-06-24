@@ -136,7 +136,10 @@ void UTPSInputHandler::Input_Crouch()
 {
 	if (ACharacter* OwnerCharacter = Cast<ACharacter>(OwnerController->GetPawn()))
 	{
-		OwnerCharacter->Crouch();
+		if (!OwnerCharacter->GetCharacterMovement()->IsFalling())
+		{
+			OwnerCharacter->Crouch();
+		}
 	}
 }
 
