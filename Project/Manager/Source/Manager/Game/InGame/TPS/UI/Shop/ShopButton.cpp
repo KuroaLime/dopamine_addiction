@@ -78,3 +78,14 @@ void UShopButton::UpdateWidget() {
 void UShopButton::SetItemID(int32 NewID) {
 	ButtonItemID = NewID;
 }
+void UShopButton::SetButtonText(const FText& NameText, const FText& PriceText)
+{
+	if (Item_Name)
+	{
+		Item_Name->SetText(NameText);
+	}
+	if (Item_Price)
+	{
+		Item_Price->SetText(PriceText);
+	}
+}
