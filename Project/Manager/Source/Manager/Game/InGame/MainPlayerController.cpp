@@ -491,7 +491,7 @@ void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int3
 		return;
 	}
 
-	PS->AddGold(Cost);
+	PS->AddGold(-Cost);
 	PS->Server_ApplyUpgrad_Implementation(UpgradeType);
 	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("static Status UP")));
 

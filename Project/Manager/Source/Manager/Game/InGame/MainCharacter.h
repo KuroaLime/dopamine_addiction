@@ -113,4 +113,7 @@ protected:
 public:
 	void UpdateCharacterStats();
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
+private:
+	void OnPlayerDataChanged(const FPlayerData& NewData);
+	void OnAccumulatedUpgradesChanged(const FAccumulatedUpgrades& NewUpgrades);
 };

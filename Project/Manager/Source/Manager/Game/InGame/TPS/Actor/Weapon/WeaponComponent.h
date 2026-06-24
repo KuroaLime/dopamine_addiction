@@ -51,11 +51,11 @@ public:
 	UFUNCTION(BlueprintPure, Category = "Weapon | Ammo")
 	int32 GetCurrentAmmo() const { return CurrentAmmo; }
 
-	UFUNCTION(BlueprintPure, Category = "Weapon | Ammo")
-	int32 GetMaxMagazineCapacity() const { return MaxMagazineCapacity; }
 
 	UFUNCTION(BlueprintCallable, Category = "Weapon | Ammo")
 	void ConsumeAmmo();
 	UFUNCTION(BlueprintCallable, Category = "Weapon | Ammo")
 	void SetCurrentAmmo(int32 NewAmmo);
+public:
+	virtual int32 GetMaxMagazineCapacity() const;
 };

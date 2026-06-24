@@ -7,6 +7,9 @@
 #include "EngineUtils.h"
 #include "Game/InGame/MainPlayerState.h"
 #include "Net/UnrealNetwork.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "GameFramework/GameStateBase.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"  
 UWeaponComponent::UWeaponComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -102,4 +105,28 @@ void UWeaponComponent::SetCurrentAmmo(int32 NewAmmo)
     {
         CurrentAmmo = NewAmmo;
     }
+}
+
+int32 UWeaponComponent::GetMaxMagazineCapacity() const
+{
+    AActor* WeaponActor = GetOwner();
+    if (WeaponActor)
+    {
+        APawn* OwnerPawn = Cast<APawn>(WeaponActor->GetOwner());
+        if (AMainPlayerState* PS = OwnerPawn ? OwnerPawn->GetPlayerState<AMainPlayerState>() : nullptr)
+        {
+            if (AGameStateBase* GS = GetWorld() ? GetWorld()->GetGameState() : nullptr)
+            {
+                if (IPhaseGameStateInterface* PhaseGS = Cast<IPhaseGameStateInterface>(GS))
+                {
+                    int32 BaseCapacity = PhaseGS->GetWeaponBaseData(WeaponType, EWeaponBaseStatType::MagazineCapacity);
+                    if (BaseCapacity > 0)
+                    {
+                        return PS->GetFinalMaxMagazine(BaseCapacity);
+                    }
+                }
+            }
+        }
+    }
+    return MaxMagazineCapacity;
 }

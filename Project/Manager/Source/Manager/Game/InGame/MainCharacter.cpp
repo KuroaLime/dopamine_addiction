@@ -165,6 +165,12 @@ void AMainCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 		Manager->RequestUnregister(this);
 	}
 
+	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>())
+	{
+		PS->OnPlayerDataChangedNative.RemoveAll(this);
+		PS->OnAccumulatedUpgradesChangedNative.RemoveAll(this);
+	}
+
 	Super::EndPlay(EndPlayReason);
 }
 
@@ -218,6 +224,16 @@ void AMainCharacter::InitPlayerData()
 		if (CharacterState){
 			CharacterState->BindToPlayerState(PS);
 		}
+	}
+	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>())
+	{
+		if (CharacterState) {
+			CharacterState->BindToPlayerState(PS);
+		}
+		PS->OnPlayerDataChangedNative.AddUObject(this, &AMainCharacter::OnPlayerDataChanged);
+		PS->OnAccumulatedUpgradesChangedNative.AddUObject(this, &AMainCharacter::OnAccumulatedUpgradesChanged);
+
+		UpdateCharacterStats();
 	}
 }
 
@@ -347,4 +363,12 @@ void AMainCharacter::UpdateCharacterStats()
 		float BaseSpeed = 600.f;
 		GetCharacterMovement()->MaxWalkSpeed = PS->GetFinalMoveSpeed(BaseSpeed);
 	}
+}
+void AMainCharacter::OnPlayerDataChanged(const FPlayerData& NewData)
+{
+	UpdateCharacterStats();
+}
+void AMainCharacter::OnAccumulatedUpgradesChanged(const FAccumulatedUpgrades& NewUpgrades)
+{
+	UpdateCharacterStats();
 }

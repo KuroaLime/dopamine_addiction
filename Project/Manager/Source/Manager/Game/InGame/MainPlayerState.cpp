@@ -302,7 +302,10 @@ void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 	default:
 		break;
 	}
-
+	if (OnPlayerDataChangedNative.IsBound())
+	{
+		OnPlayerDataChangedNative.Broadcast(PlayerData);
+	}
 	ForceNetUpdate();
 }
 
@@ -348,7 +351,10 @@ void AMainPlayerState::ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledS
 			break;
 		}
 	}
-
+	if (OnAccumulatedUpgradesChangedNative.IsBound())
+	{
+		OnAccumulatedUpgradesChangedNative.Broadcast(AccumulatedUpgrades);
+	}
 	ForceNetUpdate();
 }
 
@@ -360,7 +366,7 @@ float AMainPlayerState::GetFinalRegenRate(float BaseRegen) const {
 	return BaseRegen + (PlayerData.LvHealthRegeneration * 1.0f) + AccumulatedUpgrades.LvHealthRegen;
 }
 float AMainPlayerState::GetFinalMoveSpeed(float BaseMoveSpeed) const {
-	return BaseMoveSpeed + (PlayerData.LvMovementSpeed * 36.0f) + AccumulatedUpgrades.LvMoveSpeed;
+	return BaseMoveSpeed + (PlayerData.LvMovementSpeed * 100.0f) + AccumulatedUpgrades.LvMoveSpeed;
 }
 float AMainPlayerState::GetFinalWeaponDamageMultiplier() const {
 	return 1.0f + (WeaponData.LvDamage * 0.15f) + AccumulatedUpgrades.LvWeaponDamage;
