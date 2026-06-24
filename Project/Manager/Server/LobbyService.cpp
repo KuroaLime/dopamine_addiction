@@ -27,6 +27,12 @@ static const char* DEDI_EDITOR_ENV =
 static const char* DEDI_PACKAGED_SERVER_ENV =
 "MANAGER_DEDI_SERVER_EXE";
 
+static const char* DEDI_PROJECT_ENV =
+"MANAGER_UPROJECT_PATH";
+
+static const char* DEDI_WORKING_DIR_ENV =
+"MANAGER_DEDI_WORKING_DIR";
+
 static const char* DEDI_EXE_DEFAULT_PATH =
 "C:\\Program Files\\Epic Games\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor.exe";
 
@@ -35,6 +41,12 @@ static const char* DEDI_EXE_REL_PATH =
 
 static const char* DEDI_EXE_FALLBACK_PATH =
 "S:\\UE\\UE_5.7_Source\\Engine\\Binaries\\Win64\\UnrealEditor.exe";
+
+static const char* DEDI_PROJECT_DEFAULT_PATH =
+"X:\\Project\\Manager\\Manager.uproject";
+
+static const char* DEDI_WORKING_DIR_DEFAULT_PATH =
+"X:\\Project\\Manager";
 
 static const char* DEDI_PROJECT_REL_PATH =
 "..\\..\\..\\Manager.uproject";
@@ -176,11 +188,33 @@ static std::string GetDediEditorExePath()
 
 static std::string GetDediProjectPath()
 {
+    std::string envPath = GetEnvironmentValue(DEDI_PROJECT_ENV);
+    if (!envPath.empty())
+    {
+        return envPath;
+    }
+
+    if (FileExists(DEDI_PROJECT_DEFAULT_PATH))
+    {
+        return DEDI_PROJECT_DEFAULT_PATH;
+    }
+
     return MakeAbsoluteFromExeDir(DEDI_PROJECT_REL_PATH);
 }
 
 static std::string GetDediWorkingDir()
 {
+    std::string envPath = GetEnvironmentValue(DEDI_WORKING_DIR_ENV);
+    if (!envPath.empty())
+    {
+        return envPath;
+    }
+
+    if (DirectoryExists(DEDI_WORKING_DIR_DEFAULT_PATH))
+    {
+        return DEDI_WORKING_DIR_DEFAULT_PATH;
+    }
+
     return MakeAbsoluteFromExeDir(DEDI_WORKING_DIR_REL_PATH);
 }
 
