@@ -2542,6 +2542,176 @@ bool AMainGameMode::PickIslandCardDropLocation(const FCardIslandDropZone& DropZo
     return false;
 }
 
+bool AMainGameMode::PickDeathCardDropLocation(const FVector& DeathLocation, const TArray<FVector>& ExistingDropLocations, int32 CardIndex, FVector& OutLocation) const
+{
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] Card DeathDropLocationFail CardIndex=%d Reason=NoWorld Death=%s"),
+            CardIndex,
+            *DeathLocation.ToCompactString());
+        return false;
+    }
+
+    UNavigationSystemV1* NavSystem = UNavigationSystemV1::GetCurrent(World);
+    if (!NavSystem)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] Card DeathDropLocationFail CardIndex=%d Reason=NoNavSystem Death=%s"),
+            CardIndex,
+            *DeathLocation.ToCompactString());
+        return false;
+    }
+
+    const int32 MaxAttempts = FMath::Max(8, CardDeathDropMaxAttemptsPerCard);
+    const float StartRadius = FMath::Max(0.0f, CardDeathDropStartRadius);
+    const float RadiusStep = FMath::Max(25.0f, CardDeathDropRadiusStep);
+    const float MaxRadius = FMath::Max(StartRadius, CardDeathDropMaxRadius);
+    const float MaxProjectDistance = FMath::Max(50.0f, CardDeathDropMaxNavProjectDistance);
+    const float MinDistance = FMath::Max(0.0f, CardDeathDropMinCardDistance);
+    const float GroundOffsetZ = FMath::Max(0.0f, CardDeathDropGroundOffsetZ);
+    const FVector ProjectExtent(
+        FMath::Max(80.0f, CardDeathDropNavProjectExtent.X),
+        FMath::Max(80.0f, CardDeathDropNavProjectExtent.Y),
+        FMath::Max(700.0f, CardDeathDropNavProjectExtent.Z));
+
+    int32 NavFail = 0;
+    int32 ProjectDistanceFail = 0;
+    int32 DeathDistanceFail = 0;
+    int32 NoDropFail = 0;
+    int32 DistFail = 0;
+    int32 OverlapFail = 0;
+    int32 OverheadFail = 0;
+    int32 TotalCandidates = 0;
+
+    auto IsFarEnoughFromDeathCards = [&](const FVector& Candidate) -> bool
+    {
+        if (MinDistance <= 0.0f)
+        {
+            return true;
+        }
+
+        const float MinDistanceSq = FMath::Square(MinDistance);
+        for (const FVector& ExistingLocation : ExistingDropLocations)
+        {
+            if (FVector::DistSquared2D(Candidate, ExistingLocation) < MinDistanceSq)
+            {
+                return false;
+            }
+        }
+
+        return true;
+    };
+
+    auto TryAcceptQueryPoint = [&](const FVector& QueryPoint, const TCHAR* Source, int32 Attempt) -> bool
+    {
+        ++TotalCandidates;
+
+        FNavLocation NavLocation;
+        if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, ProjectExtent))
+        {
+            ++NavFail;
+            return false;
+        }
+
+        if (FVector::Dist2D(QueryPoint, NavLocation.Location) > MaxProjectDistance)
+        {
+            ++ProjectDistanceFail;
+            return false;
+        }
+
+        if (FVector::Dist2D(DeathLocation, NavLocation.Location) > MaxRadius)
+        {
+            ++DeathDistanceFail;
+            return false;
+        }
+
+        const FVector Candidate = NavLocation.Location + FVector(0.0f, 0.0f, GroundOffsetZ);
+
+        if (IsInsideNoDropZone(Candidate))
+        {
+            ++NoDropFail;
+            return false;
+        }
+
+        if (!IsFarEnoughFromDeathCards(Candidate))
+        {
+            ++DistFail;
+            return false;
+        }
+
+        if (!IsCardDropLocationClear(Candidate))
+        {
+            ++OverlapFail;
+            return false;
+        }
+
+        if (!HasOverheadClearance(Candidate))
+        {
+            ++OverheadFail;
+            return false;
+        }
+
+        OutLocation = Candidate;
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("[DS] Card DeathDropLocation CardIndex=%d Source=%s Attempt=%d TotalCandidates=%d ExistingCards=%d Death=%s Query=%s Nav=%s Spawn=%s ProjectDist=%.1f DeathDist=%.1f"),
+            CardIndex,
+            Source,
+            Attempt,
+            TotalCandidates,
+            ExistingDropLocations.Num(),
+            *DeathLocation.ToCompactString(),
+            *QueryPoint.ToCompactString(),
+            *NavLocation.Location.ToCompactString(),
+            *Candidate.ToCompactString(),
+            FVector::Dist2D(QueryPoint, NavLocation.Location),
+            FVector::Dist2D(DeathLocation, NavLocation.Location));
+
+        return true;
+    };
+
+    const int32 PointsPerRing = 8;
+    const float BaseAngleDegrees = 90.0f + static_cast<float>(CardIndex) * 72.0f;
+
+    for (int32 Attempt = 1; Attempt <= MaxAttempts; ++Attempt)
+    {
+        const int32 ZeroBasedAttempt = Attempt - 1;
+        const int32 RingIndex = ZeroBasedAttempt / PointsPerRing;
+        const int32 PointIndex = ZeroBasedAttempt % PointsPerRing;
+        const float Radius = FMath::Min(MaxRadius, StartRadius + static_cast<float>(RingIndex) * RadiusStep);
+        const float AngleDegrees = BaseAngleDegrees + static_cast<float>(PointIndex) * (360.0f / static_cast<float>(PointsPerRing)) + static_cast<float>(RingIndex) * 22.5f;
+        const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
+
+        const FVector QueryPoint(
+            DeathLocation.X + FMath::Cos(AngleRadians) * Radius,
+            DeathLocation.Y + FMath::Sin(AngleRadians) * Radius,
+            DeathLocation.Z);
+
+        if (TryAcceptQueryPoint(QueryPoint, TEXT("DeathNavSpiral"), Attempt))
+        {
+            return true;
+        }
+    }
+
+    UE_LOG(LogTemp, Error,
+        TEXT("[DS] Card DeathDropLocationFail CardIndex=%d Reason=AllCandidatesRejected Death=%s MaxAttempts=%d MaxRadius=%.1f ExistingCards=%d NavFail=%d ProjectDistFail=%d DeathDistFail=%d DistFail=%d OverlapFail=%d OverheadFail=%d NoDrop=%d TotalCandidates=%d"),
+        CardIndex,
+        *DeathLocation.ToCompactString(),
+        MaxAttempts,
+        MaxRadius,
+        ExistingDropLocations.Num(),
+        NavFail,
+        ProjectDistanceFail,
+        DeathDistanceFail,
+        DistFail,
+        OverlapFail,
+        OverheadFail,
+        NoDropFail,
+        TotalCandidates);
+
+    return false;
+}
+
 int32 AMainGameMode::CreateCardInstance(ECardID CardID)
 {
     if (CardID == ECardID::None)
@@ -2644,6 +2814,8 @@ int32 AMainGameMode::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const 
     }
 
     int32 SpawnedCount = 0;
+    TArray<FVector> ExistingDropLocations;
+    ExistingDropLocations.Reserve(CardsToDrop.Num());
 
     for (int32 CardIndex = 0; CardIndex < CardsToDrop.Num(); ++CardIndex)
     {
@@ -2656,12 +2828,23 @@ int32 AMainGameMode::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const 
             continue;
         }
 
-        FVector DropLocation = BaseDropLocation;
-        const float Angle = (CardIndex / static_cast<float>(CardsToDrop.Num())) * 2.0f * PI;
-        constexpr float DropRadius = 150.0f;
-        DropLocation.X += FMath::Cos(Angle) * DropRadius;
-        DropLocation.Y += FMath::Sin(Angle) * DropRadius;
-        DropLocation.Z += 100.0f;
+        FVector DropLocation;
+        if (!PickDeathCardDropLocation(BaseDropLocation, ExistingDropLocations, CardIndex, DropLocation))
+        {
+            DropLocation = BaseDropLocation;
+            const float Angle = (CardIndex / static_cast<float>(CardsToDrop.Num())) * 2.0f * PI;
+            const float DropRadius = FMath::Max(120.0f, CardDeathDropStartRadius);
+            DropLocation.X += FMath::Cos(Angle) * DropRadius;
+            DropLocation.Y += FMath::Sin(Angle) * DropRadius;
+            DropLocation.Z += FMath::Max(80.0f, CardDeathDropGroundOffsetZ);
+
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropLocationFallback Player=%s Index=%d Instance=%d Card=%d Location=%s"),
+                *TargetPS->GetPlayerName(),
+                CardIndex,
+                CardInfo.CardInstanceId,
+                static_cast<int32>(CardInfo.CardID),
+                *DropLocation.ToCompactString());
+        }
 
         FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId);
         if (!Record)
@@ -2681,6 +2864,7 @@ int32 AMainGameMode::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const 
             FOwnedCardInfo RemovedCard;
             TargetPS->RemoveOwnedCardByInstanceId(CardInfo.CardInstanceId, RemovedCard);
             SpawnedCount++;
+            ExistingDropLocations.Add(DropLocation);
 
             UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFallback Player=%s OldInstance=%d NewInstance=%d Card=%d Name=%s Location=%s"),
                 *TargetPS->GetPlayerName(),
@@ -2723,6 +2907,7 @@ int32 AMainGameMode::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const 
         FOwnedCardInfo RemovedCard;
         TargetPS->RemoveOwnedCardByInstanceId(CardInfo.CardInstanceId, RemovedCard);
         SpawnedCount++;
+        ExistingDropLocations.Add(DropLocation);
 
         UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDrop Player=%s Instance=%d Card=%d Name=%s Actor=%s Location=%s RemainingOwned=%d"),
             *TargetPS->GetPlayerName(),
