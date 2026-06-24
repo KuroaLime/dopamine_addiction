@@ -5,6 +5,8 @@
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Button.h"
+#include "Animation/WidgetAnimation.h"
+#include "TimerManager.h"
 void UShopButton::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
 
 }
@@ -18,12 +20,28 @@ void UShopButton::NativeConstruct() {
 
 
 void UShopButton::OnPurchaseButtonClicked() {
-	if (ClickAnim && !IsAnimationPlaying(ClickAnim)) {
-		PlayAnimation(ClickAnim, 0.f, 1, EUMGSequencePlayMode::Forward);
+	if (ClickAnim)
+	{
+		PlayAnimation(ClickAnim);
+		float AnimDuration = ClickAnim->GetEndTime();
+		FTimerHandle PurchaseTimerHandle;
+		GetWorld()->GetTimerManager().SetTimer(
+			PurchaseTimerHandle,
+			FTimerDelegate::CreateWeakLambda(this, [this]()
+				{
+					if (OnPurchaseEvent.IsBound())
+					{
+						OnPurchaseEvent.Broadcast(ButtonItemID);
+					}
+				}),
+			AnimDuration,
+			false
+		);
 	}
-
-	if (OnPurchaseEvent.IsBound())
+	else
+	{
 		OnPurchaseEvent.Broadcast(ButtonItemID);
+	}
 
 }
 void UShopButton::NativeOnMouseEnter(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
@@ -44,16 +62,16 @@ void UShopButton::NativeOnMouseLeave(const FPointerEvent& MouseEvent)
 		PlayAnimation(HoverAnim, 0.f, 1, EUMGSequencePlayMode::Reverse);
 	}
 }
-FReply UShopButton::NativeOnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
-{
-	if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton) {
-		if (ClickAnim && !IsAnimationPlaying(ClickAnim)) {
-			PlayAnimation(ClickAnim, 0.f, 1, EUMGSequencePlayMode::Forward);
-			return FReply::Handled();
-		}
-	}
-	return Super::NativeOnMouseButtonDown(MyGeometry, MouseEvent);
-}
+//FReply UShopButton::NativeOnMouseButtonDown(const FGeometry& MyGeometry, const FPointerEvent& MouseEvent)
+//{
+//	if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton) {
+//		if (ClickAnim && !IsAnimationPlaying(ClickAnim)) {
+//			PlayAnimation(ClickAnim, 0.f, 1, EUMGSequencePlayMode::Forward);
+//			return FReply::Handled();
+//		}
+//	}
+//	return Super::NativeOnMouseButtonDown(MyGeometry, MouseEvent);
+//}
 void UShopButton::UpdateWidget() {
 	//물결이 차오르는 듯한 표현 추가 필요
 }
