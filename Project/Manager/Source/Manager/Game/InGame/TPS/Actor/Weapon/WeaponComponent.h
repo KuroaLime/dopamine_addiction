@@ -8,6 +8,7 @@
 #include "WeaponComponent.generated.h"
 
 class UNiagaraSystem;
+class UMainAnimInstance;
 
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class MANAGER_API UWeaponComponent : public UActorComponent
@@ -64,4 +65,9 @@ public:
 	void SetCurrentAmmo(int32 NewAmmo);
 public:
 	virtual int32 GetMaxMagazineCapacity() const;
+
+private:
+	// 소유 폰의 MainAnimInstance를 찾고, 컴포넌트의 WeaponType을 PlayerState 값과 동기화한다.
+	// (Fire/Reload 피드백 멀티캐스트가 공유하는 보일러플레이트)
+	UMainAnimInstance* ResolveOwnerAnimAndSyncWeapon();
 };
