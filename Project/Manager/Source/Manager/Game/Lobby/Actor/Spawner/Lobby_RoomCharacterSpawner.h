@@ -31,7 +31,9 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, Category = "UserInfoUI")
 	class UWidgetComponent* UserInfoWidget;
-
+protected:
+	UPROPERTY(EditAnywhere, Category = "Lobby")
+	TArray<USkeletalMesh*> LobbyMeshes;
 private:
 
 public:	

@@ -5,6 +5,7 @@
 #include "Default/System/UManagerGameInstance.h"
 #include "Game/Lobby/UI/RoomUserWidget.h"
 #include "Components/WidgetComponent.h"
+#include "GameFramework/Character.h"
 
 // Sets default values
 ALobby_RoomCharacterSpawner::ALobby_RoomCharacterSpawner()
@@ -45,16 +46,15 @@ void ALobby_RoomCharacterSpawner::BeginPlay()
 
 void ALobby_RoomCharacterSpawner::SpawnCharacter()
 {
-    if (GEngine)
-    {
-        FString ClassName = CharacterClass ? CharacterClass->GetName() : TEXT("None");
-        GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, FString::Printf(TEXT("Spawning Class: %s"), *ClassName));
-    }
-
     if (CharacterClass && SpawnArrow)
     {
         FTransform SpawnTransform = SpawnArrow->GetComponentTransform();
         SpawnedCharacter = GetWorld()->SpawnActor<AActor>(CharacterClass, SpawnTransform);
+        ACharacter* LobbyChar = Cast<ACharacter>(SpawnedCharacter);
+        if (LobbyChar && LobbyChar->GetMesh() && LobbyMeshes.IsValidIndex(SpawnPointID))
+        {
+            LobbyChar->GetMesh()->SetSkeletalMesh(LobbyMeshes[SpawnPointID]);
+        }
     }
 }
 
