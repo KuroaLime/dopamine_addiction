@@ -94,8 +94,11 @@ public:
 
 	UCameraComponent* SetFollowCamera() { return FollowCamera; }
 protected:
+protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<AWeapon> m_cGun;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
+	TMap<EWeaponType, TSubclassOf<AWeapon>> WeaponClasses;
 
 	UPROPERTY(ReplicatedUsing = OnRep_EquippedGun, VisibleAnywhere, Category = "Weapon")
 	AWeapon* m_pEquippedGun;

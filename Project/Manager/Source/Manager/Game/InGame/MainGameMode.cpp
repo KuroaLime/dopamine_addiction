@@ -8,6 +8,7 @@
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/MainPlayerState.h"
 #include "Game/InGame/MainGameState.h"
+#include "Game/InGame/MainCharacter.h"
 #include "Game/InGame/Card/Actor/CardDropActor.h"
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
@@ -15,12 +16,14 @@
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Components/ActorComponent.h"
 #include "Kismet/GameplayStatics.h"
 #include "EngineUtils.h"
 #include "NavigationSystem.h"
 #include "TimerManager.h"
 #include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
+#include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 
 AMainGameMode::AMainGameMode()
 {
@@ -211,6 +214,8 @@ void AMainGameMode::BroadcastSwitchMode(EGamePhase NewPhase)
 
 void AMainGameMode::BroadcastSwitchLevel(FName LevelToUnload, FName LevelToLoad)
 {
+    LoadServerStreamLevelForPhase(LevelToLoad, TEXT("BroadcastSwitchLevel"));
+
     int32 TargetCount = 0;
 
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
@@ -228,6 +233,33 @@ void AMainGameMode::BroadcastSwitchLevel(FName LevelToUnload, FName LevelToLoad)
         TargetCount,
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));
+}
+
+void AMainGameMode::LoadServerStreamLevelForPhase(FName LevelToLoad, const TCHAR* Context)
+{
+    if (LevelToLoad.IsNone())
+    {
+        return;
+    }
+
+    UWorld* World = GetWorld();
+    if (!World || World->GetNetMode() == NM_Client)
+    {
+        return;
+    }
+
+    FLatentActionInfo LoadInfo;
+    LoadInfo.CallbackTarget = this;
+    LoadInfo.UUID = ++ServerStreamingLatentActionId;
+
+    UGameplayStatics::LoadStreamLevel(World, LevelToLoad, true, true, LoadInfo);
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Main ServerLoadStreamLevel load=%s Context=%s Round=%d ServerPhase=%s UUID=%d"),
+        *LevelToLoad.ToString(),
+        Context ? Context : TEXT("<NULL>"),
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase),
+        LoadInfo.UUID);
 }
 
 bool AMainGameMode::IsBattleRoyalePhase() const
@@ -378,10 +410,11 @@ void AMainGameMode::StartTransitionToCardPhase()
     }
 
     EndPhase();
-    SetPlayerPawnGameplayEnabled(false, TEXT("TransitionToCard"));
+    SetPlayerPawnGameplayState(false, false, true, TEXT("TransitionToCard"));
     ClearCardDrops();
     ClearPlayerPawnMovementBases(TEXT("TransitionToCard"));
-    BroadcastSwitchLevel(TEXT("Test"), TEXT("Card_Game_Stage"));
+    BroadcastSwitchLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
+    RequestMovePlayersToCardIslandSeats(TEXT("TransitionToCard"));
     StartTimedServerPhase(EDediServerPhase::TransitionToCard, GetTransitionDuration());
 }
 
@@ -394,6 +427,8 @@ void AMainGameMode::StartCardGamePhase()
     }
 
     ClearPlayerPawnMovementBases(TEXT("CardGame"));
+    RequestMovePlayersToCardIslandSeats(TEXT("CardGame"));
+    SetPlayerPawnGameplayState(true, false, true, TEXT("CardGame"));
     EnsureThreeCardsForCardGame();
     ResetSeotdaRoundStates();
     BroadcastSwitchMode(EGamePhase::Card);
@@ -440,8 +475,9 @@ void AMainGameMode::StartTransitionToBattlePhase()
 
     ClearCardDrops();
     ClearRoundCardsForAllPlayers();
+    SetPlayerPawnGameplayState(true, false, true, TEXT("TransitionToBattle"));
     ClearPlayerPawnMovementBases(TEXT("TransitionToBattle"));
-    BroadcastSwitchLevel(TEXT("Card_Game_Stage"), TEXT("Test"));
+    BroadcastSwitchLevel(TEXT("Card_Game_Stage"), TEXT("TPS_Game_Stage"));
     StartTimedServerPhase(EDediServerPhase::TransitionToBattle, GetTransitionDuration());
 }
 
@@ -3280,7 +3316,14 @@ bool AMainGameMode::IsCardPickupAllowed() const
 
 void AMainGameMode::SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context)
 {
+    SetPlayerPawnGameplayState(bEnabled, bEnabled, bEnabled, Context);
+}
+
+void AMainGameMode::SetPlayerPawnGameplayState(bool bVisible, bool bMovementEnabled, bool bCollisionEnabled, const TCHAR* Context)
+{
     int32 TargetCount = 0;
+    int32 PawnCount = 0;
+    int32 WeaponCount = 0;
 
     for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
     {
@@ -3290,9 +3333,15 @@ void AMainGameMode::SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Con
             continue;
         }
 
+        if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(PC))
+        {
+            MainPC->SetGameplayInputLocked(!bMovementEnabled, Context);
+        }
+
         APawn* Pawn = PC->GetPawn();
         if (!Pawn)
         {
+            TargetCount++;
             continue;
         }
 
@@ -3303,7 +3352,7 @@ void AMainGameMode::SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Con
                 MoveComp->SetBase(nullptr);
                 MoveComp->StopMovementImmediately();
 
-                if (bEnabled)
+                if (bMovementEnabled)
                 {
                     MoveComp->SetMovementMode(MOVE_Walking);
                 }
@@ -3314,16 +3363,33 @@ void AMainGameMode::SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Con
             }
         }
 
-        Pawn->SetReplicateMovement(bEnabled);
-        Pawn->SetActorEnableCollision(bEnabled);
-        Pawn->SetActorHiddenInGame(!bEnabled);
+        if (AMainCharacter* MainCharacter = Cast<AMainCharacter>(Pawn))
+        {
+            if (AWeapon* EquippedWeapon = MainCharacter->GetEquippedGun())
+            {
+                EquippedWeapon->SetActorHiddenInGame(!bVisible);
+                EquippedWeapon->SetActorEnableCollision(bCollisionEnabled);
+                EquippedWeapon->SetActorTickEnabled(bVisible);
+                EquippedWeapon->ForceNetUpdate();
+                WeaponCount++;
+            }
+        }
+
+        Pawn->SetReplicateMovement(true);
+        Pawn->SetActorEnableCollision(bCollisionEnabled);
+        Pawn->SetActorHiddenInGame(!bVisible);
         Pawn->ForceNetUpdate();
+        PawnCount++;
         TargetCount++;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main SetPlayerPawnGameplayEnabled enabled=%d targets=%d Context=%s Round=%d ServerPhase=%s"),
-        bEnabled ? 1 : 0,
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Main SetPlayerPawnGameplayState visible=%d movement=%d collision=%d controllers=%d pawns=%d weapons=%d Context=%s Round=%d ServerPhase=%s"),
+        bVisible ? 1 : 0,
+        bMovementEnabled ? 1 : 0,
+        bCollisionEnabled ? 1 : 0,
         TargetCount,
+        PawnCount,
+        WeaponCount,
         Context ? Context : TEXT("<NULL>"),
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));
@@ -3365,6 +3431,494 @@ void AMainGameMode::ClearPlayerPawnMovementBases(const TCHAR* Context)
         Context ? Context : TEXT("<NULL>"),
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));
+}
+
+TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCount) const
+{
+    TArray<FTransform> SeatTransforms;
+    RequiredCount = FMath::Max(0, RequiredCount);
+    TArray<AActor*> SeatActors;
+    int32 ComponentTaggedSeatCount = 0;
+
+    UWorld* World = GetWorld();
+    if (World && !CardPlayerSeatTag.IsNone())
+    {
+        UGameplayStatics::GetAllActorsWithTag(World, CardPlayerSeatTag, SeatActors);
+
+        for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+        {
+            AActor* CandidateActor = *ActorIt;
+            if (!CandidateActor || SeatActors.Contains(CandidateActor))
+            {
+                continue;
+            }
+
+            TInlineComponentArray<UActorComponent*> Components(CandidateActor);
+            for (UActorComponent* Component : Components)
+            {
+                if (Component && Component->ComponentTags.Contains(CardPlayerSeatTag))
+                {
+                    SeatActors.Add(CandidateActor);
+                    ComponentTaggedSeatCount++;
+                    break;
+                }
+            }
+        }
+
+        SeatActors.Sort([](const AActor& A, const AActor& B)
+        {
+            return A.GetName() < B.GetName();
+        });
+
+        for (AActor* SeatActor : SeatActors)
+        {
+            if (!SeatActor)
+            {
+                continue;
+            }
+
+            FVector SeatLocation = SeatActor->GetActorLocation();
+            SeatLocation.Z += CardPlayerSeatZOffset;
+            SeatTransforms.Add(FTransform(SeatActor->GetActorRotation(), SeatLocation));
+
+            if (SeatTransforms.Num() >= RequiredCount)
+            {
+                break;
+            }
+        }
+    }
+
+    const int32 TaggedSeatCount = SeatTransforms.Num();
+    const float SafeSpacing = FMath::Max(100.0f, CardPlayerSeatSpacing);
+    const float Radius = RequiredCount <= 1
+        ? 0.0f
+        : FMath::Max(SafeSpacing, (SafeSpacing * RequiredCount) / (2.0f * PI));
+    auto ProjectPointToSeatNavWithExtent = [World](const FVector& QueryLocation, FVector& OutNavLocation, const FVector& ProjectExtent, float Max2DDistance) -> bool
+    {
+        if (!World)
+        {
+            return false;
+        }
+
+        UNavigationSystemV1* NavSys = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World);
+        if (!NavSys)
+        {
+            return false;
+        }
+
+        FNavLocation ProjectedLocation;
+        if (!NavSys->ProjectPointToNavigation(QueryLocation, ProjectedLocation, ProjectExtent))
+        {
+            return false;
+        }
+
+        if (Max2DDistance > 0.0f && FVector::Dist2D(QueryLocation, ProjectedLocation.Location) > Max2DDistance)
+        {
+            return false;
+        }
+
+        OutNavLocation = ProjectedLocation.Location;
+        return true;
+    };
+
+    auto ProjectPointToSeatNav = [this, &ProjectPointToSeatNavWithExtent](const FVector& QueryLocation, FVector& OutNavLocation) -> bool
+    {
+        return ProjectPointToSeatNavWithExtent(QueryLocation, OutNavLocation, CardIslandNavProjectExtent, 0.0f);
+    };
+
+    auto BuildSeatRingFromCenter = [&](const FVector& CenterLocation, const FRotator& CenterRotation, const TCHAR* SourceName)
+    {
+        SeatTransforms.Reset();
+
+        for (int32 SeatIndex = 0; SeatIndex < RequiredCount; ++SeatIndex)
+        {
+            const float Angle = RequiredCount <= 1
+                ? 0.0f
+                : (2.0f * PI * static_cast<float>(SeatIndex)) / static_cast<float>(RequiredCount);
+
+            FVector SeatLocation = CenterLocation;
+            SeatLocation.X += FMath::Cos(Angle) * Radius;
+            SeatLocation.Y += FMath::Sin(Angle) * Radius;
+            SeatLocation.Z += CardPlayerSeatZOffset;
+
+            const FVector LookDirection = (CenterLocation - SeatLocation).GetSafeNormal2D();
+            const FRotator SeatRotation = LookDirection.IsNearlyZero()
+                ? CenterRotation
+                : LookDirection.Rotation();
+
+            SeatTransforms.Add(FTransform(SeatRotation, SeatLocation));
+        }
+
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=1 Center=%s Radius=%.1f Source=%s Tag=%s Spacing=%.1f ZOffset=%.1f"),
+            RequiredCount,
+            TaggedSeatCount,
+            ComponentTaggedSeatCount,
+            *CenterLocation.ToString(),
+            Radius,
+            SourceName ? SourceName : TEXT("<NULL>"),
+            *CardPlayerSeatTag.ToString(),
+            SafeSpacing,
+            CardPlayerSeatZOffset);
+    };
+
+    if (RequiredCount <= 0 || TaggedSeatCount >= RequiredCount)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=0 Fallback=0 FallbackEnabled=%d Tag=%s Spacing=%.1f ZOffset=%.1f"),
+            RequiredCount,
+            TaggedSeatCount,
+            ComponentTaggedSeatCount,
+            bUseCardPlayerFallbackSeats ? 1 : 0,
+            *CardPlayerSeatTag.ToString(),
+            SafeSpacing,
+            CardPlayerSeatZOffset);
+        return SeatTransforms;
+    }
+
+    if (TaggedSeatCount == 1)
+    {
+        const FTransform CenterTransform = SeatTransforms[0];
+        const FVector CenterLocation = CenterTransform.GetLocation() - FVector(0.0f, 0.0f, CardPlayerSeatZOffset);
+        const FRotator CenterRotation = CenterTransform.GetRotation().Rotator();
+        BuildSeatRingFromCenter(CenterLocation, CenterRotation, TEXT("TaggedCenter"));
+        return SeatTransforms;
+    }
+
+    if (TaggedSeatCount <= 0 && RequiredCount > 0)
+    {
+        FVector FallbackCenter = FVector::ZeroVector;
+        FRotator FallbackRotation = FRotator::ZeroRotator;
+        const TCHAR* FallbackSource = TEXT("None");
+        bool bHasFallbackCenter = false;
+
+        const TArray<FName> CenterMarkerTags =
+        {
+            FName(TEXT("CardCenter")),
+            FName(TEXT("CardGameCenter")),
+            FName(TEXT("CardIslandCenter")),
+            FName(TEXT("CardPlayerCenter"))
+        };
+
+        auto HasAnyCenterMarkerTag = [&CenterMarkerTags](const AActor* Actor) -> bool
+        {
+            if (!Actor)
+            {
+                return false;
+            }
+
+            for (const FName& CenterTag : CenterMarkerTags)
+            {
+                if (Actor->ActorHasTag(CenterTag))
+                {
+                    return true;
+                }
+            }
+
+            TInlineComponentArray<UActorComponent*> Components(Actor);
+            for (UActorComponent* Component : Components)
+            {
+                if (!Component)
+                {
+                    continue;
+                }
+
+                for (const FName& CenterTag : CenterMarkerTags)
+                {
+                    if (Component->ComponentTags.Contains(CenterTag))
+                    {
+                        return true;
+                    }
+                }
+            }
+
+            const FString ActorName = Actor->GetName();
+            return ActorName.Contains(TEXT("CardCenter"), ESearchCase::IgnoreCase)
+                || ActorName.Contains(TEXT("CardGameCenter"), ESearchCase::IgnoreCase)
+                || ActorName.Contains(TEXT("CardIslandCenter"), ESearchCase::IgnoreCase)
+                || ActorName.Contains(TEXT("CardPlayerCenter"), ESearchCase::IgnoreCase);
+        };
+
+        if (World)
+        {
+            for (TActorIterator<AActor> ActorIt(World); ActorIt; ++ActorIt)
+            {
+                AActor* CenterActor = *ActorIt;
+                if (!HasAnyCenterMarkerTag(CenterActor))
+                {
+                    continue;
+                }
+
+                FallbackCenter = CenterActor->GetActorLocation();
+                FallbackRotation = CenterActor->GetActorRotation();
+                bHasFallbackCenter = true;
+                FallbackSource = TEXT("CardCenterMarker");
+
+                FVector NavCenter = FallbackCenter;
+                if (ProjectPointToSeatNav(FallbackCenter, NavCenter))
+                {
+                    FallbackCenter = NavCenter;
+                    FallbackSource = TEXT("CardCenterMarkerNav");
+                }
+
+                break;
+            }
+        }
+
+        if (!bHasFallbackCenter)
+        {
+            const TArray<FCardIslandDropZone> IslandDropZones = FindCardIslandDropZones();
+            FVector IslandCenterSum = FVector::ZeroVector;
+            int32 IslandCenterCount = 0;
+
+            for (const FCardIslandDropZone& DropZone : IslandDropZones)
+            {
+                if (DropZone.IslandKey == FName(TEXT("Winter")) ||
+                    DropZone.IslandKey == FName(TEXT("Spring")) ||
+                    DropZone.IslandKey == FName(TEXT("Summer")) ||
+                    DropZone.IslandKey == FName(TEXT("Autumn")))
+                {
+                    IslandCenterSum += DropZone.Center;
+                    IslandCenterCount++;
+                }
+            }
+
+            if (IslandCenterCount >= 2)
+            {
+                const FVector IslandCentroid = IslandCenterSum / static_cast<float>(IslandCenterCount);
+                FVector NavCenter = IslandCentroid;
+                if (ProjectPointToSeatNavWithExtent(IslandCentroid, NavCenter, FVector(900.0f, 900.0f, 3000.0f), 1000.0f))
+                {
+                    FallbackCenter = NavCenter;
+                    FallbackRotation = FRotator::ZeroRotator;
+                    bHasFallbackCenter = true;
+                    FallbackSource = TEXT("SeasonIslandCentroidNav");
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("[DS] Card SeatCenterFallbackReject Source=SeasonIslandCentroid Reason=NavProjectFailed Center=%s IslandCount=%d"),
+                        *IslandCentroid.ToString(),
+                        IslandCenterCount);
+                }
+            }
+        }
+
+        if (!bHasFallbackCenter && bUseCardPlayerFallbackSeats)
+        {
+            FallbackCenter = CardPlayerFallbackCenter;
+            bHasFallbackCenter = true;
+            FallbackSource = TEXT("ConfiguredFallback");
+
+            FVector NavCenter = FallbackCenter;
+            if (ProjectPointToSeatNav(FallbackCenter, NavCenter))
+            {
+                FallbackCenter = NavCenter;
+                FallbackSource = TEXT("ConfiguredFallbackNav");
+            }
+        }
+
+        if (!bHasFallbackCenter)
+        {
+            UE_LOG(LogTemp, Error, TEXT("[DS] Card SeatBuildFail Required=%d Tagged=0 ComponentTagged=%d Reason=NoCardCenterMarkerAndNoCentroidNav Tag=%s. Add ActorTag CardPlayerSeat or CardCenter to the actual card island."),
+                RequiredCount,
+                ComponentTaggedSeatCount,
+                *CardPlayerSeatTag.ToString());
+            return SeatTransforms;
+        }
+
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuildAutoFallback Required=%d Tagged=0 ComponentTagged=%d Source=%s Center=%s FallbackEnabled=%d Tag=%s"),
+            RequiredCount,
+            ComponentTaggedSeatCount,
+            FallbackSource,
+            *FallbackCenter.ToString(),
+            bUseCardPlayerFallbackSeats ? 1 : 0,
+            *CardPlayerSeatTag.ToString());
+
+        BuildSeatRingFromCenter(FallbackCenter, FallbackRotation, FallbackSource);
+        return SeatTransforms;
+    }
+
+    if (!bUseCardPlayerFallbackSeats && TaggedSeatCount <= 0 && RequiredCount > 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] Card SeatBuildFail Required=%d Tagged=0 FallbackDisabled=1 Tag=%s. Place CardPlayerSeat tagged actors on the card island."),
+            RequiredCount,
+            *CardPlayerSeatTag.ToString());
+        return SeatTransforms;
+    }
+
+    if (!bUseCardPlayerFallbackSeats && TaggedSeatCount < RequiredCount)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] Card SeatBuildFail Required=%d Tagged=%d FallbackDisabled=1 Tag=%s. Add more CardPlayerSeat actors or leave one center marker only."),
+            RequiredCount,
+            TaggedSeatCount,
+            *CardPlayerSeatTag.ToString());
+        SeatTransforms.Reset();
+        return SeatTransforms;
+    }
+
+    while (SeatTransforms.Num() < RequiredCount)
+    {
+        const int32 SeatIndex = SeatTransforms.Num();
+        const float Angle = RequiredCount <= 1
+            ? 0.0f
+            : (2.0f * PI * static_cast<float>(SeatIndex)) / static_cast<float>(RequiredCount);
+
+        FVector SeatLocation = CardPlayerFallbackCenter;
+        SeatLocation.X += FMath::Cos(Angle) * Radius;
+        SeatLocation.Y += FMath::Sin(Angle) * Radius;
+        SeatLocation.Z += CardPlayerSeatZOffset;
+
+        const FVector LookDirection = (CardPlayerFallbackCenter - SeatLocation).GetSafeNormal2D();
+        const FRotator SeatRotation = LookDirection.IsNearlyZero()
+            ? FRotator::ZeroRotator
+            : LookDirection.Rotation();
+
+        SeatTransforms.Add(FTransform(SeatRotation, SeatLocation));
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuild Required=%d Tagged=%d GeneratedFromCenter=0 Fallback=%d FallbackEnabled=%d Tag=%s FallbackCenter=%s Spacing=%.1f ZOffset=%.1f"),
+        RequiredCount,
+        TaggedSeatCount,
+        SeatTransforms.Num() - TaggedSeatCount,
+        bUseCardPlayerFallbackSeats ? 1 : 0,
+        *CardPlayerSeatTag.ToString(),
+        *CardPlayerFallbackCenter.ToString(),
+        SafeSpacing,
+        CardPlayerSeatZOffset);
+
+    return SeatTransforms;
+}
+
+void AMainGameMode::RequestMovePlayersToCardIslandSeats(const TCHAR* Context)
+{
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(CardSeatMoveRetryTimerHandle);
+    }
+
+    PendingCardSeatMoveContext = Context ? Context : TEXT("<NULL>");
+    CardSeatMoveRetryCount = 0;
+
+    if (!MovePlayersToCardIslandSeats(*PendingCardSeatMoveContext))
+    {
+        ScheduleCardSeatMoveRetry(*PendingCardSeatMoveContext);
+    }
+}
+
+void AMainGameMode::ScheduleCardSeatMoveRetry(const TCHAR* Context)
+{
+    UWorld* World = GetWorld();
+    if (!World)
+    {
+        return;
+    }
+
+    if (CardSeatMoveRetryCount >= FMath::Max(0, CardPlayerSeatMoveMaxRetries))
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] Card SeatMoveRetryGiveUp Retry=%d MaxRetries=%d Context=%s Round=%d ServerPhase=%s"),
+            CardSeatMoveRetryCount,
+            CardPlayerSeatMoveMaxRetries,
+            Context ? Context : TEXT("<NULL>"),
+            CurrentRound,
+            GetServerPhaseName(CurrentServerPhase));
+        return;
+    }
+
+    CardSeatMoveRetryCount++;
+    const float RetryInterval = FMath::Max(0.05f, CardPlayerSeatMoveRetryInterval);
+    World->GetTimerManager().SetTimer(
+        CardSeatMoveRetryTimerHandle,
+        this,
+        &AMainGameMode::RetryMovePlayersToCardIslandSeats,
+        RetryInterval,
+        false);
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMoveRetryScheduled Retry=%d MaxRetries=%d Interval=%.2f Context=%s Round=%d ServerPhase=%s"),
+        CardSeatMoveRetryCount,
+        CardPlayerSeatMoveMaxRetries,
+        RetryInterval,
+        Context ? Context : TEXT("<NULL>"),
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+}
+
+void AMainGameMode::RetryMovePlayersToCardIslandSeats()
+{
+    const FString RetryContext = PendingCardSeatMoveContext.IsEmpty()
+        ? FString(TEXT("CardSeatRetry"))
+        : PendingCardSeatMoveContext;
+
+    if (!MovePlayersToCardIslandSeats(*RetryContext))
+    {
+        ScheduleCardSeatMoveRetry(*RetryContext);
+    }
+}
+
+bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
+{
+    TArray<AMainPlayerController*> Controllers;
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(It->Get()))
+        {
+            Controllers.Add(MainPC);
+        }
+    }
+
+    const TArray<FTransform> SeatTransforms = BuildCardPlayerSeatTransforms(Controllers.Num());
+    int32 MovedCount = 0;
+
+    for (int32 Index = 0; Index < Controllers.Num(); ++Index)
+    {
+        AMainPlayerController* MainPC = Controllers[Index];
+        APawn* Pawn = MainPC ? MainPC->GetPawn() : nullptr;
+        if (!Pawn || !SeatTransforms.IsValidIndex(Index))
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMoveSkip Index=%d HasPC=%d HasPawn=%d HasSeat=%d Context=%s"),
+                Index,
+                MainPC ? 1 : 0,
+                Pawn ? 1 : 0,
+                SeatTransforms.IsValidIndex(Index) ? 1 : 0,
+                Context ? Context : TEXT("<NULL>"));
+            continue;
+        }
+
+        if (ACharacter* Character = Cast<ACharacter>(Pawn))
+        {
+            if (UCharacterMovementComponent* MoveComp = Character->GetCharacterMovement())
+            {
+                MoveComp->SetBase(nullptr);
+                MoveComp->StopMovementImmediately();
+            }
+        }
+
+        const FVector TargetLocation = SeatTransforms[Index].GetLocation();
+        const FRotator TargetRotation = SeatTransforms[Index].GetRotation().Rotator();
+        const bool bTeleported = Pawn->TeleportTo(TargetLocation, TargetRotation, false, true);
+        if (!bTeleported)
+        {
+            Pawn->SetActorLocationAndRotation(TargetLocation, TargetRotation, false, nullptr, ETeleportType::TeleportPhysics);
+        }
+
+        MainPC->SetControlRotation(TargetRotation);
+        Pawn->ForceNetUpdate();
+        MovedCount++;
+
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMove Player=%s Index=%d Teleport=%d Location=%s Rotation=%s Context=%s"),
+            *GetNameSafe(MainPC->PlayerState),
+            Index,
+            bTeleported ? 1 : 0,
+            *TargetLocation.ToString(),
+            *TargetRotation.ToString(),
+            Context ? Context : TEXT("<NULL>"));
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMoveComplete Moved=%d Planned=%d Context=%s Round=%d ServerPhase=%s"),
+        MovedCount,
+        Controllers.Num(),
+        Context ? Context : TEXT("<NULL>"),
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+
+    return Controllers.Num() <= 0 || MovedCount >= Controllers.Num();
 }
 
 void AMainGameMode::StartTimedServerPhase(EDediServerPhase NewPhase, int32 DurationSeconds)

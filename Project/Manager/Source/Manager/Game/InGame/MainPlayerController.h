@@ -69,12 +69,16 @@ public:
 	void Server_SwitchMode(EGamePhase NewPhase);
 
 	void ApplySwitchMode(EGamePhase NewPhase);
+	void SetGameplayInputLocked(bool bLocked, const TCHAR* Context);
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
 
 	UFUNCTION(Client, Reliable)
 	void Client_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
+
+	UFUNCTION(Client, Reliable)
+	void Client_SetGameplayInputLocked(bool bLocked, const FString& Context);
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SwitchState(EGamePhase NewPhase);
@@ -128,6 +132,11 @@ public:
 
 	UPROPERTY()
 	TArray<FRandomCardOption> CurrentUpgradeOptions;
+
+	UPROPERTY()
+	bool bGameplayInputLocked = false;
+
+	void ApplyGameplayInputLock(bool bLocked, const TCHAR* Context);
 	
 	UFUNCTION(Server, Reliable)
 	void Server_SelectStaticUpgradeOption(int32 SelectedIndex);

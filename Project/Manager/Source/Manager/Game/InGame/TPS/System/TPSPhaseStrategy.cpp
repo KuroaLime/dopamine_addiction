@@ -35,7 +35,9 @@ void UTPSPhaseStrategy::LoadStage()
 
 	UE_LOG(LogTemp, Warning, TEXT("[DS] TPSPhase LoadStage"));
 
-	EWeaponType RoundWeapon = EWeaponType::SMG;
+	int32 RandomIndex = FMath::RandRange(1, 5);
+	EWeaponType RoundWeapon = static_cast<EWeaponType>(RandomIndex);
+
 	if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
 	{
 		GS->SetRoundWeapon(RoundWeapon);

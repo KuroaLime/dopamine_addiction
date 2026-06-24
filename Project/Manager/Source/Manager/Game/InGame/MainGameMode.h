@@ -118,6 +118,27 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|Debug")
     int32 DebugResultDuration = 5;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|CardTransition")
+    FName CardPlayerSeatTag = TEXT("CardPlayerSeat");
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|CardTransition")
+    FVector CardPlayerFallbackCenter = FVector(0.0f, 0.0f, 300.0f);
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|CardTransition")
+    bool bUseCardPlayerFallbackSeats = false;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|CardTransition")
+    float CardPlayerSeatSpacing = 240.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|CardTransition")
+    float CardPlayerSeatZOffset = 90.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|CardTransition")
+    int32 CardPlayerSeatMoveMaxRetries = 20;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|CardTransition")
+    float CardPlayerSeatMoveRetryInterval = 0.25f;
+
     UPROPERTY(BlueprintReadOnly, Category = "Phase|State")
     int32 CurrentRound = 0;
 
@@ -228,6 +249,10 @@ protected:
 private:
     FTimerHandle PhaseTimerHandle;
     FTimerHandle MatchEndShutdownTimerHandle;
+    FTimerHandle CardSeatMoveRetryTimerHandle;
+    int32 ServerStreamingLatentActionId = 10000;
+    int32 CardSeatMoveRetryCount = 0;
+    FString PendingCardSeatMoveContext;
 
     EDediServerPhase CurrentServerPhase = EDediServerPhase::None;
     bool bGameEndReached = false;
@@ -322,10 +347,17 @@ private:
     void StartGameEndPhase();
     void ShutdownDedicatedServerAfterMatchEnd();
     void NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary) const;
+    void LoadServerStreamLevelForPhase(FName LevelToLoad, const TCHAR* Context);
 
 
     void SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context);
+    void SetPlayerPawnGameplayState(bool bVisible, bool bMovementEnabled, bool bCollisionEnabled, const TCHAR* Context);
     void ClearPlayerPawnMovementBases(const TCHAR* Context);
+    void RequestMovePlayersToCardIslandSeats(const TCHAR* Context);
+    void ScheduleCardSeatMoveRetry(const TCHAR* Context);
+    void RetryMovePlayersToCardIslandSeats();
+    bool MovePlayersToCardIslandSeats(const TCHAR* Context);
+    TArray<FTransform> BuildCardPlayerSeatTransforms(int32 RequiredCount) const;
 
     void StartTimedServerPhase(EDediServerPhase NewPhase, int32 DurationSeconds);
     void OnServerPhaseTick();
