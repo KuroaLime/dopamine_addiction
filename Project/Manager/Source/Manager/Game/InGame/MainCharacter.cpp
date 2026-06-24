@@ -41,6 +41,7 @@ AMainCharacter::AMainCharacter()
 
 	GetCharacterMovement()->bOrientRotationToMovement = true;
 	GetCharacterMovement()->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
+	GetCharacterMovement()->NavAgentProps.bCanCrouch = true;
 
 	GetCharacterMovement()->JumpZVelocity = 500.f;
 	GetCharacterMovement()->AirControl = 0.35f;
@@ -115,7 +116,7 @@ void AMainCharacter::BeginPlay()
 		{
 			const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
 			m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
-			m_pEquippedGun->SetActorRelativeRotation(FRotator(0.f, 180.f, 0.f));
+			//m_pEquippedGun->SetActorRelativeRotation(FRotator(0.f, 180.f, 0.f)); // disabled: socket already orients weapon; this extra 180 double-applied and flipped it
 		}
 	}
 

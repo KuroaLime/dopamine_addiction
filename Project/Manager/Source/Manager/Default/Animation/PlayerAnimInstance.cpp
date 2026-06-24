@@ -39,7 +39,7 @@ void UPlayerAnimInstance::UpdateAnimProperties(float DeltaTime)
 
 	Direction = UKismetAnimationLibrary::CalculateDirection(Vel, OwnerCharacter->GetActorRotation());
 	bIsMoving = (Speed > 3.0f) && bIsAccelerating;
-
+	bIsCrouch = MoveComp->IsCrouching();
 	if (IAbilityCheckInterface* AimInterface = Cast<IAbilityCheckInterface>(OwnerCharacter))
 	{
 		bIsAiming = AimInterface->IsCharacterAiming();
