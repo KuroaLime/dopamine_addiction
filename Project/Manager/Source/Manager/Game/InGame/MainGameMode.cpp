@@ -3386,7 +3386,17 @@ AActor* AMainGameMode::ChoosePlayerStart_Implementation(AController* Player)
 APawn* AMainGameMode::SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayer, const FTransform& SpawnTransform)
 {
     FTransform OffsetTransform = SpawnTransform;
-    FVector NewLocation = OffsetTransform.GetLocation() + FVector(0.0f, 0.0f, 100.0f);
+    FVector NewLocation = OffsetTransform.GetLocation() + FVector(0.0f, 0.0f, 200.0f);
     OffsetTransform.SetLocation(NewLocation);
-    return Super::SpawnDefaultPawnAtTransform_Implementation(NewPlayer, OffsetTransform);
+    
+    FRotator NewRotation = OffsetTransform.GetRotation().Rotator();
+    NewRotation.Yaw += 90.0f;
+    OffsetTransform.SetRotation(NewRotation.Quaternion());
+    APawn* SpawnedPawn = Super::SpawnDefaultPawnAtTransform_Implementation(NewPlayer, OffsetTransform);
+    if (NewPlayer && SpawnedPawn)
+    {
+        NewPlayer->SetControlRotation(NewRotation);
+    }
+    return SpawnedPawn;
+
 }
