@@ -131,3 +131,23 @@ void UMainAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		}
 	}
 }
+void UMainAnimInstance::PlayFireMontage(EWeaponType WeaponType)
+{
+	if (WeaponFireMontages.Contains(WeaponType))
+	{
+		if (UAnimMontage* TargetMontage = WeaponFireMontages[WeaponType])
+		{
+			Montage_Play(TargetMontage);
+		}
+	}
+}
+void UMainAnimInstance::PlayReloadMontage(EWeaponType WeaponType)
+{
+	if (WeaponReloadMontages.Contains(WeaponType))
+	{
+		if (UAnimMontage* TargetMontage = WeaponReloadMontages[WeaponType])
+		{
+			Montage_Play(TargetMontage);
+		}
+	}
+}

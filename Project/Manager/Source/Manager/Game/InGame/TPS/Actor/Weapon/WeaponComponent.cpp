@@ -2,10 +2,10 @@
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
-#include "Default/Animation/PlayerAnimInstance.h"
+#include "Game/InGame/MainAnimInstance.h"
 #include "GameFramework/Character.h"
 #include "EngineUtils.h"
-
+#include "Game/InGame/MainPlayerState.h"
 UWeaponComponent::UWeaponComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -42,18 +42,19 @@ void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& 
         UGameplayStatics::PlaySoundAtLocation(GetWorld(), m_FireSound, MuzzleLocation);
     }
     AActor* WeaponActor = GetOwner();
-
     if (WeaponActor)
     {
-        
         APawn* OwnerPawn = Cast<APawn>(WeaponActor->GetOwner());
         if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
         {
-            
-            if (UPlayerAnimInstance* PlayerAnim = Cast<UPlayerAnimInstance>(Character->GetMesh()->GetAnimInstance()))
+            if (UMainAnimInstance* MainAnim = Cast<UMainAnimInstance>(Character->GetMesh()->GetAnimInstance()))
             {
-                
-                PlayerAnim->PlayFireMontage(WeaponType);
+                if (AMainPlayerState* PS = OwnerPawn->GetPlayerState<AMainPlayerState>())
+                {
+                    if(WeaponType != PS->GetWeaponID())
+                        WeaponType = PS->GetWeaponID();
+                }
+                MainAnim->PlayFireMontage(WeaponType);
             }
         }
     }
@@ -70,9 +71,14 @@ void UWeaponComponent::Multicast_PlayReloadFeedback_Implementation()
         APawn* OwnerPawn = Cast<APawn>(WeaponActor->GetOwner());
         if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
         {
-            if (UPlayerAnimInstance* PlayerAnim = Cast<UPlayerAnimInstance>(Character->GetMesh()->GetAnimInstance()))
+            if (UMainAnimInstance* MainAnim = Cast<UMainAnimInstance>(Character->GetMesh()->GetAnimInstance()))
             {
-                PlayerAnim->PlayReloadMontage(WeaponType);
+                if (AMainPlayerState* PS = OwnerPawn->GetPlayerState<AMainPlayerState>())
+                {
+                    if (WeaponType != PS->GetWeaponID())
+                        WeaponType = PS->GetWeaponID();
+                }
+                MainAnim->PlayReloadMontage(WeaponType);
             }
         }
     }
