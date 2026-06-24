@@ -38,13 +38,20 @@ int32 AMainPlayerState::GetWeaponStatLV(EWeaponStatType StatType) const
 {
 	switch (StatType)
 	{
-	case EWeaponStatType::None:                 return 0;
-	case EWeaponStatType::Damage:               return WeaponData.LvDamage;
-	case EWeaponStatType::FireRate:             return WeaponData.LvFireRate;
-	case EWeaponStatType::Range:                return WeaponData.LvRange;
-	case EWeaponStatType::MagazineCapacity:     return WeaponData.LvMagazineCapacity;
-	case EWeaponStatType::ReloadTime:           return WeaponData.LvReloadTime;
-	default:                                    return 0;
+	case EWeaponStatType::None:
+		return 0;
+	case EWeaponStatType::Damage:
+		return WeaponData.LvDamage + FMath::RoundToInt(AccumulatedUpgrades.LvWeaponDamage);
+	case EWeaponStatType::FireRate:
+		return WeaponData.LvFireRate + FMath::RoundToInt(AccumulatedUpgrades.LvWeaponFireRate);
+	case EWeaponStatType::Range:
+		return WeaponData.LvRange + FMath::RoundToInt(AccumulatedUpgrades.LvWeaponRange);
+	case EWeaponStatType::MagazineCapacity:
+		return WeaponData.LvMagazineCapacity + FMath::RoundToInt(AccumulatedUpgrades.LvWeaponMagazine);
+	case EWeaponStatType::ReloadTime:
+		return WeaponData.LvReloadTime + FMath::RoundToInt(AccumulatedUpgrades.LvWeaponReload);
+	default:
+		return 0;
 	}
 }
 
