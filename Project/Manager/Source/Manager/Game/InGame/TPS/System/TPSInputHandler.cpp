@@ -12,7 +12,7 @@
 #include "Game/InGame/MainPlayerState.h"
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
-
+#include "GameFramework/CharacterMovementComponent.h"
 UTPSInputHandler::UTPSInputHandler()
 {
 	PrimaryComponentTick.bCanEverTick = false;
