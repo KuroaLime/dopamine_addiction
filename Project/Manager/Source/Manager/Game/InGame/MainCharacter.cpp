@@ -45,7 +45,7 @@ AMainCharacter::AMainCharacter()
 
 	GetCharacterMovement()->JumpZVelocity = 500.f;
 	GetCharacterMovement()->AirControl = 0.35f;
-	GetCharacterMovement()->MaxWalkSpeed = 500.f;
+	GetCharacterMovement()->MaxWalkSpeed = 505.f;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
 	GetCharacterMovement()->BrakingDecelerationWalking = 2000.f;
 	GetCharacterMovement()->BrakingDecelerationFalling = 1500.0f;
@@ -81,6 +81,7 @@ AMainCharacter::AMainCharacter()
 	HPBarWidget->SetOwnerNoSee(true);
 
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
+	bWasAiming = false;
 	SetReplicates(true);
 }
 
@@ -137,6 +138,13 @@ void AMainCharacter::BeginPlay()
 void AMainCharacter::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
+
+	bool bIsCurrentlyAiming = IsCharacterAiming();
+	if (bIsCurrentlyAiming != bWasAiming)
+	{
+		bWasAiming = bIsCurrentlyAiming;
+		UpdateCharacterStats();
+	}
 
 	if (!HPBarWidget || !HPBarWidget->IsVisible()) return;
 
@@ -391,7 +399,7 @@ void AMainCharacter::UpdateCharacterStats()
 	if (!PS) return;
 	if (GetCharacterMovement())
 	{
-		float BaseSpeed = 600.f;
+		float BaseSpeed = IsCharacterAiming() ? 300.f : 505.f;
 		GetCharacterMovement()->MaxWalkSpeed = PS->GetFinalMoveSpeed(BaseSpeed);
 	}
 }

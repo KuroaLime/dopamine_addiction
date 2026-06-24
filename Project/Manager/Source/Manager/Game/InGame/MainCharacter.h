@@ -119,4 +119,5 @@ public:
 private:
 	void OnPlayerDataChanged(const FPlayerData& NewData);
 	void OnAccumulatedUpgradesChanged(const FAccumulatedUpgrades& NewUpgrades);
+	bool bWasAiming;
 };
