@@ -31,6 +31,7 @@ void UShopWidget::NativeConstruct() {
 	{
 		UpgradeButton00->SetItemID(0);
 		UpgradeButton00->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleUpgradePurchase);
+		UpgradeButton00->SetButtonText(FText::FromString(TEXT("랜덤 카드 강화")), FText::FromString(TEXT("100")));
 	}
 
 	Char_UpgradeButtons.Empty();
@@ -42,14 +43,28 @@ void UShopWidget::NativeConstruct() {
 					int32 GeneratedID = Char_UpgradeButtons.Num() - 1;
 					FoundButton->SetItemID(GeneratedID);
 					FoundButton->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleUpgradCharacterState);
-
+					FText UpgradeName;
+					FText UpgradePrice = FText::FromString(TEXT("50 Gold"));
+					switch (GeneratedID)
+					{
+					case 0:
+						UpgradeName = FText::FromString(TEXT("최대 체력 증가"));
+						break;
+					case 1:
+						UpgradeName = FText::FromString(TEXT("이동 속도 증가"));
+						break;
+					case 2:
+						UpgradeName = FText::FromString(TEXT("체력 재생 증가"));
+						break;
+					default:
+						UpgradeName = FText::FromString(TEXT("미정이가 간다!"));
+						break;
+					}
+					FoundButton->SetButtonText(UpgradeName, UpgradePrice);
 				}
 			}
 		}
 	);
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Total %d upgrade buttons registered."), Char_UpgradeButtons.Num()));
-	
-
 
 }
 void UShopWidget::HandleUpgradePurchase(int32 ItemID) {
