@@ -68,7 +68,7 @@ private:
 
 	//Weapon Count
 	UPROPERTY()
-	UTextBlock* WEAPONMaxTxt = nullptr;
+	UTextBlock* WEAPONMAXTxt = nullptr;
 	UPROPERTY()
 	UTextBlock* WEAPONCountxt = nullptr;
 
@@ -87,6 +87,13 @@ private:
 	bool bNeedPlayerStateBind = false;
 
 	ECardID Cards[CardTotalNumber];
+
+
+	UPROPERTY(meta = (BindWidget))
+	class UCRoundandTimerWidget* CRoundandTimer_UI;
+
+	void UpdateCRoundandTimer_UI();
+
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI", meta = (AllowPrivateAccess = "true"))
 	class UTexture2D* PlayerIcon_Image = nullptr;

@@ -9,6 +9,8 @@
 #include "Camera/CameraComponent.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/MainPlayerState.h"      
+#include "Game/InGame/MainCharacter.h"
+#include "Game/InGame/TPS/UI/CRoundandTimerWidget.h"
 
 const FName UTpsPlayerMainHUD::HPRadialWipeParamName(TEXT("Radial_wipe"));
 const FName UTpsPlayerMainHUD::LvLinearWipeParamName(TEXT("Linear_wipe"));
@@ -18,12 +20,17 @@ void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacte
     CurrentCharacterState = NewCharacterState;
     NewCharacterState->OnHPChanged.AddUObject(this, &UTpsPlayerMainHUD::UpdateHPWidget);
     NewCharacterState->OnLEVELChanged.AddUObject(this, &UTpsPlayerMainHUD::UpdateLevel);
-
     StaticUI();
     UpdateHPWidget();
     UpdateLevel();
     bNeedPlayerStateBind = true;
     TryBindPlayerState();
+
+    if (CRoundandTimer_UI)
+    {
+        CRoundandTimer_UI->BindCharacterState(NewCharacterState);
+    }
+    UpdateCRoundandTimer_UI();
 }
 
 void UTpsPlayerMainHUD::NativeConstruct()
@@ -78,12 +85,16 @@ void UTpsPlayerMainHUD::NativeConstruct()
     {
         Cards[i] = ECardID::None;
     }
+    WEAPONMAXTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("WEAPONMAXTxt")));
+    WEAPONCountxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("WEAPONCountxt")));
+
 }
 
 void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
 {
     Super::NativeTick(MyGeometry, InDeltaTime);
     UpdateCompass();
+    UpdateWeaponCountWidget();
     if (bNeedPlayerStateBind)
         TryBindPlayerState();
 }
@@ -196,10 +207,22 @@ void UTpsPlayerMainHUD::UpdateWeaponIconWidget()
 
 void UTpsPlayerMainHUD::UpdateWeaponCountWidget()
 {
-    if (CurrentCharacterState.IsValid())
+    AMainCharacter* Character = Cast<AMainCharacter>(GetOwningPlayerPawn());
+    if (Character && WEAPONCountxt)
     {
-        if (WEAPONMaxTxt)  WEAPONMaxTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxAmmoCount()));
-        if (WEAPONCountxt) WEAPONCountxt->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentAmmoCount()));
+        AWeapon* Weapon = Character->GetEquippedGun();
+        if (Weapon && Weapon->Setting)
+        {
+            WEAPONCountxt->SetText(FText::AsNumber(Weapon->Setting->GetCurrentAmmo()));
+        }
+        else
+        {
+            WEAPONCountxt->SetText(FText::AsNumber(0));
+        }
+    }
+    if (CurrentCharacterState.IsValid() && WEAPONMAXTxt)
+    {
+        WEAPONMAXTxt->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentAmmoCount()));
     }
 }
 
@@ -253,4 +276,7 @@ void UTpsPlayerMainHUD::UpdateCompass()
                 ChangeCompassSize(CameraYaw, PSU_Compass);
         }
     }
+}
+void UTpsPlayerMainHUD::UpdateCRoundandTimer_UI() {
+   // CRoundandTimer_UI->UpdateTimer_TextImage(1);
 }
