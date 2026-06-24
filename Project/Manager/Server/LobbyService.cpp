@@ -27,6 +27,9 @@ static const char* DEDI_EDITOR_ENV =
 static const char* DEDI_PACKAGED_SERVER_ENV =
 "MANAGER_DEDI_SERVER_EXE";
 
+static const char* DEDI_EXE_DEFAULT_PATH =
+"C:\\Program Files\\Epic Games\\UE_5.7\\Engine\\Binaries\\Win64\\UnrealEditor.exe";
+
 static const char* DEDI_EXE_REL_PATH =
 "..\\..\\..\\..\\..\\UE\\UE_5.7_Source\\Engine\\Binaries\\Win64\\UnrealEditor.exe";
 
@@ -155,6 +158,11 @@ static std::string GetDediEditorExePath()
     if (!envPath.empty())
     {
         return envPath;
+    }
+
+    if (FileExists(DEDI_EXE_DEFAULT_PATH))
+    {
+        return DEDI_EXE_DEFAULT_PATH;
     }
 
     std::string relativePath = MakeAbsoluteFromExeDir(DEDI_EXE_REL_PATH);
