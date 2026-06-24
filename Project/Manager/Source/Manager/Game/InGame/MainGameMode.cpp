@@ -1928,6 +1928,54 @@ bool AMainGameMode::IsSeasonIslandActorName(const FString& ActorName) const
         || ActorName.Contains(TEXT("BPP_MAP_Winter"));
 }
 
+
+FVector AMainGameMode::GetRandomFallbackCardDropLocation(const TArray<FVector>& ExistingLocations) const
+{
+    const float SafeExtentX = FMath::Max(1.0f, CardBundleDropExtent.X);
+    const float SafeExtentY = FMath::Max(1.0f, CardBundleDropExtent.Y);
+
+    const int32 MaxAttempts = FMath::Max(1, CardIslandDropMaxAttemptsPerCard);
+    const float MinDistance = FMath::Max(80.0f, CardIslandMinCardDistance);
+
+    auto MakeCandidate = [this, SafeExtentX, SafeExtentY]() -> FVector
+    {
+        const float X = CardBundleDropCenter.X + FMath::FRandRange(-SafeExtentX, SafeExtentX);
+        const float Y = CardBundleDropCenter.Y + FMath::FRandRange(-SafeExtentY, SafeExtentY);
+        return FVector(X, Y, CardBundleDropCenter.Z);
+    };
+
+    for (int32 Attempt = 0; Attempt < MaxAttempts; ++Attempt)
+    {
+        const FVector Candidate = MakeCandidate();
+
+        bool bTooClose = false;
+        for (const FVector& Existing : ExistingLocations)
+        {
+            if (FVector::Dist2D(Candidate, Existing) < MinDistance)
+            {
+                bTooClose = true;
+                break;
+            }
+        }
+
+        if (!bTooClose)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Card RandomFallback Location=%s Existing=%d"),
+                *Candidate.ToString(),
+                ExistingLocations.Num());
+
+            return Candidate;
+        }
+    }
+
+    const FVector Fallback = MakeCandidate();
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card RandomFallback ForceLocation=%s Existing=%d"),
+        *Fallback.ToString(),
+        ExistingLocations.Num());
+
+    return Fallback;
+}
 TArray<AMainGameMode::FCardIslandDropZone> AMainGameMode::FindCardIslandDropZones() const
 {
     TArray<FCardIslandDropZone> TaggedZones;
@@ -2290,9 +2338,15 @@ void AMainGameMode::SpawnRoundCardBundleForBattleRoyale()
         TArray<ECardID> CardIDs = BuildCardBundleIDs();
         ShuffleCardIDs(CardIDs);
 
+        TArray<FVector> ExistingFallbackLocations;
+        ExistingFallbackLocations.Reserve(CardIDs.Num());
+
         for (int32 Index = 0; Index < CardIDs.Num(); ++Index)
         {
-            SpawnCardDrop(CardIDs[Index], GetDistributedCardDropLocation(Index, CardIDs.Num()));
+            const FVector SpawnLocation = GetRandomFallbackCardDropLocation(ExistingFallbackLocations);
+            ExistingFallbackLocations.Add(SpawnLocation);
+
+            SpawnCardDrop(CardIDs[Index], SpawnLocation);
         }
 
         UE_LOG(LogTemp, Warning, TEXT("[DS] Card BundleDropComplete Count=%d Round=%d Phase=%s"),
