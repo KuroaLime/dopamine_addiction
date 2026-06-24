@@ -56,6 +56,16 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rope Bridge|Anchors")
 	FName EndAnchorTag;
 
+	// --- Parts (toggle structure on/off) ---
+
+	// Show the four corner pillars (Biseok). Off = bridge with no pillars.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rope Bridge|Parts")
+	bool bShowBiseok = true;
+
+	// Show all ropes (foot ropes, handrail ropes, thin vertical ropes). Off = planks only (a plain plank walkway).
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Rope Bridge|Parts")
+	bool bShowRopes = true;
+
 	// --- Exposed tuning knobs ---
 
 	// Left/right distance between the pillars (cm).
