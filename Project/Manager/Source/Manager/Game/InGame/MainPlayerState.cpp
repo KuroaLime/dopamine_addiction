@@ -10,6 +10,15 @@ AMainPlayerState::AMainPlayerState()
 {
 	CurPlayerData.HoldingGold = 10;
 	CurPlayerData.CurrentHP = 150;
+
+
+	//하드 코딩 바꾸자
+	CarriedAmmoList.Init(0, 6);
+	CarriedAmmoList[static_cast<uint8>(EWeaponType::AR)] = 90;
+	CarriedAmmoList[static_cast<uint8>(EWeaponType::PISTOL)] = 30;
+	CarriedAmmoList[static_cast<uint8>(EWeaponType::SHOTGUN)] = 15;
+	CarriedAmmoList[static_cast<uint8>(EWeaponType::SMG)] = 120;
+	CarriedAmmoList[static_cast<uint8>(EWeaponType::SNIPER)] = 10;
 }
 
 void AMainPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -22,6 +31,7 @@ void AMainPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME_CONDITION(AMainPlayerState, OwnedCards, COND_OwnerOnly);
 	DOREPLIFETIME(AMainPlayerState, PublicCardCount);
 	DOREPLIFETIME(AMainPlayerState, AccumulatedUpgrades);
+	DOREPLIFETIME(AMainPlayerState, CarriedAmmoList);
 }
 
 int32 AMainPlayerState::GetWeaponStatLV(EWeaponStatType StatType) const
@@ -366,4 +376,24 @@ float AMainPlayerState::GetFinalMaxMagazine(float BaseMaxAmmo) const {
 }
 float AMainPlayerState::GetFinalReloadTimeMultiplier() const {
 	return 1.0f + (WeaponData.LvReloadTime * 0.12f) + AccumulatedUpgrades.LvWeaponReload;
+}
+
+int32 AMainPlayerState::GetCarriedAmmoByWeaponType(EWeaponType WeaponType) const
+{
+	uint8 Index = static_cast<uint8>(WeaponType);
+	if (CarriedAmmoList.IsValidIndex(Index))
+	{
+		return CarriedAmmoList[Index];
+	}
+	return 0;
+}
+void AMainPlayerState::AddCarriedAmmoByWeaponType(EWeaponType WeaponType, int32 Amount)
+{
+	if (!HasAuthority()) return;
+	uint8 Index = static_cast<uint8>(WeaponType);
+	if (CarriedAmmoList.IsValidIndex(Index))
+	{
+		CarriedAmmoList[Index] = FMath::Max(0, CarriedAmmoList[Index] + Amount);
+		ForceNetUpdate();
+	}
 }

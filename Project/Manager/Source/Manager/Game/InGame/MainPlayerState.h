@@ -93,6 +93,9 @@ protected:
 
 	UFUNCTION()
 	void OnRep_PublicCardCount();
+
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player | Ammo")
+	TArray<int32> CarriedAmmoList;
 public:
 	UFUNCTION()
 	void Server_ApplyUpgrad_Implementation(EUpgradeType Type);
@@ -109,4 +112,9 @@ public:
 	float GetFinalWeaponRangeMultiplier() const;
 	float GetFinalMaxMagazine(float BaseMaxAmmo) const;
 	float GetFinalReloadTimeMultiplier() const;
+
+	UFUNCTION(BlueprintPure, Category = "Player | Ammo")
+	int32 GetCarriedAmmoByWeaponType(EWeaponType WeaponType) const;
+	UFUNCTION(BlueprintCallable, Category = "Player | Ammo")
+	void AddCarriedAmmoByWeaponType(EWeaponType WeaponType, int32 Amount);
 };
