@@ -6,7 +6,7 @@
 #include "SeotdaTypes.generated.h"
 
 //////////////////////////////////////////////////////////////////////////////////////
-// 1. ¿­°ÅÇü
+// 1. ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
 
 UENUM(BlueprintType)
 enum class EAIStyle : uint8
@@ -20,12 +20,15 @@ enum class EAIStyle : uint8
 UENUM(BlueprintType)
 enum class EBettingAction : uint8
 {
-	None,
-	Check,
-	Call,
-	Half,
-	Die,
-	AllIn
+    None,
+    Check,
+    Call,
+    Quarter,
+    Half,
+    Ddadang,
+    Pping,
+    Die,
+    AllIn
 };
 
 UENUM(BlueprintType)
@@ -47,7 +50,7 @@ enum class ECardMonth : uint8
 };
 
 //////////////////////////////////////////////////////////////////////////////////////
-// 2. °ÔÀÓ ·©Å· »ó¼ö
+// 2. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Å· ï¿½ï¿½ï¿½
 
 namespace SeotdaRank {
 	const int32 TRIPLE_38 = 3000;
@@ -56,7 +59,7 @@ namespace SeotdaRank {
 }
 
 //////////////////////////////////////////////////////////////////////////////////////
-// 3. Ä«µå Á¤º¸
+// 3. Ä«ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 
 USTRUCT(BlueprintType)
 struct FSeotdaCard
@@ -94,7 +97,7 @@ public:
 };
 
 //////////////////////////////////////////////////////////////////////////////////////
-// 4. ÇÃ·¹ÀÌ¾î Á¤º¸
+// 4. ï¿½Ã·ï¿½ï¿½Ì¾ï¿½ ï¿½ï¿½ï¿½ï¿½
 
 USTRUCT(BlueprintType)
 struct FSeotdaPlayerInfo
@@ -134,7 +137,7 @@ public:
 public:
 	void ResetForNewRound()
 	{
-		// ¹èÆ²·Î¾â¿¡¼­ È¹µæÇÑ Ä«µå´Â À¯ÁöÇØ¾ß ÇÏ¹Ç·Î Hand´Â ºñ¿ìÁö ¾Ê´Â´Ù.
+		// ï¿½ï¿½Æ²ï¿½Î¾â¿¡ï¿½ï¿½ È¹ï¿½ï¿½ï¿½ï¿½ Ä«ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ø¾ï¿½ ï¿½Ï¹Ç·ï¿½ Handï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Ê´Â´ï¿½.
 		Score = 0;
 		bIsFolded = false;
 		BetMoney = 0;
@@ -157,7 +160,10 @@ public:
 		switch (Action) {
 		case EBettingAction::Check:
 		case EBettingAction::Call:  return CallDiff;
-		case EBettingAction::Half:  return CallDiff + ((GlobalPot + CallDiff) / 2);
+		case EBettingAction::Quarter: return CallDiff + FMath::Max<int64>(1, (GlobalPot + CallDiff) / 4);
+   	case EBettingAction::Half:  return CallDiff + FMath::Max<int64>(1, (GlobalPot + CallDiff) / 2);
+   	case EBettingAction::Ddadang: return CallDiff + FMath::Max<int64>(2, GlobalMaxBet);
+   	case EBettingAction::Pping: return CallDiff > 0 ? CallDiff : 2;
 		case EBettingAction::AllIn: return Money;
 		default:                    return 0;
 		}
@@ -178,7 +184,10 @@ public:
 		}
 		static const TMap<EBettingAction, FString> ActionNames = {
 			{ EBettingAction::Call,  TEXT("CALL") },
+			{ EBettingAction::Quarter, TEXT("QUARTER") },
 			{ EBettingAction::Half,  TEXT("HALF") },
+			{ EBettingAction::Ddadang, TEXT("DDADANG") },
+			{ EBettingAction::Pping, TEXT("PPING") },
 			{ EBettingAction::AllIn, TEXT("ALL-IN") }
 		};
 
@@ -190,7 +199,7 @@ public:
 };
 
 //////////////////////////////////////////////////////////////////////////////////////
-// 5. Ä«µå µô·¯ (Dealer Struct)
+// 5. Ä«ï¿½ï¿½ ï¿½ï¿½ï¿½ (Dealer Struct)
 
 USTRUCT(BlueprintType)
 struct FSeotdaDealer
@@ -238,7 +247,7 @@ public:
 };
 
 //////////////////////////////////////////////////////////////////////////////////////
-// 6. °ÔÀÓ Å×ÀÌºí Á¤º¸ (Table Struct)
+// 6. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Ìºï¿½ ï¿½ï¿½ï¿½ï¿½ (Table Struct)
 
 USTRUCT(BlueprintType)
 struct FSeotdaTable

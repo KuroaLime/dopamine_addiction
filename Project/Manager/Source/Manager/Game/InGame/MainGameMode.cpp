@@ -804,8 +804,13 @@ void AMainGameMode::ResetSeotdaRoundStates()
 {
     SeotdaRoundStates.Empty();
     SeotdaTurnOrder.Empty();
-    SeotdaPot = 0;
-    SeotdaCurrentBet = 0;
+
+    // 기본 판돈은 서버가 넣는다. 플레이어 돈에서는 빠지지 않는다.
+    SeotdaPot = FMath::Max(0, SeotdaServerSeedPot);
+
+    // Call을 눌렀을 때 각 플레이어가 기본 2원을 내도록 시작 기준 베팅을 2로 둔다.
+    SeotdaCurrentBet = FMath::Max(0, SeotdaBaseCallBet);
+
     SeotdaCurrentTurnIndex = 0;
     bSeotdaBettingActive = false;
     bSeotdaRoundResolved = false;
@@ -866,8 +871,13 @@ void AMainGameMode::StartSeotdaBettingRound()
     }
 
     SeotdaTurnOrder.Empty();
-    SeotdaPot = 0;
-    SeotdaCurrentBet = 0;
+
+    // 기본 판돈은 서버가 넣는다. 플레이어 돈에서는 빠지지 않는다.
+    SeotdaPot = FMath::Max(0, SeotdaServerSeedPot);
+
+    // Call을 눌렀을 때 각 플레이어가 기본 2원을 내도록 시작 기준 베팅을 2로 둔다.
+    SeotdaCurrentBet = FMath::Max(0, SeotdaBaseCallBet);
+
     SeotdaCurrentTurnIndex = 0;
 
     for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
@@ -1025,8 +1035,17 @@ bool AMainGameMode::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, E
     case EBettingAction::Call:
         RequestedPay = CallAmount;
         break;
+    case EBettingAction::Quarter:
+        RequestedPay = CallAmount + FMath::Max(1, (SeotdaPot + CallAmount) / 4);
+        break;
     case EBettingAction::Half:
         RequestedPay = CallAmount + FMath::Max(1, (SeotdaPot + CallAmount) / 2);
+        break;
+    case EBettingAction::Ddadang:
+        RequestedPay = CallAmount + FMath::Max(SeotdaBaseCallBet, SeotdaCurrentBet);
+        break;
+    case EBettingAction::Pping:
+        RequestedPay = (CallAmount > 0) ? CallAmount : SeotdaBaseCallBet;
         break;
     case EBettingAction::AllIn:
         RequestedPay = GetSeotdaPlayerMoney(PS);

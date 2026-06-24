@@ -92,12 +92,20 @@ RootBox->AddChildToVerticalBox(BetRow);
 
 CheckButton = MakeButton(TEXT("CheckButton"), CheckText, TEXT("Check"));
 CallButton = MakeButton(TEXT("CallButton"), CallText, TEXT("Call"));
+QuarterButton = MakeButton(TEXT("QuarterButton"), QuarterText, TEXT("Quarter"));
 HalfButton = MakeButton(TEXT("HalfButton"), HalfText, TEXT("Half"));
+DdadangButton = MakeButton(TEXT("DdadangButton"), DdadangText, TEXT("Ddadang"));
+PpingButton = MakeButton(TEXT("PpingButton"), PpingText, TEXT("Pping"));
+AllInButton = MakeButton(TEXT("AllInButton"), AllInText, TEXT("All-In"));
 DieButton = MakeButton(TEXT("DieButton"), DieText, TEXT("Die"));
 
 BetRow->AddChildToHorizontalBox(CheckButton);
 BetRow->AddChildToHorizontalBox(CallButton);
+BetRow->AddChildToHorizontalBox(QuarterButton);
 BetRow->AddChildToHorizontalBox(HalfButton);
+BetRow->AddChildToHorizontalBox(DdadangButton);
+BetRow->AddChildToHorizontalBox(PpingButton);
+BetRow->AddChildToHorizontalBox(AllInButton);
 BetRow->AddChildToHorizontalBox(DieButton);
 
 ResultText = MakeText(TEXT("ResultText"), TEXT("Result: None"), 16);
@@ -150,10 +158,30 @@ if (CallButton)
 CallButton->OnClicked.RemoveDynamic(this, &USeotdaTempWidget::OnCallClicked);
 CallButton->OnClicked.AddDynamic(this, &USeotdaTempWidget::OnCallClicked);
 }
+if (QuarterButton)
+{
+QuarterButton->OnClicked.RemoveDynamic(this, &USeotdaTempWidget::OnQuarterClicked);
+QuarterButton->OnClicked.AddDynamic(this, &USeotdaTempWidget::OnQuarterClicked);
+}
 if (HalfButton)
 {
 HalfButton->OnClicked.RemoveDynamic(this, &USeotdaTempWidget::OnHalfClicked);
 HalfButton->OnClicked.AddDynamic(this, &USeotdaTempWidget::OnHalfClicked);
+}
+if (DdadangButton)
+{
+DdadangButton->OnClicked.RemoveDynamic(this, &USeotdaTempWidget::OnDdadangClicked);
+DdadangButton->OnClicked.AddDynamic(this, &USeotdaTempWidget::OnDdadangClicked);
+}
+if (PpingButton)
+{
+PpingButton->OnClicked.RemoveDynamic(this, &USeotdaTempWidget::OnPpingClicked);
+PpingButton->OnClicked.AddDynamic(this, &USeotdaTempWidget::OnPpingClicked);
+}
+if (AllInButton)
+{
+AllInButton->OnClicked.RemoveDynamic(this, &USeotdaTempWidget::OnAllInClicked);
+AllInButton->OnClicked.AddDynamic(this, &USeotdaTempWidget::OnAllInClicked);
 }
 if (DieButton)
 {
@@ -356,7 +384,7 @@ GetSelectedCount()
 if (BetInfoText)
 {
 BetInfoText->SetText(FText::FromString(FString::Printf(
-TEXT("Bet: Round=%d | Pot=%d | CurrentBet=%d | MyBet=%d | NeedCall=%d | Turn=%s"),
+TEXT("Bet: Round=%d | 판돈(Pot)=%d | 기준Bet=%d | 내Bet=%d | Call필요=%d | Turn=%s"),
 PC->SeotdaUiRound,
 PC->SeotdaUiPot,
 PC->SeotdaUiCurrentBet,
@@ -620,4 +648,21 @@ void USeotdaTempWidget::OnLobbyClicked()
     }
 
     PC->ReturnToLobbyFromMatchEnd();
+}
+
+void USeotdaTempWidget::OnQuarterClicked()
+{
+    RequestBetAction(EBettingAction::Quarter);
+}
+void USeotdaTempWidget::OnDdadangClicked()
+{
+    RequestBetAction(EBettingAction::Ddadang);
+}
+void USeotdaTempWidget::OnPpingClicked()
+{
+    RequestBetAction(EBettingAction::Pping);
+}
+void USeotdaTempWidget::OnAllInClicked()
+{
+    RequestBetAction(EBettingAction::AllIn);
 }
