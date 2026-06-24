@@ -59,5 +59,12 @@ protected:
 
 public:
 	void Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>& Options);
-	
+	void UpdateUpgradeButtons();
+
+private:
+	FTimerHandle BindingTimerHandle;
+	bool bBoundDelegates = false;
+	void TryBindPlayerStateDelegates();
+	void OnPlayerDataChanged(const FPlayerData& NewPlayerData);
+	void OnGoldChanged(float NewGold);
 };

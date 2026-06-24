@@ -56,4 +56,5 @@ protected:
 
 public:
 	void UpdateWidget();
+	int32 GetItemID() const { return ButtonItemID; }
 };

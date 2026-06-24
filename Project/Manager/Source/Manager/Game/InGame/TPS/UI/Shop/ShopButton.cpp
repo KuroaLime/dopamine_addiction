@@ -7,6 +7,7 @@
 #include "Components/Button.h"
 #include "Animation/WidgetAnimation.h"
 #include "TimerManager.h"
+
 void UShopButton::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
 
 }
