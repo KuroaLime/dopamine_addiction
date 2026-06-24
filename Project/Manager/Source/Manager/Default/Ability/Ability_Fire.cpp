@@ -161,9 +161,9 @@ void UAbility_Fire::Server_ExecuteFire()
 
 
 	// -------------------------------------------------------
-	// µð¹ö±× Ç¥½Ã
-	//   ÃÊ·Ï: È÷Æ®   (¶óÀÎ CamStart ¡æ ImpactPoint + ¹Ú½º)
-	//   »¡°­: ¹Ì½º   (¶óÀÎ CamStart ¡æ CamEnd)
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ Ç¥ï¿½ï¿½
+	//   ï¿½Ê·ï¿½: ï¿½ï¿½Æ®   (ï¿½ï¿½ï¿½ï¿½ CamStart ï¿½ï¿½ ImpactPoint + ï¿½Ú½ï¿½)
+	//   ï¿½ï¿½ï¿½ï¿½: ï¿½Ì½ï¿½   (ï¿½ï¿½ï¿½ï¿½ CamStart ï¿½ï¿½ CamEnd)
 	// -------------------------------------------------------
 	if (bCamHit && CamHit.GetActor())
 	{
@@ -223,7 +223,9 @@ void UAbility_Fire::Server_ExecuteFire()
 		}
 	}
 	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
-	EquippedGun->Setting->Multicast_PlayFireFeedback(MuzzleLoc);
+	// ì´ì•Œ íŠ¸ë ˆì´ì„œê°€ í–¥í•  ëª©í‘œ: ëª…ì¤‘í•˜ë©´ ì¶©ëŒì , ë¹—ë‚˜ê°€ë©´ ì¹´ë©”ë¼ ìµœëŒ€ ì‚¬ê±°ë¦¬ ë.
+	FVector TargetLoc = (bCamHit && CamHit.bBlockingHit) ? CamHit.ImpactPoint : CamEnd;
+	EquippedGun->Setting->Multicast_PlayFireFeedback(MuzzleLoc, TargetLoc);
 
 	int32 BaseDamage = GS_Interface->GetWeaponBaseData(
 		PS_Interface->GetWeaponID(), EWeaponBaseStatType::Damage);

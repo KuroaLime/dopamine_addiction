@@ -7,6 +7,8 @@
 #include "Game/Protocol_Client/Protocol_InGame.h"
 #include "WeaponComponent.generated.h"
 
+class UNiagaraSystem;
+
 UCLASS( ClassGroup=(Custom), meta=(BlueprintSpawnableComponent) )
 class MANAGER_API UWeaponComponent : public UActorComponent
 {
@@ -27,12 +29,16 @@ public:
 
 
 	UFUNCTION(NetMulticast, Reliable)
-	virtual void Multicast_PlayFireFeedback(const FVector& MuzzleLocation);
+	virtual void Multicast_PlayFireFeedback(const FVector& MuzzleLocation, const FVector& TargetLocation);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Sound")
 	USoundBase* m_FireSound;
+
+	// 발사 시 총구→명중 방향으로 날아가는 총알 트레이서 (멀티캐스트에서 스폰, 모든 클라 표시)
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "VFX")
+	UNiagaraSystem* BulletTracerFX;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Setting")
 	EWeaponType WeaponType = EWeaponType::SMG;
