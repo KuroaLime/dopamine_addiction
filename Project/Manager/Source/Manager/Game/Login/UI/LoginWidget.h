@@ -24,6 +24,10 @@ protected:
 	UPROPERTY(meta = (BindWidget));
 	class UButton* LoginButton;
 
+	// 애니메이션 바인딩
+	UPROPERTY(Transient, meta = (BindWidgetAnim))
+	class UWidgetAnimation* ImageAnimation;
+
 	virtual void NativeConstruct() override;
 
 	UFUNCTION()
