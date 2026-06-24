@@ -77,7 +77,19 @@ UPROPERTY()
 TObjectPtr<UButton> CallButton = nullptr;
 
 UPROPERTY()
+TObjectPtr<UButton> QuarterButton = nullptr;
+
+UPROPERTY()
 TObjectPtr<UButton> HalfButton = nullptr;
+
+UPROPERTY()
+TObjectPtr<UButton> DdadangButton = nullptr;
+
+UPROPERTY()
+TObjectPtr<UButton> PpingButton = nullptr;
+
+UPROPERTY()
+TObjectPtr<UButton> AllInButton = nullptr;
 
 UPROPERTY()
 TObjectPtr<UButton> DieButton = nullptr;
@@ -95,7 +107,19 @@ UPROPERTY()
 TObjectPtr<UTextBlock> CallText = nullptr;
 
 UPROPERTY()
+TObjectPtr<UTextBlock> QuarterText = nullptr;
+
+UPROPERTY()
 TObjectPtr<UTextBlock> HalfText = nullptr;
+
+UPROPERTY()
+TObjectPtr<UTextBlock> DdadangText = nullptr;
+
+UPROPERTY()
+TObjectPtr<UTextBlock> PpingText = nullptr;
+
+UPROPERTY()
+TObjectPtr<UTextBlock> AllInText = nullptr;
 
 UPROPERTY()
 TObjectPtr<UTextBlock> DieText = nullptr;
@@ -150,7 +174,19 @@ UFUNCTION()
 void OnCallClicked();
 
 UFUNCTION()
+void OnQuarterClicked();
+
+UFUNCTION()
 void OnHalfClicked();
+
+UFUNCTION()
+void OnDdadangClicked();
+
+UFUNCTION()
+void OnPpingClicked();
+
+UFUNCTION()
+void OnAllInClicked();
 
 UFUNCTION()
 void OnDieClicked();

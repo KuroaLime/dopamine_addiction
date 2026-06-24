@@ -50,14 +50,14 @@ ARopeBridge::ARopeBridge()
 	// Defaults
 	StartAnchorTag = TEXT("BridgeAnchor");
 	EndAnchorTag = TEXT("BridgeAnchor");
-	BridgeWidth = 600.0f;
+	BridgeWidth = 700.0f;
 	PlankSpacing = 90.0f;
-	PlankWidthScale = 10.0f;
+	PlankWidthScale = 12.0f;
 	PlankDepthScale = 5.0f;
 	RopeSagAmount = 80.0f;
 	HandrailSagAmount = 300.0f;
 	bHandrailCollision = true;
-	BiseokScale = 1.0f;
+	BiseokScale = 0.8f;
 	VerticalRopeScale = 0.3f;      // thin
 	PlankVerticalOffset = 3.0f;
 	RopeSegmentLength = 100.0f;

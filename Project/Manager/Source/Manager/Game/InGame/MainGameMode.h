@@ -259,6 +259,14 @@ private:
     bool bSeotdaRoundResolved = false;
     FString LastSeotdaRoundResultSummary = TEXT("Pending");
 
+    // 서버가 베팅 시작 시 기본으로 넣어주는 판돈. 플레이어 돈에서는 차감하지 않음.
+    UPROPERTY(EditDefaultsOnly, Category = "Seotda|Betting")
+    int32 SeotdaServerSeedPot = 2;
+
+    // 베팅 시작 직후 Call에 필요한 기본 금액.
+    UPROPERTY(EditDefaultsOnly, Category = "Seotda|Betting")
+    int32 SeotdaBaseCallBet = 2;
+
 
 
 private:
