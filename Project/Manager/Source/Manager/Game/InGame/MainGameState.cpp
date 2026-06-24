@@ -37,8 +37,15 @@ void AMainGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 
 	DOREPLIFETIME(AMainGameState, RemainingTime);
 	DOREPLIFETIME(AMainGameState, CurrentRoundWeapon);
+	DOREPLIFETIME(AMainGameState, CurrentRound);
 }
-
+void AMainGameState::OnRep_CurrentRound()
+{
+	if (OnRoundChanged.IsBound())
+	{
+		OnRoundChanged.Broadcast(CurrentRound);
+	}
+}
 void AMainGameState::SetRoundWeapon(EWeaponType InWeaponID)
 {
 	if (HasAuthority())

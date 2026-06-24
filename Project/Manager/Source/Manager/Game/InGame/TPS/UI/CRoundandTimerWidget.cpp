@@ -7,6 +7,7 @@
 #include "Components/TextBlock.h"
 #include "GameFramework/GameStateBase.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "Game/InGame/MainGameState.h"
 
 void UCRoundandTimerWidget::BindCharacterState(UCharacterStateComponent* NewCharacterState) {
 
@@ -16,7 +17,12 @@ void UCRoundandTimerWidget::BindCharacterState(UCharacterStateComponent* NewChar
 		IPhaseGameStateInterface* TimeProvider = Cast<IPhaseGameStateInterface>(GS);
 		TimeProvider->GetOnTimeUpdated().AddDynamic(this, &UCRoundandTimerWidget::UpdateTimer_TextImage);
 		UpdateTimer_TextImage(TimeProvider->GetRemainingTime());
+
+		TimeProvider->GetOnRoundChanged().AddDynamic(this, &UCRoundandTimerWidget::OnRoundChanged);
+		UpdateRoundImage();
 	}
+
+	
 }
 
 void UCRoundandTimerWidget::NativeConstruct() {
@@ -40,6 +46,7 @@ void UCRoundandTimerWidget::NativeDestruct()
 		if (GS && GS->Implements<UPhaseGameStateInterface>())
 		{
 			Cast<IPhaseGameStateInterface>(GS)->GetOnTimeUpdated().RemoveDynamic(this, &UCRoundandTimerWidget::UpdateTimer_TextImage);
+			Cast<IPhaseGameStateInterface>(GS)->GetOnRoundChanged().RemoveDynamic(this, &UCRoundandTimerWidget::OnRoundChanged);
 		}
 	}
 	Super::NativeDestruct();
@@ -50,8 +57,26 @@ void UCRoundandTimerWidget::UpdateTimer_TextImage(int32 NewTime) {
 	if (nullptr != Timer_Text) Timer_Text->SetText(FText::AsNumber(NewTime));
 }
 
+void UCRoundandTimerWidget::OnRoundChanged(int32 NewRound)
+{
+	UpdateRoundImage();
+}
 void UCRoundandTimerWidget::UpdateRoundImage() {
-	if (CurrentCharacterState.IsValid()) {
-		//if (nullptr != GoldBackgroundImage) GoldBackgroundImage->SetBrushFromTexture("ddf");
+	AMainGameState* GS = Cast<AMainGameState>(GetWorld()->GetGameState());
+	if (!GS) return;
+	int32 CurrentRound = GS->CurrentRound;
+	for (int32 i = 0; i < 4; ++i)
+	{
+		if (Round[i])
+		{
+			if (i < CurrentRound)
+			{
+				Round[i]->SetVisibility(ESlateVisibility::Visible);
+			}
+			else
+			{
+				Round[i]->SetVisibility(ESlateVisibility::Hidden);
+			}
+		}
 	}
 }

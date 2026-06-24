@@ -10,6 +10,7 @@
 #include "PhaseGameStateInterface.generated.h"
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnTimeUpdated, int32, NewTime);
+DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnRoundChanged, int32, NewRound);
 
 UENUM(BlueprintType)
 enum class EWeaponBaseStatType : uint8
@@ -40,6 +41,7 @@ class MANAGER_API IPhaseGameStateInterface
 public:
 	virtual int32 GetRemainingTime() const = 0;
 	virtual FOnTimeUpdated& GetOnTimeUpdated() = 0;
+	virtual FOnRoundChanged& GetOnRoundChanged() = 0;
 	virtual void SetRemainingTime(int32 NewTime) = 0;
 	virtual void BroadcastTimeUpdated(int32 NewTime) = 0;
 

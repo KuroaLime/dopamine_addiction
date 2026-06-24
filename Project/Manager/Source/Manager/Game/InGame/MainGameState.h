@@ -10,6 +10,9 @@
 /**
  * 
  */
+
+
+
 UCLASS()
 class MANAGER_API AMainGameState : public AGameStateBase,
 								   public IPhaseGameStateInterface
@@ -81,4 +84,13 @@ private:
 	class UDataTable* ShopRandomCardDataTableAsset;
 
 	void InitializeMasterData();
+public:
+	UPROPERTY(BlueprintAssignable, Category = "Events")
+	FOnRoundChanged OnRoundChanged;
+	UPROPERTY(ReplicatedUsing = OnRep_CurrentRound, BlueprintReadOnly, Category = "Round Data")
+	int32 CurrentRound = 1;
+	UFUNCTION()
+	void OnRep_CurrentRound();
+
+	virtual FOnRoundChanged& GetOnRoundChanged() override { return OnRoundChanged; }
 };
