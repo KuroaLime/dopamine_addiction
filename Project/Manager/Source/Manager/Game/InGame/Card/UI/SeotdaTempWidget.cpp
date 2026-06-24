@@ -312,9 +312,16 @@ return;
         LobbyButton->SetIsEnabled(bShowLobbyButton);
     }
 
-    if (ResultText && PC->bSeotdaUiMatchEnded && !PC->SeotdaUiLastResultText.IsEmpty())
+    if (ResultText)
     {
-        ResultText->SetText(FText::FromString(PC->SeotdaUiLastResultText));
+        if (!PC->SeotdaUiLastResultText.IsEmpty())
+        {
+            ResultText->SetText(FText::FromString(PC->SeotdaUiLastResultText));
+        }
+        else
+        {
+            ResultText->SetText(FText::FromString(TEXT("Result: Waiting...")));
+        }
     }
 
     AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
