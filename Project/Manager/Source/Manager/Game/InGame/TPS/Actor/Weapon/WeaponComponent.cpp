@@ -13,6 +13,8 @@
 #include "NiagaraComponent.h"
 #include "NiagaraSystem.h"
 #include "UObject/ConstructorHelpers.h"
+#include "TimerManager.h"
+#include "Engine/World.h"
 UWeaponComponent::UWeaponComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
@@ -30,6 +32,27 @@ void UWeaponComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 {
     Super::GetLifetimeReplicatedProps(OutLifetimeProps);
     DOREPLIFETIME(UWeaponComponent, CurrentAmmo);
+    DOREPLIFETIME(UWeaponComponent, bIsReloading);
+}
+
+void UWeaponComponent::StartReloadLock(float Duration)
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+
+    bIsReloading = true;
+    if (Duration > 0.f && GetWorld())
+    {
+        GetWorld()->GetTimerManager().SetTimer(ReloadLockTimerHandle, this, &UWeaponComponent::ClearReloadLock, Duration, false);
+    }
+    else
+    {
+        ClearReloadLock();
+    }
+}
+
+void UWeaponComponent::ClearReloadLock()
+{
+    bIsReloading = false;
 }
 void UWeaponComponent::BeginPlay()
 {

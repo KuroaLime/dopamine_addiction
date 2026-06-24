@@ -180,6 +180,11 @@ void UAbility_Fire::Server_ExecuteFire()
 			UWeaponComponent* WeaponComp = EquippedWeapon->Setting;
 			if (WeaponComp)
 			{
+				// 장전 중이면 사격 차단 (장전이 끝날 때까지)
+				if (WeaponComp->IsReloading())
+				{
+					return;
+				}
 				if (WeaponComp->GetCurrentAmmo() <= 0)
 				{
 					EndAbility(true);

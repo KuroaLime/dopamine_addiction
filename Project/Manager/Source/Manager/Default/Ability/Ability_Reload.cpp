@@ -54,10 +54,22 @@ void UAbility_Reload::ActivateAbility()
 							{
 								int32 AmmoToLoad = FMath::Min(AmmoNeeded, AvailableAmmo);
 								CurrentAmmo += AmmoToLoad;
-								WeaponComp->SetCurrentAmmo(CurrentAmmo); 
+								WeaponComp->SetCurrentAmmo(CurrentAmmo);
 								PS->AddCarriedAmmoByWeaponType(WeaponType, -AmmoToLoad);
 
 								WeaponComp->Multicast_PlayReloadFeedback();
+
+								// 장전 잠금: 이 시간 동안 사격 불가. 무기 데이터의 ReloadTime(초) 사용, 없으면 기본 1.5초.
+								float ReloadLockTime = 1.5f;
+								if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
+								{
+									const int32 BaseReload = GS->GetWeaponBaseData(WeaponType, EWeaponBaseStatType::ReloadTime);
+									if (BaseReload > 0)
+									{
+										ReloadLockTime = static_cast<float>(BaseReload);
+									}
+								}
+								WeaponComp->StartReloadLock(ReloadLockTime);
 							}
 						}
 					}

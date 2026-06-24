@@ -52,6 +52,10 @@ protected:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Weapon | Ammo")
 	int32 CurrentAmmo=30;
 
+	// 장전 중 잠금 — true인 동안 사격 불가. 서버에서 set, 복제됨.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Weapon | Reload")
+	bool bIsReloading = false;
+
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon | Ammo")
 	int32 MaxMagazineCapacity = 30;
 public:
@@ -66,8 +70,18 @@ public:
 public:
 	virtual int32 GetMaxMagazineCapacity() const;
 
+	// 장전 중인지 (사격 차단 판정용)
+	UFUNCTION(BlueprintPure, Category = "Weapon | Reload")
+	bool IsReloading() const { return bIsReloading; }
+
+	// 서버: Duration초 동안 "장전 중"으로 잠금 (그 사이 사격 불가). 끝나면 자동 해제.
+	void StartReloadLock(float Duration);
+
 private:
 	// 소유 폰의 MainAnimInstance를 찾고, 컴포넌트의 WeaponType을 PlayerState 값과 동기화한다.
 	// (Fire/Reload 피드백 멀티캐스트가 공유하는 보일러플레이트)
 	UMainAnimInstance* ResolveOwnerAnimAndSyncWeapon();
+
+	void ClearReloadLock();
+	FTimerHandle ReloadLockTimerHandle;
 };
