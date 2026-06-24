@@ -376,7 +376,7 @@ void AMainGameMode::StartTransitionToCardPhase()
     SetPlayerPawnGameplayEnabled(false, TEXT("TransitionToCard"));
     ClearCardDrops();
     ClearPlayerPawnMovementBases(TEXT("TransitionToCard"));
-    BroadcastSwitchLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
+    BroadcastSwitchLevel(TEXT("Test"), TEXT("Card_Game_Stage"));
     StartTimedServerPhase(EDediServerPhase::TransitionToCard, GetTransitionDuration());
 }
 
@@ -436,7 +436,7 @@ void AMainGameMode::StartTransitionToBattlePhase()
     ClearCardDrops();
     ClearRoundCardsForAllPlayers();
     ClearPlayerPawnMovementBases(TEXT("TransitionToBattle"));
-    BroadcastSwitchLevel(TEXT("Card_Game_Stage"), TEXT("TPS_Game_Stage"));
+    BroadcastSwitchLevel(TEXT("Card_Game_Stage"), TEXT("Test"));
     StartTimedServerPhase(EDediServerPhase::TransitionToBattle, GetTransitionDuration());
 }
 
