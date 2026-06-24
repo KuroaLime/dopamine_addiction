@@ -2622,6 +2622,127 @@ ACardDropActor* AMainGameMode::SpawnCardDrop(ECardID CardID, const FVector& Spaw
     return CardActor;
 }
 
+int32 AMainGameMode::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const FVector& BaseDropLocation)
+{
+    if (!HasAuthority() || !GetWorld() || !TargetPS)
+    {
+        return 0;
+    }
+
+    const TArray<FOwnedCardInfo> CardsToDrop = TargetPS->GetOwnedCards();
+    if (CardsToDrop.Num() == 0)
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropSkip Player=%s Reason=NoOwnedCards"),
+            *TargetPS->GetPlayerName());
+        return 0;
+    }
+
+    TSubclassOf<ACardDropActor> SpawnClass = CardDropActorClass;
+    if (!SpawnClass)
+    {
+        SpawnClass = ACardDropActor::StaticClass();
+    }
+
+    int32 SpawnedCount = 0;
+
+    for (int32 CardIndex = 0; CardIndex < CardsToDrop.Num(); ++CardIndex)
+    {
+        const FOwnedCardInfo& CardInfo = CardsToDrop[CardIndex];
+        if (CardInfo.CardID == ECardID::None)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Reason=NoneCardID"),
+                *TargetPS->GetPlayerName(),
+                CardInfo.CardInstanceId);
+            continue;
+        }
+
+        FVector DropLocation = BaseDropLocation;
+        const float Angle = (CardIndex / static_cast<float>(CardsToDrop.Num())) * 2.0f * PI;
+        constexpr float DropRadius = 150.0f;
+        DropLocation.X += FMath::Cos(Angle) * DropRadius;
+        DropLocation.Y += FMath::Sin(Angle) * DropRadius;
+        DropLocation.Z += 100.0f;
+
+        FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId);
+        if (!Record)
+        {
+            ACardDropActor* FallbackActor = SpawnCardDrop(CardInfo.CardID, DropLocation);
+            if (!FallbackActor)
+            {
+                UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Card=%d Name=%s Reason=MissingRecordFallbackSpawnFail Location=%s"),
+                    *TargetPS->GetPlayerName(),
+                    CardInfo.CardInstanceId,
+                    static_cast<int32>(CardInfo.CardID),
+                    *CardDebug::ToString(CardInfo.CardID),
+                    *DropLocation.ToCompactString());
+                continue;
+            }
+
+            FOwnedCardInfo RemovedCard;
+            TargetPS->RemoveOwnedCardByInstanceId(CardInfo.CardInstanceId, RemovedCard);
+            SpawnedCount++;
+
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFallback Player=%s OldInstance=%d NewInstance=%d Card=%d Name=%s Location=%s"),
+                *TargetPS->GetPlayerName(),
+                CardInfo.CardInstanceId,
+                FallbackActor->GetCardInstanceId(),
+                static_cast<int32>(CardInfo.CardID),
+                *CardDebug::ToString(CardInfo.CardID),
+                *DropLocation.ToCompactString());
+            continue;
+        }
+
+        if (Record->DropActor.IsValid())
+        {
+            Record->DropActor->Destroy();
+            Record->DropActor.Reset();
+        }
+
+        FActorSpawnParameters Params;
+        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+        ACardDropActor* CardActor = GetWorld()->SpawnActor<ACardDropActor>(SpawnClass, DropLocation, FRotator::ZeroRotator, Params);
+        if (!CardActor)
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Card=%d Name=%s Reason=SpawnNull Location=%s"),
+                *TargetPS->GetPlayerName(),
+                CardInfo.CardInstanceId,
+                static_cast<int32>(CardInfo.CardID),
+                *CardDebug::ToString(CardInfo.CardID),
+                *DropLocation.ToCompactString());
+            continue;
+        }
+
+        CardActor->InitCardDrop(Record->CardInstanceId, Record->CardID);
+        ActiveCardDrops.Add(CardActor);
+
+        Record->State = ECardRuntimeState::WorldDrop;
+        Record->OwnerPlayerState = nullptr;
+        Record->DropActor = CardActor;
+
+        FOwnedCardInfo RemovedCard;
+        TargetPS->RemoveOwnedCardByInstanceId(CardInfo.CardInstanceId, RemovedCard);
+        SpawnedCount++;
+
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDrop Player=%s Instance=%d Card=%d Name=%s Actor=%s Location=%s RemainingOwned=%d"),
+            *TargetPS->GetPlayerName(),
+            Record->CardInstanceId,
+            static_cast<int32>(Record->CardID),
+            *CardDebug::ToString(Record->CardID),
+            *CardActor->GetName(),
+            *DropLocation.ToCompactString(),
+            TargetPS->PublicCardCount);
+    }
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropComplete Player=%s Requested=%d Spawned=%d RemainingOwned=%d"),
+        *TargetPS->GetPlayerName(),
+        CardsToDrop.Num(),
+        SpawnedCount,
+        TargetPS->PublicCardCount);
+
+    return SpawnedCount;
+}
+
 void AMainGameMode::SpawnRoundCardBundleForBattleRoyale()
 {
     if (!HasAuthority())

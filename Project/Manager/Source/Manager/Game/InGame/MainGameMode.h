@@ -331,6 +331,7 @@ private:
 
 public:
     ACardDropActor* SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation);
+    int32 DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const FVector& BaseDropLocation);
 
 private:
     void SpawnRoundCardBundleForBattleRoyale();
