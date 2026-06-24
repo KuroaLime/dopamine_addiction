@@ -22,15 +22,14 @@ protected:
 	virtual void NativeDestruct() override;
 protected:
 
-
+	UFUNCTION()
 	void UpdateRoundImage();
-
+	UFUNCTION()
+	void OnRoundChanged(int32 NewRound);
 private:
 
-	//배경
 	UPROPERTY()
 	class UTextBlock* Timer_Text;
-	//플레이어 아이콘
 	UPROPERTY()
 	class UImage* Round[4];
 };

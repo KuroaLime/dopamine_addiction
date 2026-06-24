@@ -301,7 +301,12 @@ void AMainGameMode::TryStartGameIfReady()
 
     bGameStarted = true;
     CurrentRound = 1;
-
+    AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
+    if (GS)
+    {
+        GS->CurrentRound = CurrentRound;
+        GS->OnRep_CurrentRound();
+    }
     UE_LOG(LogTemp, Warning, TEXT("[DS] Main RequiredPlayersReady HumanPlayers=%d/%d StartRound=%d MaxRound=%d"),
         HumanPlayers,
         RequiredPlayerCount,
@@ -3163,6 +3168,12 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
         else
         {
             CurrentRound++;
+            AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
+            if (GS)
+            {
+                GS->CurrentRound = CurrentRound;
+                GS->OnRep_CurrentRound();
+            }
             UE_LOG(LogTemp, Warning, TEXT("[DS] NextRound Round=%d/%d"), CurrentRound, MaxRoundCount);
             StartTransitionToBattlePhase();
         }
