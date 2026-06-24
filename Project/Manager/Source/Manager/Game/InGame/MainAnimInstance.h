@@ -96,6 +96,9 @@ protected:
 	bool bIsDead;
 
 private:
+	/** 이전 프레임의 사망 상태 (변경 감지용) */
+	bool bWasDead = false;
+
 	/** OwningCharacter 유효성 보장(끊겼으면 재캐싱). 실패 시 false */
 	bool EnsureOwner();
 

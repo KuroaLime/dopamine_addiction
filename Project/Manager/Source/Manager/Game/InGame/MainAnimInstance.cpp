@@ -94,11 +94,9 @@ void UMainAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		bIsFiring = ASC->HasAnyMatchingGameplayTags(FGameplayTagContainer(FiringTag));
 	}
 
-	// 4) 사망 판정 (HP 0 — 별도 사망 플래그가 없어 HP로)
-	if (UCharacterStateComponent* State = OwningCharacter->GetCharacterState())
-	{
-		bIsDead = State->GetCurrentHP() <= 0.f;
-	}
+	// 4) 사망 판정 (IsCharacterDeath() 인터페이스)
+	bIsDead = OwningCharacter->IsCharacterDeath();
+	bWasDead = bIsDead;
 
 	// 5) 현재 무기 타입 — 멀티 동기화의 진실원본인 PlayerState에서
 	if (const AMainPlayerState* PS = OwningCharacter->GetPlayerState<AMainPlayerState>())
