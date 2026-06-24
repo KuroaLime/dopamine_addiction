@@ -299,7 +299,19 @@ float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& 
 	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
 	if (PS)
 	{
+		const int32 OldHP = PS->CurPlayerData.CurrentHP;
 		PS->ApplyDamage(ActualDamage);
+
+		if (OldHP > 0 && PS->CurPlayerData.CurrentHP <= 0)
+		{
+			UE_LOG(LogTemp, Warning, TEXT("[DS] TPS DeathTrigger Player=%s Damage=%.2f HP=%d->%d"),
+				*PS->GetPlayerName(),
+				ActualDamage,
+				OldHP,
+				PS->CurPlayerData.CurrentHP);
+
+			OnCharacterDeath();
+		}
 	}
 
 	return ActualDamage;
@@ -307,12 +319,22 @@ float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& 
 
 void AMainCharacter::OnCharacterDeath()
 {
+	if (!AbilitySystemComponent)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[DS] TPS DeathTriggerFail Character=%s Reason=NoASC"), *GetName());
+		return;
+	}
+
 	if (!AbilitySystemComponent->HasAnyMatchingGameplayTags(
 		FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("State.Movement.Death")))))
 	{
 		static const FGameplayTag DeathTag =
 			FGameplayTag::RequestGameplayTag(FName("Ability.Action.Death"));
 		EPFGAbilityActivationResult Result = AbilitySystemComponent->TryActivateAbilityByTag(DeathTag);
+
+		UE_LOG(LogTemp, Warning, TEXT("[DS] TPS DeathAbility Character=%s Result=%d"),
+			*GetName(),
+			static_cast<int32>(Result));
 	}
 }
 

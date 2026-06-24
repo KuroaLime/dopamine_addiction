@@ -195,6 +195,30 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Island")
     float CardIslandOverheadClearance = 90.0f;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|DeathDrop")
+    int32 CardDeathDropMaxAttemptsPerCard = 32;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|DeathDrop")
+    float CardDeathDropStartRadius = 120.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|DeathDrop")
+    float CardDeathDropRadiusStep = 80.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|DeathDrop")
+    float CardDeathDropMaxRadius = 520.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|DeathDrop")
+    float CardDeathDropMinCardDistance = 120.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|DeathDrop")
+    float CardDeathDropGroundOffsetZ = 80.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|DeathDrop")
+    FVector CardDeathDropNavProjectExtent = FVector(180.0f, 180.0f, 500.0f);
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|DeathDrop")
+    float CardDeathDropMaxNavProjectDistance = 180.0f;
+
     UPROPERTY()
     TMap<EGamePhase, TObjectPtr<UPhaseStrategy>> StrategyMap;
 
@@ -326,11 +350,13 @@ private:
     bool IsCardDropZSane(const FCardIslandDropZone& DropZone, float ReferenceNavZ, const FVector& Candidate) const;
     bool IsInsideNoDropZone(const FVector& Candidate) const;
     bool HasOverheadClearance(const FVector& Candidate) const;
+    bool PickDeathCardDropLocation(const FVector& DeathLocation, const TArray<FVector>& ExistingDropLocations, int32 CardIndex, FVector& OutLocation) const;
 
     int32 CreateCardInstance(ECardID CardID);
 
 public:
     ACardDropActor* SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation);
+    int32 DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const FVector& BaseDropLocation);
 
 private:
     void SpawnRoundCardBundleForBattleRoyale();
