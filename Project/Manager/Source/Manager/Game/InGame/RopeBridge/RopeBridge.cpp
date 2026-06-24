@@ -55,7 +55,7 @@ ARopeBridge::ARopeBridge()
 	PlankWidthScale = 12.0f;
 	PlankDepthScale = 5.0f;
 	RopeSagAmount = 80.0f;
-	HandrailSagAmount = 300.0f;
+	HandrailSagAmount = 200.0f;
 	bHandrailCollision = true;
 	BiseokScale = 0.8f;
 	VerticalRopeScale = 0.3f;      // thin
