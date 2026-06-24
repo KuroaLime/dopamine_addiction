@@ -225,6 +225,42 @@ void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
 	CurrentPhase = NewPhase;
 }
 
+void AMainPlayerController::SetGameplayInputLocked(bool bLocked, const TCHAR* Context)
+{
+	ApplyGameplayInputLock(bLocked, Context);
+
+	if (HasAuthority())
+	{
+		Client_SetGameplayInputLocked(bLocked, FString(Context ? Context : TEXT("<NULL>")));
+	}
+}
+
+void AMainPlayerController::Client_SetGameplayInputLocked_Implementation(bool bLocked, const FString& Context)
+{
+	ApplyGameplayInputLock(bLocked, *Context);
+}
+
+void AMainPlayerController::ApplyGameplayInputLock(bool bLocked, const TCHAR* Context)
+{
+	bGameplayInputLocked = bLocked;
+
+	ResetIgnoreMoveInput();
+	ResetIgnoreLookInput();
+
+	if (bLocked)
+	{
+		SetIgnoreMoveInput(true);
+		SetIgnoreLookInput(true);
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[%s] GameplayInputLock Locked=%d Context=%s Local=%d Phase=%d"),
+		HasAuthority() ? TEXT("SV") : TEXT("CL"),
+		bLocked ? 1 : 0,
+		Context ? Context : TEXT("<NULL>"),
+		IsLocalPlayerController() ? 1 : 0,
+		static_cast<int32>(CurrentPhase));
+}
+
 bool AMainPlayerController::Server_SwitchToLevel_Validate(FName LevelToUnload, FName LevelToLoad)
 {
 	return true;
