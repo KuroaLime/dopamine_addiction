@@ -7,6 +7,7 @@
 #include "Game/InGame/TPS/UI/Shop/UpgradeSelectionWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Image.h"
+#include "Components/TextBlock.h"
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/TPS/UI/Shop/ShopBanner.h"
 
@@ -80,11 +81,11 @@ void UShopWidget::Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>&
 	Static_Upgrade_Background->SetVisibility(ESlateVisibility::Collapsed);
 	Background->SetVisibility(ESlateVisibility::Collapsed);
 	BP_ShopBanner->SetVisibility(ESlateVisibility::Collapsed);
-
+	StaticUpgradeText->SetVisibility(ESlateVisibility::Collapsed);
 	if (CardSelectionPanel)
 	{
-		CardSelectionPanel->SetCardID(Options); //������ ī�� ID ����(���� ������)
-		CardSelectionPanel->SetVisibility(ESlateVisibility::Visible);//���̰�
+		CardSelectionPanel->SetCardID(Options);
+		CardSelectionPanel->SetVisibility(ESlateVisibility::Visible);
 	}
 }
 
@@ -105,6 +106,7 @@ void UShopWidget::ReturnToShopButtons()
 	Static_Upgrade_Background->SetVisibility(ESlateVisibility::Visible);
 	Background->SetVisibility(ESlateVisibility::Visible);
 	BP_ShopBanner->SetVisibility(ESlateVisibility::Visible);
+	StaticUpgradeText->SetVisibility(ESlateVisibility::Visible);
 }
 
 void UShopWidget::SendToSelectionCardID(int32 CardID)

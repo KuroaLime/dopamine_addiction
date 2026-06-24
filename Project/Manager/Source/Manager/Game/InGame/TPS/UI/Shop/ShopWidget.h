@@ -37,6 +37,9 @@ private:
 	UPROPERTY(meta = (BindWidget))
 	class UShopBanner* BP_ShopBanner;
 
+	UPROPERTY(meta = (BindWidget))
+	class UTextBlock* StaticUpgradeText;
+
 protected:
 	UFUNCTION()
 	void HandleUpgradePurchase(int32 ItemID);
