@@ -104,16 +104,25 @@ void AMainCharacter::BeginPlay()
 		}
 	}
 
-	if (HasAuthority() && m_cGun)
+	if (HasAuthority())
 	{
-		FActorSpawnParameters SpawnParams;
-		SpawnParams.Owner = this;
-		SpawnParams.Instigator = GetInstigator();
-		m_pEquippedGun = GetWorld()->SpawnActor<AWeapon>(m_cGun, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
-		if (m_pEquippedGun)
-		{
-			const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
-			m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
+		EWeaponType TargetWeapon = EWeaponType::None;
+		if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
+			{
+				TargetWeapon = GS->GetWeaponID();
+			}
+		if (TargetWeapon != EWeaponType::None){
+			EquipWeapon(TargetWeapon);
+		}
+		else if (m_cGun){
+			FActorSpawnParameters SpawnParams;
+			SpawnParams.Owner = this;
+			SpawnParams.Instigator = GetInstigator();
+			m_pEquippedGun = GetWorld()->SpawnActor<AWeapon>(m_cGun, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+			if (m_pEquippedGun){
+				const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
+				m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
+			}
 		}
 	}
 
@@ -265,7 +274,29 @@ bool AMainCharacter::IsCharacterDeath() const
 
 void AMainCharacter::EquipWeapon(EWeaponType NewWeaponID)
 {
-	if (!HasAuthority()) return;
+	TSubclassOf<AWeapon> WeaponClassToSpawn = nullptr;
+	if (WeaponClasses.Contains(NewWeaponID)){
+		WeaponClassToSpawn = WeaponClasses[NewWeaponID];
+	}
+	if (!WeaponClassToSpawn){
+		WeaponClassToSpawn = m_cGun;
+	}
+	if (!WeaponClassToSpawn)return;
+
+	if (m_pEquippedGun){
+		m_pEquippedGun->Destroy();
+		m_pEquippedGun = nullptr;
+	}
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.Owner = this;
+	SpawnParams.Instigator = GetInstigator();
+	
+	m_pEquippedGun = GetWorld()->SpawnActor<AWeapon>(WeaponClassToSpawn, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
+	
+	if (m_pEquippedGun){
+		const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
+		m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
+	}
 }
 
 void AMainCharacter::Move(const FInputActionValue& Value)
