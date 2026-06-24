@@ -97,6 +97,7 @@ void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
     UpdateWeaponCountWidget();
     if (bNeedPlayerStateBind)
         TryBindPlayerState();
+    UpdateNameWidget();
 }
 
 void UTpsPlayerMainHUD::StaticUI()
@@ -116,9 +117,28 @@ void UTpsPlayerMainHUD::UpdateHPWidget()
 
 void UTpsPlayerMainHUD::UpdateNameWidget()
 {
-    if (CurrentCharacterState.IsValid())
+    if (!NAMETxt)
     {
-        if (NAMETxt) NAMETxt->SetText(FText::FromString(CurrentCharacterState->GetOwner()->GetName()));
+        return;
+    }
+
+    if (CachedPlayerState.IsValid())
+    {
+        NAMETxt->SetText(FText::FromString(CachedPlayerState->GetPlayerName()));
+        return;
+    }
+
+    APlayerController* PC = GetOwningPlayer();
+    AMainPlayerState* PS = PC ? PC->GetPlayerState<AMainPlayerState>() : nullptr;
+    if (PS)
+    {
+        NAMETxt->SetText(FText::FromString(PS->GetPlayerName()));
+        return;
+    }
+
+    if (CurrentCharacterState.IsValid() && CurrentCharacterState->GetOwner())
+    {
+        NAMETxt->SetText(FText::FromString(CurrentCharacterState->GetOwner()->GetName()));
     }
 }
 
@@ -168,6 +188,7 @@ void UTpsPlayerMainHUD::TryBindPlayerState()
     if (PS->OwnedCards.Num() > 0)
         OnOwnedCardsChanged(PS->OwnedCards);
 
+    UpdateNameWidget();
     bNeedPlayerStateBind = false;
 }
 

@@ -7,6 +7,31 @@
 
 #define UE_ASYNC_GUARD if (!IsValid(this) || !GetWorld()) return;
 
+namespace
+{
+    FString MakePlayerNameUrlOption(const FString& RawName)
+    {
+        FString TrimmedName = RawName;
+        TrimmedName.TrimStartAndEndInline();
+
+        FString SafeName;
+        SafeName.Reserve(TrimmedName.Len());
+
+        for (int32 Index = 0; Index < TrimmedName.Len(); ++Index)
+        {
+            const TCHAR Ch = TrimmedName[Index];
+            SafeName.AppendChar((FChar::IsAlnum(Ch) || Ch == TEXT('_') || Ch == TEXT('-')) ? Ch : TEXT('_'));
+        }
+
+        if (SafeName.IsEmpty())
+        {
+            SafeName = TEXT("Player");
+        }
+
+        return SafeName.Left(32);
+    }
+}
+
 UUManagerGameInstance::UUManagerGameInstance() {
     FString CharacterDataPath = TEXT("/Game/GameData/ABCharacterData.ABCharacterData");
     static ConstructorHelpers::FObjectFinder<UDataTable> DT_ABCHARACTER(*CharacterDataPath);
@@ -420,7 +445,9 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
         }
 
         FString ServerIp = FString(UTF8_TO_TCHAR(ipBytes.c_str()));
-        AsyncTask(ENamedThreads::GameThread, [this, ServerIp, port, ticket]()
+        const FString PlayerNameOption = MakePlayerNameUrlOption(PlayerID);
+
+        AsyncTask(ENamedThreads::GameThread, [this, ServerIp, port, ticket, PlayerNameOption]()
             {
                 UE_ASYNC_GUARD
 
@@ -430,7 +457,13 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
                     return;
                 }
 
-                const FString TravelURL = FString::Printf(TEXT("%s:%u?ticket=%u"), *ServerIp, static_cast<uint32>(port), ticket);
+                const FString TravelURL = FString::Printf(
+                    TEXT("%s:%u?ticket=%u?Name=%s?PlayerName=%s"),
+                    *ServerIp,
+                    static_cast<uint32>(port),
+                    ticket,
+                    *PlayerNameOption,
+                    *PlayerNameOption);
 
                 if (GEngine)
                 {

@@ -25,6 +25,35 @@
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 
+namespace
+{
+    FString MakePlayerNameFromOptions(const FString& Options)
+    {
+        FString PlayerName = UGameplayStatics::ParseOption(Options, TEXT("PlayerName"));
+        if (PlayerName.IsEmpty())
+        {
+            PlayerName = UGameplayStatics::ParseOption(Options, TEXT("Name"));
+        }
+
+        PlayerName.TrimStartAndEndInline();
+        if (PlayerName.IsEmpty())
+        {
+            return TEXT("");
+        }
+
+        FString SafeName;
+        SafeName.Reserve(PlayerName.Len());
+
+        for (int32 Index = 0; Index < PlayerName.Len(); ++Index)
+        {
+            const TCHAR Ch = PlayerName[Index];
+            SafeName.AppendChar((FChar::IsAlnum(Ch) || Ch == TEXT('_') || Ch == TEXT('-')) ? Ch : TEXT('_'));
+        }
+
+        return SafeName.Left(32);
+    }
+}
+
 AMainGameMode::AMainGameMode()
 {
     CurrentStrategy = nullptr;
@@ -85,6 +114,35 @@ void AMainGameMode::PreLogin(
     //    UE_LOG(LogTemp, Warning, TEXT("[DS] Main PreLogin rejected. Error=%s"), *ErrorMessage);
     //    return;
     //}
+}
+
+FString AMainGameMode::InitNewPlayer(
+    APlayerController* NewPlayerController,
+    const FUniqueNetIdRepl& UniqueId,
+    const FString& Options,
+    const FString& Portal)
+{
+    const FString Result = Super::InitNewPlayer(NewPlayerController, UniqueId, Options, Portal);
+    const FString PlayerName = MakePlayerNameFromOptions(Options);
+
+    AMainPlayerState* PS = NewPlayerController ? NewPlayerController->GetPlayerState<AMainPlayerState>() : nullptr;
+    if (PS && !PlayerName.IsEmpty())
+    {
+        PS->SetPlayerName(PlayerName);
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitNewPlayer PlayerName=%s Controller=%s Options=%s"),
+            *PlayerName,
+            NewPlayerController ? *NewPlayerController->GetName() : TEXT("<NULL>"),
+            *Options);
+    }
+    else
+    {
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitNewPlayer PlayerNameFallback CurrentName=%s Controller=%s Options=%s"),
+            PS ? *PS->GetPlayerName() : TEXT("<NO_PLAYER_STATE>"),
+            NewPlayerController ? *NewPlayerController->GetName() : TEXT("<NULL>"),
+            *Options);
+    }
+
+    return Result;
 }
 
 void AMainGameMode::BeginPlay()

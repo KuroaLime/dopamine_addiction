@@ -4,6 +4,8 @@
 #include "Game/Login/UI/LoginWidget.h"
 #include "Components/EditableTextBox.h"
 #include "Components/Button.h"
+#include "Math/UnrealMathUtility.h"
+#include "Animation/WidgetAnimation.h"
 #include "Kismet/GameplayStatics.h"
 #include "Game/Login/LoginPlayerController.h"
 
@@ -18,6 +20,12 @@ void ULoginWidget::NativeConstruct()
 	if(PWInput)
 	{
 		PWInput->SetIsPassword(true);
+	}
+
+	// 이미지 애니메이션 시작 (무한반복)
+	if (ImageAnimation)
+	{
+		PlayAnimation(ImageAnimation, 0.0f, 0);
 	}
 }
 
