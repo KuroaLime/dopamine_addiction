@@ -227,9 +227,7 @@ float UAbility_Fire::CalculateRange(int32 Base, int32 Level) const
 float UAbility_Fire::CalculateFireRate(int32 Base, int32 Level) const
 {
 	float BaseDelay = Base * 0.1f;
-	float FireRate = BaseDelay;
-	float SpeedBonus = (Level * 0.1f) + Base;
-	FireRate = BaseDelay / (1.f + SpeedBonus);
 
+	float FireRate = BaseDelay / (1.f + (Level * 0.1f));
 	return FireRate;
 }
