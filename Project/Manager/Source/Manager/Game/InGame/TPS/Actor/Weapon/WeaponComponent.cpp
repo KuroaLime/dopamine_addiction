@@ -64,48 +64,40 @@ void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& 
         const FRotator AimRot = (TargetLocation - MuzzleLocation).Rotation();
         UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), BulletTracerFX, MuzzleLocation, AimRot);
     }
-    AActor* WeaponActor = GetOwner();
-    if (WeaponActor)
+    if (UMainAnimInstance* MainAnim = ResolveOwnerAnimAndSyncWeapon())
     {
-        APawn* OwnerPawn = Cast<APawn>(WeaponActor->GetOwner());
-        if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
+        MainAnim->PlayFireMontage(WeaponType);
+    }
+}
+
+UMainAnimInstance* UWeaponComponent::ResolveOwnerAnimAndSyncWeapon()
+{
+    AActor* WeaponActor = GetOwner();
+    if (!WeaponActor) return nullptr;
+
+    APawn* OwnerPawn = Cast<APawn>(WeaponActor->GetOwner());
+    ACharacter* Character = Cast<ACharacter>(OwnerPawn);
+    if (!Character) return nullptr;
+
+    UMainAnimInstance* MainAnim = Cast<UMainAnimInstance>(Character->GetMesh()->GetAnimInstance());
+    if (!MainAnim) return nullptr;
+
+    // 멀티 동기화 진실원본인 PlayerState의 무기 타입으로 맞춤
+    if (AMainPlayerState* PS = OwnerPawn->GetPlayerState<AMainPlayerState>())
+    {
+        if (WeaponType != PS->GetWeaponID())
         {
-            if (UMainAnimInstance* MainAnim = Cast<UMainAnimInstance>(Character->GetMesh()->GetAnimInstance()))
-            {
-                if (AMainPlayerState* PS = OwnerPawn->GetPlayerState<AMainPlayerState>())
-                {
-                    if(WeaponType != PS->GetWeaponID())
-                        WeaponType = PS->GetWeaponID();
-                }
-                MainAnim->PlayFireMontage(WeaponType);
-            }
+            WeaponType = PS->GetWeaponID();
         }
     }
+    return MainAnim;
 }
 
 void UWeaponComponent::Multicast_PlayReloadFeedback_Implementation()
 {
-    AActor* WeaponActor = GetOwner();
-    if (WeaponActor)
+    if (UMainAnimInstance* MainAnim = ResolveOwnerAnimAndSyncWeapon())
     {
-        
-        APawn* OwnerPawn = Cast<APawn>(WeaponActor->GetOwner());
-        if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
-        {
-            
-            if (UMainAnimInstance* MainAnim = Cast<UMainAnimInstance>(Character->GetMesh()->GetAnimInstance()))
-            {
-
-                if (AMainPlayerState* PS = OwnerPawn->GetPlayerState<AMainPlayerState>())
-                {
-                    if (WeaponType != PS->GetWeaponID())
-                    {
-                        WeaponType = PS->GetWeaponID();
-                    }
-                }
-                MainAnim->PlayReloadMontage(WeaponType);
-            }
-        }
+        MainAnim->PlayReloadMontage(WeaponType);
     }
 }
 
