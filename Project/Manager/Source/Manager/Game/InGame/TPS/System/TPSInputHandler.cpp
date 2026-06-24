@@ -92,9 +92,8 @@ void UTPSInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputComponen
 	{
 		EnhancedInputComponent->BindAction(IA_PickupCard, ETriggerEvent::Started, this, &UTPSInputHandler::Input_PickupCard);
 	}
-	else if (IA_Shop)
-	{
-		EnhancedInputComponent->BindAction(IA_Shop, ETriggerEvent::Started, this, &UTPSInputHandler::Input_PickupCard);
+	if (IA_Reload) {
+		EnhancedInputComponent->BindAction(IA_Reload, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Reload);
 	}
 }
 
@@ -201,5 +200,14 @@ void UTPSInputHandler::Input_PickupCard()
 	if (UPFGASC* ASC = ResolveOwnerASC())
 	{
 		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.PickUp")));
+	}
+}
+
+void UTPSInputHandler::Input_Reload()
+{
+	if (UPFGASC* ASC = ResolveOwnerASC())
+	{
+		
+		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Reload")));
 	}
 }

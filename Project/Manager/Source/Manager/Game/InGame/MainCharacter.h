@@ -97,8 +97,10 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon", meta = (AllowPrivateAccess = "true"))
 	TSubclassOf<AWeapon> m_cGun;
 
-	UPROPERTY(VisibleAnywhere, Category = "Weapon")
+	UPROPERTY(ReplicatedUsing = OnRep_EquippedGun, VisibleAnywhere, Category = "Weapon")
 	AWeapon* m_pEquippedGun;
+	UFUNCTION()
+	void OnRep_EquippedGun();
 
 	UPROPERTY(EditAnywhere, Category = "GAS")
 	TArray<TSubclassOf<UPFGAbility>> DefaultAbilities;
@@ -110,4 +112,5 @@ protected:
 	UWidgetComponent* HPBarWidget;
 public:
 	void UpdateCharacterStats();
+	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 };

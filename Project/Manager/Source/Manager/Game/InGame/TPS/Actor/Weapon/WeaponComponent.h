@@ -25,7 +25,6 @@ public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
-	virtual void Fire(const FVector& MuzzleLocation);
 
 	UFUNCTION(NetMulticast, Reliable)
 	virtual void Multicast_PlayFireFeedback(const FVector& MuzzleLocation);
@@ -39,7 +38,6 @@ protected:
 	EWeaponType WeaponType = EWeaponType::SMG;
 public:
 
-	virtual void Reload();
 	UFUNCTION(NetMulticast,Reliable)
 	virtual void Multicast_PlayReloadFeedback();
 
@@ -58,4 +56,6 @@ public:
 
 	UFUNCTION(BlueprintCallable, Category = "Weapon | Ammo")
 	void ConsumeAmmo();
+	UFUNCTION(BlueprintCallable, Category = "Weapon | Ammo")
+	void SetCurrentAmmo(int32 NewAmmo);
 };

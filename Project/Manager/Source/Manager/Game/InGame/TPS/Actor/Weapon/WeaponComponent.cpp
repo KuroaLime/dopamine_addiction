@@ -29,16 +29,7 @@ void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActo
     Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 
-void UWeaponComponent::Fire(const FVector& MuzzleLocation)
-{
-    AActor* Owner = GetOwner();
-    if (!Owner) return;
 
-    if (m_FireSound)
-    {
-        UGameplayStatics::PlaySoundAtLocation(this, m_FireSound, MuzzleLocation);
-    }
-}
 void UWeaponComponent::ConsumeAmmo()
 {
     if (GetOwner() && GetOwner()->HasAuthority())
@@ -78,44 +69,37 @@ void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& 
         }
     }
 }
-void UWeaponComponent::Reload()
-{
-    Multicast_PlayReloadFeedback();
-}
 
 void UWeaponComponent::Multicast_PlayReloadFeedback_Implementation()
 {
-    if(!GetOwner()->HasAuthority()) return;
     AActor* WeaponActor = GetOwner();
-    
-
     if (WeaponActor)
     {
+        
         APawn* OwnerPawn = Cast<APawn>(WeaponActor->GetOwner());
         if (ACharacter* Character = Cast<ACharacter>(OwnerPawn))
         {
+            
             if (UMainAnimInstance* MainAnim = Cast<UMainAnimInstance>(Character->GetMesh()->GetAnimInstance()))
             {
+
                 if (AMainPlayerState* PS = OwnerPawn->GetPlayerState<AMainPlayerState>())
                 {
                     if (WeaponType != PS->GetWeaponID())
-                        WeaponType = PS->GetWeaponID();
-                    if (CurrentAmmo >= MaxMagazineCapacity) return;
-
-                    int32 AmmoNeeded = MaxMagazineCapacity - CurrentAmmo;
-                    int32 AvailableAmmo = PS->GetCarriedAmmoByWeaponType(WeaponType);
-                    if (AvailableAmmo <= 0)
                     {
-                        return;
+                        WeaponType = PS->GetWeaponID();
                     }
-                    int32 AmmoToLoad = FMath::Min(AmmoNeeded, AvailableAmmo);
-                    CurrentAmmo += AmmoToLoad;
-
-                    PS->AddCarriedAmmoByWeaponType(WeaponType, -AmmoToLoad);
                 }
-
                 MainAnim->PlayReloadMontage(WeaponType);
             }
         }
+    }
+}
+
+void UWeaponComponent::SetCurrentAmmo(int32 NewAmmo)
+{
+    if (GetOwner() && GetOwner()->HasAuthority())
+    {
+        CurrentAmmo = NewAmmo;
     }
 }

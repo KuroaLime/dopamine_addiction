@@ -58,6 +58,9 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|TPS")
 	UInputAction* IA_PickupCard = nullptr;
 
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|TPS")
+	UInputAction* IA_Reload = nullptr;
+
 protected:
 	void Input_Move(const FInputActionValue& Value);
 	void Input_Look(const FInputActionValue& Value);
@@ -70,6 +73,6 @@ protected:
 	void Input_AimEnd();
 	void Input_Shop();
 	void Input_PickupCard();
-
+	void Input_Reload();
 	bool bOpenShop = false;
 };

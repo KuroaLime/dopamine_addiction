@@ -104,20 +104,16 @@ void AMainCharacter::BeginPlay()
 		}
 	}
 
-	if (m_cGun)
+	if (HasAuthority() && m_cGun)
 	{
 		FActorSpawnParameters SpawnParams;
 		SpawnParams.Owner = this;
 		SpawnParams.Instigator = GetInstigator();
-
 		m_pEquippedGun = GetWorld()->SpawnActor<AWeapon>(m_cGun, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
-
 		if (m_pEquippedGun)
 		{
 			const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
 			m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
-			//m_pEquippedGun->SetActorRelativeRotation(FRotator(0.f, 180.f, 0.f));
-
 		}
 	}
 
@@ -147,6 +143,20 @@ void AMainCharacter::Tick(float DeltaTime)
 	HPBarWidget->SetWorldRotation(StickerRotation);
 }
 
+void AMainCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+	DOREPLIFETIME(AMainCharacter, m_pEquippedGun);
+}
+
+void AMainCharacter::OnRep_EquippedGun()
+{
+	if (m_pEquippedGun)
+	{
+		const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
+		m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
+	}
+}
 void AMainCharacter::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 
