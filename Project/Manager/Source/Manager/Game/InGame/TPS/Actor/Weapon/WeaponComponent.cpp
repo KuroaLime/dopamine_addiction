@@ -9,11 +9,21 @@
 #include "Net/UnrealNetwork.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "GameFramework/GameStateBase.h"
-#include "Game/InGame/Interface/PhaseGameStateInterface.h"  
+#include "NiagaraFunctionLibrary.h"
+#include "NiagaraComponent.h"
+#include "NiagaraSystem.h"
+#include "UObject/ConstructorHelpers.h"
 UWeaponComponent::UWeaponComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
     SetIsReplicatedByDefault(true);
+
+    // 기본 총알 트레이서 (BP에서 무기별로 덮어쓸 수 있음)
+    static ConstructorHelpers::FObjectFinder<UNiagaraSystem> BulletTracerAsset(TEXT("/Game/Character/Weapons/NS_BulletTracer.NS_BulletTracer"));
+    if (BulletTracerAsset.Succeeded())
+    {
+        BulletTracerFX = BulletTracerAsset.Object;
+    }
 }
 
 void UWeaponComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
@@ -40,19 +50,19 @@ void UWeaponComponent::ConsumeAmmo()
         CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
     }
 }
-void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& MuzzleLocation)
+void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& MuzzleLocation, const FVector& TargetLocation)
 {
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow,
-            FString::Printf(TEXT("[Debug] Fire Called! Ammo: %d/%d, HasAuthority: %d"),
-                CurrentAmmo, MaxMagazineCapacity, (GetOwner() && GetOwner()->HasAuthority()) ? 1 : 0));
-    }
-
     if (m_FireSound)
     {
         UGameplayStatics::PlaySoundAtLocation(GetWorld(), m_FireSound, MuzzleLocation);
-        
+    }
+
+    // 총알 트레이서: 총구에서 명중점 방향으로 회전시켜 스폰.
+    // (NS_BulletTracer가 Local Space + 로컬 +X 속도라, 이 회전이 곧 날아가는 방향이 됨)
+    if (BulletTracerFX && GetWorld())
+    {
+        const FRotator AimRot = (TargetLocation - MuzzleLocation).Rotation();
+        UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), BulletTracerFX, MuzzleLocation, AimRot);
     }
     AActor* WeaponActor = GetOwner();
     if (WeaponActor)

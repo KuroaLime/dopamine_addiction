@@ -161,20 +161,10 @@ void UAbility_Fire::Server_ExecuteFire()
 
 
 	// -------------------------------------------------------
-	// µð¹ö±× Ç¥½Ã
-	//   ÃÊ·Ï: È÷Æ®   (¶óÀÎ CamStart ¡æ ImpactPoint + ¹Ú½º)
-	//   »¡°­: ¹Ì½º   (¶óÀÎ CamStart ¡æ CamEnd)
+	// ï¿½ï¿½ï¿½ï¿½ï¿½ Ç¥ï¿½ï¿½
+	//   ï¿½Ê·ï¿½: ï¿½ï¿½Æ®   (ï¿½ï¿½ï¿½ï¿½ CamStart ï¿½ï¿½ ImpactPoint + ï¿½Ú½ï¿½)
+	//   ï¿½ï¿½ï¿½ï¿½: ï¿½Ì½ï¿½   (ï¿½ï¿½ï¿½ï¿½ CamStart ï¿½ï¿½ CamEnd)
 	// -------------------------------------------------------
-	if (bCamHit && CamHit.GetActor())
-	{
-		DrawDebugLine(World, CamStart, CamHit.ImpactPoint, FColor::Green, false, 2.0f, 0, 0.5f);
-		DrawDebugBox(World, CamHit.ImpactPoint, FVector(15.0f), FColor::Green, false, 2.0f, 0, 2.0f);
-	}
-	else
-	{
-		DrawDebugLine(World, CamStart, CamEnd, FColor::Red, false, 2.0f, 0, 1.5f);
-	}
-
 	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
 	if (!EquippedGun || !EquippedGun->Setting || !EquippedGun->m_pMesh) return;
 
@@ -184,46 +174,28 @@ void UAbility_Fire::Server_ExecuteFire()
 	AMainCharacter* MainChar = Cast<AMainCharacter>(OwnerCharacter);
 	if (MainChar)
 	{
-		if (GEngine)
-		{
-			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] MainChar Called!")));
-		}
 		AWeapon* EquippedWeapon = MainChar->GetEquippedGun();
 		if (EquippedWeapon)
 		{
-			if (GEngine)
-			{
-				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] EquippedWeapon Called!")));
-			}
 			UWeaponComponent* WeaponComp = EquippedWeapon->Setting;
 			if (WeaponComp)
 			{
-				if (GEngine)
-				{
-					GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] WeaponComp Called!")));
-				}
 				if (WeaponComp->GetCurrentAmmo() <= 0)
 				{
-					if (GEngine)
-					{
-						GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] eaponComp->GetCurrentAmmo() Called!")));
-					}
 					EndAbility(true);
 					return;
 				}
 				if (OwnerCharacter->HasAuthority())
 				{
-					if (GEngine)
-					{
-						GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] wnerCharacter->HasAuthority Called!")));
-					}
 					WeaponComp->ConsumeAmmo();
 				}
 			}
 		}
 	}
 	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
-	EquippedGun->Setting->Multicast_PlayFireFeedback(MuzzleLoc);
+	// ì´ì•Œ íŠ¸ë ˆì´ì„œê°€ í–¥í•  ëª©í‘œ: ëª…ì¤‘í•˜ë©´ ì¶©ëŒì , ë¹—ë‚˜ê°€ë©´ ì¹´ë©”ë¼ ìµœëŒ€ ì‚¬ê±°ë¦¬ ë.
+	FVector TargetLoc = (bCamHit && CamHit.bBlockingHit) ? CamHit.ImpactPoint : CamEnd;
+	EquippedGun->Setting->Multicast_PlayFireFeedback(MuzzleLoc, TargetLoc);
 
 	int32 BaseDamage = GS_Interface->GetWeaponBaseData(
 		PS_Interface->GetWeaponID(), EWeaponBaseStatType::Damage);
