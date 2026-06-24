@@ -69,13 +69,13 @@ AManagerCharacter::AManagerCharacter()
 	// are set in the derived blueprint asset named TshirdPersonCharacter (to avoid direct content references in C++)
 
 
-	//µ¥ÀÌÅÍ ÄÄÆ÷³ÍÆ® ÃÊ±âÈ­
+	//ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ® ï¿½Ê±ï¿½È­
 	CharacterState = CreateDefaultSubobject<UCharacterStateComponent>(TEXT("CHARACTERSTATE"));
-	//Ä«¸Þ¶ó »óÅÂ ÄÄÆ÷³ÍÆ® ÃÊ±âÈ­
+	//Ä«ï¿½Þ¶ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½Æ® ï¿½Ê±ï¿½È­
 	CameraState = CreateDefaultSubobject<UCameraStateComponent>(TEXT("CAMERASTATE"));
 
 
-	//Ä³¸¯ÅÍ À§ HPBar
+	//Ä³ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ HPBar
 	HPBarWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("HPBARWIDGET"));
 	HPBarWidget->SetupAttachment(RootComponent);
 	HPBarWidget->SetRelativeLocation(FVector(0.0f, 0.0f, 180.0f));
@@ -90,7 +90,7 @@ AManagerCharacter::AManagerCharacter()
 	HPBarWidget->SetOwnerNoSee(true);
 	
 
-	//ÇÃ·¹ÀÌ¾î µðÆúÆ® UI
+	//ï¿½Ã·ï¿½ï¿½Ì¾ï¿½ ï¿½ï¿½ï¿½ï¿½Æ® UI
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
 	
 }
@@ -104,7 +104,7 @@ void AManagerCharacter::BeginPlay()
 		Manager->RequestRegister(this);
 	}
 
-	//»ç¿ë °¡´É ¾îºô¸®Æ¼ µî·Ï
+	//ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Æ¼ ï¿½ï¿½ï¿½
 	if (AbilitySystemComponent)
 	{
 		for (TSubclassOf<UPFGAbility> AbilityClass : DefaultAbilities)
@@ -123,15 +123,15 @@ void AManagerCharacter::BeginPlay()
 		SpawnParams.Owner = this;
 		SpawnParams.Instigator = GetInstigator();
 
-		// 1. ¹«±â ¾×ÅÍ »ý¼º
+		// 1. ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½
 		m_pEquippedGun = GetWorld()->SpawnActor<AWeapon>(m_cGun, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
 		
 		if (m_pEquippedGun)
 		{
-			// 2. Ä³¸¯ÅÍ ¼Õ ¼ÒÄÏ¿¡ ºÎÂø (¼ÒÄÏ ÀÌ¸§ È®ÀÎ ÇÊ¼ö)
+			// 2. Ä³ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ ï¿½ï¿½ï¿½Ï¿ï¿½ ï¿½ï¿½ï¿½ï¿½ (ï¿½ï¿½ï¿½ï¿½ ï¿½Ì¸ï¿½ È®ï¿½ï¿½ ï¿½Ê¼ï¿½)
 			const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
 			m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
-			m_pEquippedGun->SetActorRelativeRotation(FRotator(0.f, 180.f, 0.f));
+			//m_pEquippedGun->SetActorRelativeRotation(FRotator(0.f, 180.f, 0.f)); // disabled: socket already orients weapon; this extra 180 double-applied and flipped it
 		}
 	}
 

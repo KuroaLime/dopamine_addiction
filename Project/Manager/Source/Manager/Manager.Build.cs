@@ -16,6 +16,7 @@ public class Manager : ModuleRules
 			"NetCore",
 			"EnhancedInput",
 			"AIModule",
+			"NavigationSystem",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
 			"UMG",
@@ -25,8 +26,7 @@ public class Manager : ModuleRules
             "AnimGraphRuntime",
 			"Niagara",
             "Sockets",
-            "Networking",
-            "NavigationSystem"
+            "Networking"
         });
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });

@@ -44,6 +44,9 @@ protected:
 	UInputAction* IA_Look = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|TPS")
+	class UInputAction* IA_Crouch = nullptr;
+	
+	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|TPS")
 	UInputAction* IA_Fire = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = "Input|TPS")
@@ -59,6 +62,8 @@ protected:
 	void Input_Move(const FInputActionValue& Value);
 	void Input_Look(const FInputActionValue& Value);
 	void Input_Jump();
+	void Input_Crouch();
+	void Input_CrouchEnd();
 	void Input_StartFire();
 	void Input_StopFire();
 	void Input_Aim();

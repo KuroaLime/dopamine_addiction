@@ -5,6 +5,7 @@
 #include "EnhancedInputSubsystems.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/Character.h"
 #include "Default/Ability/GAS/PFGASC.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
@@ -69,6 +70,12 @@ void UTPSInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputComponen
 	if (IA_Move) EnhancedInputComponent->BindAction(IA_Move, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_Move);
 	if (IA_Look) EnhancedInputComponent->BindAction(IA_Look, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_Look);
 	if (IA_Jump) EnhancedInputComponent->BindAction(IA_Jump, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Jump);
+	if (IA_Crouch)
+	{
+		EnhancedInputComponent->BindAction(IA_Crouch, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Crouch);
+		EnhancedInputComponent->BindAction(IA_Crouch, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_CrouchEnd);
+	}
+
 	if (IA_Fire) EnhancedInputComponent->BindAction(IA_Fire, ETriggerEvent::Triggered, this, &UTPSInputHandler::Input_StartFire);
 	if (IA_Fire) EnhancedInputComponent->BindAction(IA_Fire, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_StopFire);
 	if (IA_Aim)
@@ -122,6 +129,22 @@ void UTPSInputHandler::Input_Jump()
 	if (UPFGASC* ASC = ResolveOwnerASC())
 	{
 		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Jump")));
+	}
+}
+
+void UTPSInputHandler::Input_Crouch()
+{
+	if (ACharacter* OwnerCharacter = Cast<ACharacter>(OwnerController->GetPawn()))
+	{
+		OwnerCharacter->Crouch();
+	}
+}
+
+void UTPSInputHandler::Input_CrouchEnd()
+{
+	if (ACharacter* OwnerCharacter = Cast<ACharacter>(OwnerController->GetPawn()))
+	{
+		OwnerCharacter->UnCrouch();
 	}
 }
 
