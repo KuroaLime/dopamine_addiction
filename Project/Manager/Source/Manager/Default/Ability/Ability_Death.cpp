@@ -1,6 +1,5 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Default/Ability/Ability_Death.h"
 #include "Default/Ability/GAS/PFGASC.h"
 #include "Game/InGame/TPS/System/TPSUIHandler.h"
@@ -30,7 +29,6 @@ void UAbility_Death::LocalActivateWithOwner(AActor* InOwner)
 
 void UAbility_Death::LocalCancelWithOwner(AActor* InOwner)
 {
-
 }
 
 void UAbility_Death::ActivateAbility()
@@ -41,7 +39,6 @@ void UAbility_Death::ActivateAbility()
 		return;
 	}
 
-	// 플레이어 카드 드롭
 	DropAllPlayerCards();
 
 	RespawnTime = 5;
@@ -91,34 +88,7 @@ void UAbility_Death::DropAllPlayerCards()
 		return;
 	}
 
-	// 플레이어의 모든 카드를 드롭
-	TArray<FOwnedCardInfo> CardsToDropList = PlayerState->GetOwnedCards();
-
-	if (CardsToDropList.Num() == 0)
-	{
-		return;
-	}
-
-	FVector BaseDropLocation = OwnerCharacter->GetActorLocation();
-
-	for (int32 CardIndex = 0; CardIndex < CardsToDropList.Num(); ++CardIndex)
-	{
-		const FOwnedCardInfo& CardInfo = CardsToDropList[CardIndex];
-
-		FVector DropLocation = BaseDropLocation;
-
-		// 카드를 원형으로 분산시킴
-		float Angle = (CardIndex / static_cast<float>(CardsToDropList.Num())) * 2.0f * PI;
-		float Radius = 150.f;
-		DropLocation.X += FMath::Cos(Angle) * Radius;
-		DropLocation.Y += FMath::Sin(Angle) * Radius;
-		DropLocation.Z += 100.f;
-
-		GameMode->SpawnCardDrop(CardInfo.CardID, DropLocation);
-	}
-
-	// 플레이어의 카드 인벤토리 비우기
-	PlayerState->ClearOwnedCards();
+	GameMode->DropOwnedCardsFromPlayer(PlayerState, OwnerCharacter->GetActorLocation());
 }
 
 void UAbility_Death::Server_ExecuteCountDown()
