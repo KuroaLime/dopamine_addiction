@@ -16,6 +16,8 @@ UMainAnimInstance::UMainAnimInstance()
 	// 기본값 초기화
 	Velocity = FVector::ZeroVector;
 	LeftIKLocation = FVector::ZeroVector;
+	LeftHandIKAlpha = 1.f;
+	bIsReloading = false;
 	GroundSpeed = 0.f;
 	Direction = 0.f;
 	bShouldMove = false;
@@ -127,6 +129,22 @@ void UMainAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 			LeftIKLocation = HandL; // 무기 없음 → 제자리 = IK no-op
 		}
 	}
+
+	// 8) 재장전 감지 + 왼손 IK 알파.
+	//    재장전 몽타주가 재생 중이면 왼손이 그립을 떠나므로 IK를 꺼야 한다(알파 0).
+	bIsReloading = false;
+	for (const TPair<EWeaponType, UAnimMontage*>& Pair : WeaponReloadMontages)
+	{
+		if (Pair.Value && Montage_IsPlaying(Pair.Value))
+		{
+			bIsReloading = true;
+			break;
+		}
+	}
+	// 왼손 IK는 양손총(WeaponStance==2)이고 재장전 중이 아닐 때만. 톡 끊기지 않게 부드럽게 보간.
+	const bool bWantLeftIK = (bIsReloading == false) && (WeaponStance == 2);
+	const float TargetAlpha = bWantLeftIK ? 1.f : 0.f;
+	LeftHandIKAlpha = FMath::FInterpTo(LeftHandIKAlpha, TargetAlpha, DeltaSeconds, 12.f);
 }
 void UMainAnimInstance::PlayFireMontage(EWeaponType WeaponType)
 {
