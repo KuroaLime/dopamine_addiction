@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "Animation/AnimInstance.h"
 #include "Game/Protocol_Client/Protocol_InGame.h" // EWeaponType 정의 위치
+
 #include "MainAnimInstance.generated.h"
 
 class AMainCharacter;
@@ -97,4 +98,15 @@ protected:
 private:
 	/** OwningCharacter 유효성 보장(끊겼으면 재캐싱). 실패 시 false */
 	bool EnsureOwner();
+
+public:
+	UFUNCTION(BlueprintCallable, Category = "Animation Montage")
+	void PlayFireMontage(EWeaponType WeaponType);
+	UFUNCTION(BlueprintCallable, Category = "Animation Montage")
+	void PlayReloadMontage(EWeaponType WeaponType);
+protected:
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	TMap<EWeaponType, UAnimMontage*> WeaponFireMontages;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
+	TMap<EWeaponType, UAnimMontage*> WeaponReloadMontages;
 };
