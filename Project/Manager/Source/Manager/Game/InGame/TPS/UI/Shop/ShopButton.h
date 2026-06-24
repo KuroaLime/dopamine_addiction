@@ -50,10 +50,11 @@ public:
 	void SetItemID(int32 NewID);
 
 	virtual void BindCharacterState(class UCharacterStateComponent* NewCharacterState) override;
-
+	void SetButtonText(const FText& NameText, const FText& PriceText);
 protected:
 	virtual void NativeConstruct() override;
 
 public:
 	void UpdateWidget();
+	int32 GetItemID() const { return ButtonItemID; }
 };

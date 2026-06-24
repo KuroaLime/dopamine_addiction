@@ -8,7 +8,7 @@
 
 AMainPlayerState::AMainPlayerState()
 {
-	CurPlayerData.HoldingGold = 10;
+	CurPlayerData.HoldingGold = 10000;
 	CurPlayerData.CurrentHP = 150;
 
 

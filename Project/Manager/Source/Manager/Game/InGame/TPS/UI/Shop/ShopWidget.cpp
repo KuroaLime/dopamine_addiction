@@ -7,8 +7,10 @@
 #include "Game/InGame/TPS/UI/Shop/UpgradeSelectionWidget.h"
 #include "Blueprint/WidgetTree.h"
 #include "Components/Image.h"
+#include "Components/TextBlock.h"
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/TPS/UI/Shop/ShopBanner.h"
+#include "Game/InGame/MainPlayerState.h"
 
 
 void UShopWidget::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
@@ -30,6 +32,7 @@ void UShopWidget::NativeConstruct() {
 	{
 		UpgradeButton00->SetItemID(0);
 		UpgradeButton00->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleUpgradePurchase);
+		UpgradeButton00->SetButtonText(FText::FromString(TEXT("랜덤 카드 강화")), FText::FromString(TEXT("100")));
 	}
 
 	Char_UpgradeButtons.Empty();
@@ -41,15 +44,40 @@ void UShopWidget::NativeConstruct() {
 					int32 GeneratedID = Char_UpgradeButtons.Num() - 1;
 					FoundButton->SetItemID(GeneratedID);
 					FoundButton->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleUpgradCharacterState);
-
+					FText UpgradeName;
+					FText UpgradePrice = FText::FromString(TEXT("100 Gold"));
+					switch (GeneratedID)
+					{
+					case 0:
+						UpgradeName = FText::FromString(TEXT("최대 체력 증가"));
+						break;
+					case 1:
+						UpgradeName = FText::FromString(TEXT("이동 속도 증가"));
+						break;
+					case 2:
+						UpgradeName = FText::FromString(TEXT("체력 재생 증가"));
+						break;
+					default:
+						UpgradeName = FText::FromString(TEXT("미정이가 간다!"));
+						break;
+					}
+					FoundButton->SetButtonText(UpgradeName, UpgradePrice);
 				}
 			}
 		}
 	);
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Total %d upgrade buttons registered."), Char_UpgradeButtons.Num()));
-	
+	TryBindPlayerStateDelegates();
 
-
+	if (!bBoundDelegates && GetWorld())
+	{
+		GetWorld()->GetTimerManager().SetTimer(
+			BindingTimerHandle,
+			this,
+			&UShopWidget::TryBindPlayerStateDelegates,
+			0.1f,
+			true
+		);
+	}
 }
 void UShopWidget::HandleUpgradePurchase(int32 ItemID) {
 
@@ -80,11 +108,11 @@ void UShopWidget::Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>&
 	Static_Upgrade_Background->SetVisibility(ESlateVisibility::Collapsed);
 	Background->SetVisibility(ESlateVisibility::Collapsed);
 	BP_ShopBanner->SetVisibility(ESlateVisibility::Collapsed);
-
+	StaticUpgradeText->SetVisibility(ESlateVisibility::Collapsed);
 	if (CardSelectionPanel)
 	{
-		CardSelectionPanel->SetCardID(Options); //������ ī�� ID ����(���� ������)
-		CardSelectionPanel->SetVisibility(ESlateVisibility::Visible);//���̰�
+		CardSelectionPanel->SetCardID(Options);
+		CardSelectionPanel->SetVisibility(ESlateVisibility::Visible);
 	}
 }
 
@@ -105,6 +133,7 @@ void UShopWidget::ReturnToShopButtons()
 	Static_Upgrade_Background->SetVisibility(ESlateVisibility::Visible);
 	Background->SetVisibility(ESlateVisibility::Visible);
 	BP_ShopBanner->SetVisibility(ESlateVisibility::Visible);
+	StaticUpgradeText->SetVisibility(ESlateVisibility::Visible);
 }
 
 void UShopWidget::SendToSelectionCardID(int32 CardID)
@@ -113,4 +142,75 @@ void UShopWidget::SendToSelectionCardID(int32 CardID)
 	if (PlayerController) {
 		PlayerController->Server_SelectUpgradeOption(CardID);
 	}
+}
+void UShopWidget::TryBindPlayerStateDelegates()
+{
+	if (bBoundDelegates) return;
+	AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
+	if (!PC) return;
+	AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+	if (PS)
+	{
+		PS->OnPlayerDataChangedNative.AddUObject(this, &UShopWidget::OnPlayerDataChanged);
+		PS->OnGoldChnageNative.AddUObject(this, &UShopWidget::OnGoldChanged);
+		bBoundDelegates = true;
+		if (GetWorld())
+		{
+			GetWorld()->GetTimerManager().ClearTimer(BindingTimerHandle);
+		}
+		UpdateUpgradeButtons();
+	}
+}
+void UShopWidget::UpdateUpgradeButtons()
+{
+	AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
+	if (!PC) return;
+	AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+	if (!PS) return;
+	if (UpgradeButton00)
+	{
+		UpgradeButton00->SetButtonText(FText::FromString(TEXT("랜덤 카드 강화")), FText::FromString(TEXT("무료")));
+	}
+	for (UShopButton* Button : Char_UpgradeButtons)
+	{
+		if (!Button) continue;
+		int32 ItemID = Button->GetItemID();
+		EUpgradeType UpgradeType = PC->GetStaticUpgradeTypeFromIndex(ItemID);
+		if (UpgradeType == EUpgradeType::None) continue;
+		int32 CurrentLevel = PC->GetCurrentUpgradeLevel(PS, UpgradeType);
+		int32 Cost = PC->GetStaticUpgradeCost(UpgradeType, CurrentLevel);
+		FText UpgradeName;
+		switch (UpgradeType)
+		{
+		case EUpgradeType::Player_Health:
+			UpgradeName = FText::Format(FText::FromString(TEXT("최대 체력 증가 (Lv.{0})")), FText::AsNumber(CurrentLevel));
+			break;
+		case EUpgradeType::Player_MoveSpeed:
+			UpgradeName = FText::Format(FText::FromString(TEXT("이동 속도 증가 (Lv.{0})")), FText::AsNumber(CurrentLevel));
+			break;
+		case EUpgradeType::Player_HealthRegeneration:
+			UpgradeName = FText::Format(FText::FromString(TEXT("체력 재생 증가 (Lv.{0})")), FText::AsNumber(CurrentLevel));
+			break;
+		default:
+			UpgradeName = FText::FromString(TEXT("스탯 강화"));
+			break;
+		}
+		FText PriceText = FText::Format(FText::FromString(TEXT("{0} Gold")), FText::AsNumber(Cost));
+		if (CurrentLevel >= 5)
+		{
+			Button->SetButtonText(UpgradeName, FText::FromString(TEXT("MAX")));
+		}
+		else
+		{
+			Button->SetButtonText(UpgradeName, PriceText);
+		}
+	}
+}
+void UShopWidget::OnPlayerDataChanged(const FPlayerData& NewPlayerData)
+{
+	UpdateUpgradeButtons();
+}
+void UShopWidget::OnGoldChanged(float NewGold)
+{
+	UpdateUpgradeButtons();
 }

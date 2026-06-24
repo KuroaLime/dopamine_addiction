@@ -198,6 +198,17 @@ void ARopeBridge::PlaceUprightPillar(UStaticMeshComponent* Pillar, const FVector
 	{
 		return;
 	}
+
+	// Toggle: hide + disable collision when biseok is turned off (no mesh asset counts as off too).
+	const bool bShow = bShowBiseok && (BiseokMesh != nullptr);
+	Pillar->SetVisibility(bShow);
+	Pillar->SetHiddenInGame(!bShow);
+	Pillar->SetCollisionEnabled(bShow ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
+	if (!bShow)
+	{
+		return;
+	}
+
 	if (BiseokMesh)
 	{
 		Pillar->SetStaticMesh(BiseokMesh);
@@ -284,11 +295,16 @@ void ARopeBridge::RebuildBridge()
 	UpdateSplinePoints(HandrailSplineL, RingStartL, HandMidL, RingEndL);
 	UpdateSplinePoints(HandrailSplineR, RingStartR, HandMidR, RingEndR);
 
-	// Foot ropes never block; only the handrails optionally collide.
-	BuildSplineMeshes(MainRopeSplineL, false);
-	BuildSplineMeshes(MainRopeSplineR, false);
-	BuildSplineMeshes(HandrailSplineL, bHandrailCollision);
-	BuildSplineMeshes(HandrailSplineR, bHandrailCollision);
+	// Ropes are optional. When off we skip building any segment meshes; the cursor stays 0 so
+	// TrimSplineMeshPool() below removes all existing rope segments. (Planks still use the spline path.)
+	if (bShowRopes)
+	{
+		// Foot ropes never block; only the handrails optionally collide.
+		BuildSplineMeshes(MainRopeSplineL, false);
+		BuildSplineMeshes(MainRopeSplineR, false);
+		BuildSplineMeshes(HandrailSplineL, bHandrailCollision);
+		BuildSplineMeshes(HandrailSplineR, bHandrailCollision);
+	}
 
 	// Gather plank + thin vertical-rope transforms, then apply them (reusing instances to avoid jitter).
 	TArray<FTransform> PlankXforms;
@@ -323,7 +339,7 @@ void ARopeBridge::RebuildBridge()
 			Center += PlankDrop;
 			PlankXforms.Add(FTransform(Rot, Center, FVector(PlankDepthScale, PlankWidthScale, 1.f)));
 
-			if (VerticalRopeMesh)
+			if (bShowRopes && VerticalRopeMesh)
 			{
 				const FVector TopL = HandrailSplineL->GetLocationAtDistanceAlongSpline(Dist, ESplineCoordinateSpace::Local);
 				VRopeXforms.Add(MakeVerticalRopeTransform(TopL, PosL + PlankDrop));
