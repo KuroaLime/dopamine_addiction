@@ -10,6 +10,7 @@
 #include "GameFramework/GameStateBase.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
+#include "Game/InGame/MainCharacter.h"
 
 UAbility_Fire::UAbility_Fire()
 {
@@ -131,6 +132,7 @@ void UAbility_Fire::Client_ExecuteFire(AActor* InOwner)
 
 void UAbility_Fire::Server_ExecuteFire()
 {
+
 	IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
 	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
 	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(OwnerCharacter->GetWorld()->GetGameState());
@@ -139,6 +141,7 @@ void UAbility_Fire::Server_ExecuteFire()
 
 	UCameraComponent* FollowCamera = Owner->GetFollowCameraComponent();
 	if (!FollowCamera) return;
+
 
 	int32 BaseRange = GS_Interface->GetWeaponBaseData(PS_Interface->GetWeaponID(), EWeaponBaseStatType::Range);
 	int32 LvRange = PS_Interface->GetWeaponStatLV(EWeaponStatType::Range);
@@ -175,6 +178,50 @@ void UAbility_Fire::Server_ExecuteFire()
 	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
 	if (!EquippedGun || !EquippedGun->Setting || !EquippedGun->m_pMesh) return;
 
+	
+
+
+	AMainCharacter* MainChar = Cast<AMainCharacter>(OwnerCharacter);
+	if (MainChar)
+	{
+		if (GEngine)
+		{
+			GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] MainChar Called!")));
+		}
+		AWeapon* EquippedWeapon = MainChar->GetEquippedGun();
+		if (EquippedWeapon)
+		{
+			if (GEngine)
+			{
+				GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] EquippedWeapon Called!")));
+			}
+			UWeaponComponent* WeaponComp = EquippedWeapon->Setting;
+			if (WeaponComp)
+			{
+				if (GEngine)
+				{
+					GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] WeaponComp Called!")));
+				}
+				if (WeaponComp->GetCurrentAmmo() <= 0)
+				{
+					if (GEngine)
+					{
+						GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] eaponComp->GetCurrentAmmo() Called!")));
+					}
+					EndAbility(true);
+					return;
+				}
+				if (OwnerCharacter->HasAuthority())
+				{
+					if (GEngine)
+					{
+						GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow, FString::Printf(TEXT("[Debug] wnerCharacter->HasAuthority Called!")));
+					}
+					WeaponComp->ConsumeAmmo();
+				}
+			}
+		}
+	}
 	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
 	EquippedGun->Setting->Multicast_PlayFireFeedback(MuzzleLoc);
 

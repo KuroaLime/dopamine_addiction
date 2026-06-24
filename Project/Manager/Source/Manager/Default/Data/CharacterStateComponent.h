@@ -58,6 +58,8 @@ public:
 	float GetMaxHP();
 	float GetCurrentHP();
 	float GetAttack();
+	int32 GetCurrentAmmoCount();
+	int32 GetMaxAmmoCount();
 
 	int GetLevel();
 
@@ -108,4 +110,7 @@ protected:
 public:
 	UFUNCTION()
 	void BindToPlayerState(class AMainPlayerState* PS);
+
+
+
 };

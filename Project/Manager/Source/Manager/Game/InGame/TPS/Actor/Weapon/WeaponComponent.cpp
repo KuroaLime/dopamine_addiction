@@ -6,15 +6,22 @@
 #include "GameFramework/Character.h"
 #include "EngineUtils.h"
 #include "Game/InGame/MainPlayerState.h"
+#include "Net/UnrealNetwork.h"
 UWeaponComponent::UWeaponComponent()
 {
     PrimaryComponentTick.bCanEverTick = true;
     SetIsReplicatedByDefault(true);
 }
 
+void UWeaponComponent::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
+{
+    Super::GetLifetimeReplicatedProps(OutLifetimeProps);
+    DOREPLIFETIME(UWeaponComponent, CurrentAmmo);
+}
 void UWeaponComponent::BeginPlay()
 {
     Super::BeginPlay();
+    CurrentAmmo = MaxMagazineCapacity;
 }
 
 void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)
@@ -32,14 +39,26 @@ void UWeaponComponent::Fire(const FVector& MuzzleLocation)
         UGameplayStatics::PlaySoundAtLocation(this, m_FireSound, MuzzleLocation);
     }
 }
-
+void UWeaponComponent::ConsumeAmmo()
+{
+    if (GetOwner() && GetOwner()->HasAuthority())
+    {
+        CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
+    }
+}
 void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& MuzzleLocation)
 {
+    if (GEngine)
+    {
+        GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Yellow,
+            FString::Printf(TEXT("[Debug] Fire Called! Ammo: %d/%d, HasAuthority: %d"),
+                CurrentAmmo, MaxMagazineCapacity, (GetOwner() && GetOwner()->HasAuthority()) ? 1 : 0));
+    }
 
-    
     if (m_FireSound)
     {
         UGameplayStatics::PlaySoundAtLocation(GetWorld(), m_FireSound, MuzzleLocation);
+        
     }
     AActor* WeaponActor = GetOwner();
     if (WeaponActor)
@@ -63,9 +82,13 @@ void UWeaponComponent::Reload()
 {
     Multicast_PlayReloadFeedback();
 }
+
 void UWeaponComponent::Multicast_PlayReloadFeedback_Implementation()
 {
+    if(!GetOwner()->HasAuthority()) return;
     AActor* WeaponActor = GetOwner();
+    
+
     if (WeaponActor)
     {
         APawn* OwnerPawn = Cast<APawn>(WeaponActor->GetOwner());
@@ -77,7 +100,20 @@ void UWeaponComponent::Multicast_PlayReloadFeedback_Implementation()
                 {
                     if (WeaponType != PS->GetWeaponID())
                         WeaponType = PS->GetWeaponID();
+                    if (CurrentAmmo >= MaxMagazineCapacity) return;
+
+                    int32 AmmoNeeded = MaxMagazineCapacity - CurrentAmmo;
+                    int32 AvailableAmmo = PS->GetCarriedAmmoByWeaponType(WeaponType);
+                    if (AvailableAmmo <= 0)
+                    {
+                        return;
+                    }
+                    int32 AmmoToLoad = FMath::Min(AmmoNeeded, AvailableAmmo);
+                    CurrentAmmo += AmmoToLoad;
+
+                    PS->AddCarriedAmmoByWeaponType(WeaponType, -AmmoToLoad);
                 }
+
                 MainAnim->PlayReloadMontage(WeaponType);
             }
         }
