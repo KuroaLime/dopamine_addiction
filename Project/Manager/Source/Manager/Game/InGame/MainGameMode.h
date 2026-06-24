@@ -328,7 +328,11 @@ private:
     bool HasOverheadClearance(const FVector& Candidate) const;
 
     int32 CreateCardInstance(ECardID CardID);
+
+public:
     ACardDropActor* SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation);
+
+private:
     void SpawnRoundCardBundleForBattleRoyale();
     void ClearCardDrops();
 

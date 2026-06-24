@@ -5,6 +5,8 @@
 #include "Default/Ability/GAS/PFGASC.h"
 #include "Game/InGame/TPS/System/TPSUIHandler.h"
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
+#include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/MainPlayerState.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 
@@ -35,9 +37,12 @@ void UAbility_Death::ActivateAbility()
 {
 	if (!OwnerCharacter || !OwnerCharacter->HasAuthority())
 	{
-		EndAbilityNow(); 
+		EndAbilityNow();
 		return;
 	}
+
+	// 플레이어 카드 드롭
+	DropAllPlayerCards();
 
 	RespawnTime = 5;
 
@@ -59,6 +64,61 @@ void UAbility_Death::ActivateAbility()
 void UAbility_Death::EndAbility(bool bWasCancelled)
 {
 	Super::EndAbility(bWasCancelled);
+}
+
+void UAbility_Death::DropAllPlayerCards()
+{
+	if (!OwnerCharacter || !OwnerCharacter->HasAuthority())
+	{
+		return;
+	}
+
+	APlayerController* PC = Cast<APlayerController>(OwnerCharacter->GetController());
+	if (!PC)
+	{
+		return;
+	}
+
+	AMainPlayerState* PlayerState = Cast<AMainPlayerState>(PC->PlayerState);
+	if (!PlayerState)
+	{
+		return;
+	}
+
+	AMainGameMode* GameMode = Cast<AMainGameMode>(GetWorld()->GetAuthGameMode());
+	if (!GameMode)
+	{
+		return;
+	}
+
+	// 플레이어의 모든 카드를 드롭
+	TArray<FOwnedCardInfo> CardsToDropList = PlayerState->GetOwnedCards();
+
+	if (CardsToDropList.Num() == 0)
+	{
+		return;
+	}
+
+	FVector BaseDropLocation = OwnerCharacter->GetActorLocation();
+
+	for (int32 CardIndex = 0; CardIndex < CardsToDropList.Num(); ++CardIndex)
+	{
+		const FOwnedCardInfo& CardInfo = CardsToDropList[CardIndex];
+
+		FVector DropLocation = BaseDropLocation;
+
+		// 카드를 원형으로 분산시킴
+		float Angle = (CardIndex / static_cast<float>(CardsToDropList.Num())) * 2.0f * PI;
+		float Radius = 150.f;
+		DropLocation.X += FMath::Cos(Angle) * Radius;
+		DropLocation.Y += FMath::Sin(Angle) * Radius;
+		DropLocation.Z += 100.f;
+
+		GameMode->SpawnCardDrop(CardInfo.CardID, DropLocation);
+	}
+
+	// 플레이어의 카드 인벤토리 비우기
+	PlayerState->ClearOwnedCards();
 }
 
 void UAbility_Death::Server_ExecuteCountDown()
