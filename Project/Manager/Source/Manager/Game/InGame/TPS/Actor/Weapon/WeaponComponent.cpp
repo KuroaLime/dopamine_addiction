@@ -1,4 +1,5 @@
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
+#include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Controller.h"
@@ -75,17 +76,24 @@ void UWeaponComponent::ConsumeAmmo()
 }
 void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& MuzzleLocation, const FVector& TargetLocation)
 {
+    FVector ActualMuzzleLoc = MuzzleLocation;
+    AWeapon* Weapon = Cast<AWeapon>(GetOwner());
+    if (Weapon && Weapon->m_pMesh)
+    {
+        ActualMuzzleLoc = Weapon->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
+    }
+
     if (m_FireSound)
     {
-        UGameplayStatics::PlaySoundAtLocation(GetWorld(), m_FireSound, MuzzleLocation);
+        UGameplayStatics::PlaySoundAtLocation(GetWorld(), m_FireSound, ActualMuzzleLoc);
     }
 
     // 총알 트레이서: 총구에서 명중점 방향으로 회전시켜 스폰.
     // (NS_BulletTracer가 Local Space + 로컬 +X 속도라, 이 회전이 곧 날아가는 방향이 됨)
     if (BulletTracerFX && GetWorld())
     {
-        const FRotator AimRot = (TargetLocation - MuzzleLocation).Rotation();
-        UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), BulletTracerFX, MuzzleLocation, AimRot);
+        const FRotator AimRot = (TargetLocation - ActualMuzzleLoc).Rotation();
+        UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), BulletTracerFX, ActualMuzzleLoc, AimRot);
     }
     if (UMainAnimInstance* MainAnim = ResolveOwnerAnimAndSyncWeapon())
     {

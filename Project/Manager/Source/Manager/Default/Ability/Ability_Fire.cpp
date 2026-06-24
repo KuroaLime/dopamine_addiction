@@ -197,6 +197,8 @@ void UAbility_Fire::Server_ExecuteFire()
 			}
 		}
 	}
+
+
 	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
 	// 총알 트레이서가 향할 목표: 명중하면 충돌점, 빗나가면 카메라 최대 사거리 끝.
 	FVector TargetLoc = (bCamHit && CamHit.bBlockingHit) ? CamHit.ImpactPoint : CamEnd;
