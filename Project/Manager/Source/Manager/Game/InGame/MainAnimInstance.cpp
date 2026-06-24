@@ -148,21 +148,73 @@ void UMainAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 }
 void UMainAnimInstance::PlayFireMontage(EWeaponType WeaponType)
 {
+	UAnimMontage* TargetMontage = nullptr;
 	if (WeaponFireMontages.Contains(WeaponType))
 	{
-		if (UAnimMontage* TargetMontage = WeaponFireMontages[WeaponType])
+		TargetMontage = WeaponFireMontages[WeaponType];
+	}
+
+	// [폴백 규칙] 지정된 몽타주가 없으면, 권총은 권총 몽타주로, 그 외(Shotgun, SMG, Sniper 등)는 AR(Rifle) 몽타주로 대체
+	if (!TargetMontage)
+	{
+		EWeaponType FallbackType = (WeaponType == EWeaponType::PISTOL) ? EWeaponType::PISTOL : EWeaponType::AR;
+		if (WeaponFireMontages.Contains(FallbackType))
 		{
-			Montage_Play(TargetMontage);
+			TargetMontage = WeaponFireMontages[FallbackType];
 		}
+	}
+
+	if (TargetMontage)
+	{
+		Montage_Play(TargetMontage);
 	}
 }
+
 void UMainAnimInstance::PlayReloadMontage(EWeaponType WeaponType)
 {
+	UAnimMontage* TargetMontage = nullptr;
 	if (WeaponReloadMontages.Contains(WeaponType))
 	{
-		if (UAnimMontage* TargetMontage = WeaponReloadMontages[WeaponType])
+		TargetMontage = WeaponReloadMontages[WeaponType];
+	}
+
+	// [폴백 규칙] 지정된 몽타주가 없으면, 권총은 권총 몽타주로, 그 외(Shotgun, SMG, Sniper 등)는 AR(Rifle) 몽타주로 대체
+	if (!TargetMontage)
+	{
+		EWeaponType FallbackType = (WeaponType == EWeaponType::PISTOL) ? EWeaponType::PISTOL : EWeaponType::AR;
+		if (WeaponReloadMontages.Contains(FallbackType))
 		{
-			Montage_Play(TargetMontage);
+			TargetMontage = WeaponReloadMontages[FallbackType];
 		}
 	}
+
+	if (TargetMontage)
+	{
+		Montage_Play(TargetMontage);
+	}
+}
+
+float UMainAnimInstance::GetReloadMontageLength(EWeaponType WeaponType) const
+{
+	UAnimMontage* TargetMontage = nullptr;
+	if (WeaponReloadMontages.Contains(WeaponType))
+	{
+		TargetMontage = WeaponReloadMontages[WeaponType];
+	}
+
+	// [폴백 규칙] 지정된 몽타주가 없으면, 권총은 권총 몽타주로, 그 외(Shotgun, SMG, Sniper 등)는 AR(Rifle) 몽타주로 대체
+	if (!TargetMontage)
+	{
+		EWeaponType FallbackType = (WeaponType == EWeaponType::PISTOL) ? EWeaponType::PISTOL : EWeaponType::AR;
+		if (WeaponReloadMontages.Contains(FallbackType))
+		{
+			TargetMontage = WeaponReloadMontages[FallbackType];
+		}
+	}
+
+	if (TargetMontage)
+	{
+		return TargetMontage->GetPlayLength();
+	}
+	return 0.f;
 }

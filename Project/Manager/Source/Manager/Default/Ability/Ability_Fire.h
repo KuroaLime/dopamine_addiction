@@ -18,12 +18,12 @@ public:
 	UAbility_Fire();
 
 public:
-	// Å¬¶óÀÌ¾ğÆ® ·ÎÄÃ: ·¹ÀÌÄ³½ºÆ® + ¹ß»ç ÀÌÆåÆ® + È÷Æ® ½Ã ServerRPC Àü¼Û
+	// í´ë¼ì´ì–¸íŠ¸ ë¡œì»¬: ë ˆì´ìºìŠ¤íŠ¸ + ë°œì‚¬ ì´í™íŠ¸ + íˆíŠ¸ ì‹œ ServerRPC ì „ì†¡
 	virtual void LocalActivateWithOwner(AActor* InOwner) override;
 	virtual void LocalCancelWithOwner(AActor* InOwner) override;
 
 protected:
-	// ¼­¹ö: Äğ´Ù¿î/ÅÂ±× Ã³¸® ÈÄ Áï½Ã Á¾·á
+	// ì„œë²„: ì¿¨ë‹¤ìš´/íƒœê·¸ ì²˜ë¦¬ í›„ ì¦‰ì‹œ ì¢…ë£Œ
 	virtual void ActivateAbility() override;
 	virtual void EndAbility(bool bWasCancelled) override;
 
@@ -32,6 +32,8 @@ private:
 	FTimerHandle ClientFireTimerHandle;
 	bool bIsServerFire;
 	bool bIsClientFire;
+	float LastClientFireTime;
+	float LastServerFireTime;
 
 	void Server_ExecuteFire();
 	void Client_ExecuteFire(AActor* InOwner);

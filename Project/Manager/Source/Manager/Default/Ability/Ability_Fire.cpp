@@ -23,6 +23,8 @@ UAbility_Fire::UAbility_Fire()
 
 	bIsServerFire = false;
 	bIsClientFire = false;
+	LastClientFireTime = 0.f;
+	LastServerFireTime = 0.f;
 }
 
 void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
@@ -35,8 +37,6 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 		IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
 		if (!PS_Interface || !GS_Interface) return;
 
-
-
 		int32 BaseFireRate = GS_Interface->GetWeaponBaseData(
 			PS_Interface->GetWeaponID(),
 			EWeaponBaseStatType::FireRate);
@@ -44,23 +44,71 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 
 		float FireRate = CalculateFireRate(BaseFireRate, LvFireRate);
 
-		FTimerDelegate Delegate;
-		TWeakObjectPtr<AActor> WeakOwner(InOwner);
-		Delegate.BindLambda([this, WeakOwner]()
-			{
-				if (!WeakOwner.IsValid()) return;
-				Client_ExecuteFire(WeakOwner.Get());
-			});
+		float CurrentTime = Character->GetWorld()->GetTimeSeconds();
+		float TimeSinceLastShot = CurrentTime - LastClientFireTime;
 
-		Character->GetWorldTimerManager().SetTimer(
-			ClientFireTimerHandle,
-			Delegate,
-			FireRate,
-			true
-		);
 		bIsClientFire = true;
 
-		Client_ExecuteFire(InOwner);
+		TWeakObjectPtr<ACharacter> WeakChar(Character);
+
+		if (TimeSinceLastShot >= FireRate)
+		{
+			// 즉시 발사 가능
+			Client_ExecuteFire(InOwner);
+			LastClientFireTime = CurrentTime;
+
+			// 이후 루핑 타이머 시작
+			FTimerDelegate Delegate;
+			Delegate.BindLambda([this, WeakChar]()
+				{
+					if (!WeakChar.IsValid()) return;
+					Client_ExecuteFire(WeakChar.Get());
+					LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+				});
+
+			Character->GetWorldTimerManager().SetTimer(
+				ClientFireTimerHandle,
+				Delegate,
+				FireRate,
+				true
+			);
+		}
+		else
+		{
+			// 지연 발사: 남은 쿨다운만큼 대기 후 첫 발사 실행, 이후 루핑 전환
+			float InitialDelay = FireRate - TimeSinceLastShot;
+
+			FTimerDelegate FirstShotDelegate;
+			FirstShotDelegate.BindLambda([this, WeakChar, FireRate]()
+				{
+					if (!WeakChar.IsValid()) return;
+					Client_ExecuteFire(WeakChar.Get());
+					LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+
+					// 첫 발사 후 정규 루핑 타이머로 재설정
+					FTimerDelegate LoopDelegate;
+					LoopDelegate.BindLambda([this, WeakChar]()
+						{
+							if (!WeakChar.IsValid()) return;
+							Client_ExecuteFire(WeakChar.Get());
+							LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+						});
+
+					WeakChar->GetWorldTimerManager().SetTimer(
+						ClientFireTimerHandle,
+						LoopDelegate,
+						FireRate,
+						true
+					);
+				});
+
+			Character->GetWorldTimerManager().SetTimer(
+				ClientFireTimerHandle,
+				FirstShotDelegate,
+				InitialDelay,
+				false
+			);
+		}
 	}
 }
 
@@ -83,7 +131,6 @@ void UAbility_Fire::ActivateAbility()
 
 		if (!Owner || !PS_Interface || !GS_Interface) return;
 
-
 		int32 BaseFireRate = GS_Interface->GetWeaponBaseData(
 			PS_Interface->GetWeaponID(),
 			EWeaponBaseStatType::FireRate);
@@ -91,19 +138,68 @@ void UAbility_Fire::ActivateAbility()
 
 		float FireRate = CalculateFireRate(BaseFireRate, LvFireRate);
 
-
-		bIsServerFire = true;
-		OwnerCharacter->GetWorldTimerManager().SetTimer(
-			ServerFireTimerHandle,
-			this,
-			&UAbility_Fire::Server_ExecuteFire,
-			FireRate,
-			true
-		);
+		float CurrentTime = OwnerCharacter->GetWorld()->GetTimeSeconds();
+		float TimeSinceLastShot = CurrentTime - LastServerFireTime;
 
 		bIsServerFire = true;
 
-		Server_ExecuteFire();
+		TWeakObjectPtr<ACharacter> WeakChar(OwnerCharacter);
+
+		if (TimeSinceLastShot >= FireRate)
+		{
+			Server_ExecuteFire();
+			LastServerFireTime = CurrentTime;
+
+			FTimerDelegate Delegate;
+			Delegate.BindLambda([this, WeakChar]()
+				{
+					if (!WeakChar.IsValid()) return;
+					Server_ExecuteFire();
+					LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+				});
+
+			OwnerCharacter->GetWorldTimerManager().SetTimer(
+				ServerFireTimerHandle,
+				Delegate,
+				FireRate,
+				true
+			);
+		}
+		else
+		{
+			// 지연 발사: 서버에서도 남은 시간만큼 대기 후 첫 발사 실행, 이후 루핑 전환
+			float InitialDelay = FireRate - TimeSinceLastShot;
+
+			FTimerDelegate FirstShotDelegate;
+			FirstShotDelegate.BindLambda([this, WeakChar, FireRate]()
+				{
+					if (!WeakChar.IsValid()) return;
+					Server_ExecuteFire();
+					LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+
+					FTimerDelegate LoopDelegate;
+					LoopDelegate.BindLambda([this, WeakChar]()
+						{
+							if (!WeakChar.IsValid()) return;
+							Server_ExecuteFire();
+							LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+						});
+
+					WeakChar->GetWorldTimerManager().SetTimer(
+						ServerFireTimerHandle,
+						LoopDelegate,
+						FireRate,
+						true
+					);
+				});
+
+			OwnerCharacter->GetWorldTimerManager().SetTimer(
+				ServerFireTimerHandle,
+				FirstShotDelegate,
+				InitialDelay,
+				false
+			);
+		}
 	}
 }
 

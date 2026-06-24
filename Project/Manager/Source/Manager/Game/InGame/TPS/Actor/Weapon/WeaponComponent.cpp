@@ -58,7 +58,7 @@ void UWeaponComponent::ClearReloadLock()
 void UWeaponComponent::BeginPlay()
 {
     Super::BeginPlay();
-    CurrentAmmo = MaxMagazineCapacity;
+    CurrentAmmo = GetMaxMagazineCapacity();
 }
 
 void UWeaponComponent::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction)

@@ -112,6 +112,9 @@ public:
 	void PlayFireMontage(EWeaponType WeaponType);
 	UFUNCTION(BlueprintCallable, Category = "Animation Montage")
 	void PlayReloadMontage(EWeaponType WeaponType);
+
+	UFUNCTION(BlueprintPure, Category = "Animation Montage")
+	float GetReloadMontageLength(EWeaponType WeaponType) const;
 protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Animation")
 	TMap<EWeaponType, UAnimMontage*> WeaponFireMontages;

@@ -15,6 +15,8 @@
 #include "DrawDebugHelpers.h"
 #include "Game/InGame/MainCharacter.h"
 #include "Game/InGame/MainPlayerState.h"
+#include "Game/InGame/MainAnimInstance.h"
+#include "Components/SkeletalMeshComponent.h"
 
 UAbility_Reload::UAbility_Reload()
 {
@@ -60,15 +62,54 @@ void UAbility_Reload::ActivateAbility()
 								WeaponComp->Multicast_PlayReloadFeedback();
 
 								// 장전 잠금: 이 시간 동안 사격 불가. 무기 데이터의 ReloadTime(초) 사용, 없으면 기본 1.5초.
+								// 장전 잠금: 이 시간 동안 사격 불가. 
 								float ReloadLockTime = 1.5f;
-								if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
+								bool bCalculatedFromAnim = false;
+
+								// 1. 애니메이션 몽타주 길이 자동 조회 시도 (비주얼 동기화 최우선)
+								if (USkeletalMeshComponent* MeshComp = MainChar->GetMesh())
 								{
-									const int32 BaseReload = GS->GetWeaponBaseData(WeaponType, EWeaponBaseStatType::ReloadTime);
-									if (BaseReload > 0)
+									if (UMainAnimInstance* MainAnim = Cast<UMainAnimInstance>(MeshComp->GetAnimInstance()))
 									{
-										ReloadLockTime = static_cast<float>(BaseReload);
+										float AnimLen = MainAnim->GetReloadMontageLength(WeaponType);
+										if (AnimLen > 0.f)
+										{
+											ReloadLockTime = AnimLen;
+											bCalculatedFromAnim = true;
+										}
 									}
 								}
+
+								// 2. 애니메이션 조회가 실패했거나 0일 경우, 무기 데이터 테이블의 ReloadTime(초) 사용
+								if (!bCalculatedFromAnim)
+								{
+									if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
+									{
+										const int32 BaseReload = GS->GetWeaponBaseData(WeaponType, EWeaponBaseStatType::ReloadTime);
+										if (BaseReload > 0)
+										{
+											// 데이터 테이블 단위 보정:
+											// 100 초과: 밀리초(ms) 단위로 간주 (예: 1500 -> 1.5초)
+											if (BaseReload > 100)
+											{
+												ReloadLockTime = static_cast<float>(BaseReload) / 1000.f;
+											}
+											// 10 초과 100 이하: 0.1초 단위로 간주 (예: 25 -> 2.5초)
+											else if (BaseReload > 10)
+											{
+												ReloadLockTime = static_cast<float>(BaseReload) * 0.1f;
+											}
+											// 10 이하: 초(s) 단위로 간주 (예: 2 -> 2.0초)
+											else
+											{
+												ReloadLockTime = static_cast<float>(BaseReload);
+											}
+										}
+									}
+								}
+
+
+
 								WeaponComp->StartReloadLock(ReloadLockTime);
 							}
 						}
