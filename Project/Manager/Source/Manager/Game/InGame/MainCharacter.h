@@ -36,6 +36,7 @@ public:
 
 	virtual void Tick(float DeltaTime) override;
 	virtual void SetupPlayerInputComponent(UInputComponent* PlayerInputComponent) override;
+	virtual void FellOutOfWorld(const class UDamageType& DmgType) override;
 
 public:
 	virtual bool IsCharacterAiming() const override;

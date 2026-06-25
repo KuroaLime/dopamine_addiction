@@ -29,6 +29,9 @@
 #include "Net/UnrealNetwork.h"
 #include "GameFramework/PlayerStart.h"
 #include "Game/InGame/TPS/System/HealthRegenComponent.h"
+#include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
+#include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 
 // Sets default values
 AMainCharacter::AMainCharacter()
@@ -258,6 +261,50 @@ void AMainCharacter::InitPlayerData()
 void AMainCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
+}
+
+void AMainCharacter::FellOutOfWorld(const UDamageType& DmgType)
+{
+	if (HasAuthority())
+	{
+		FVector SafeLocation = FVector::ZeroVector;
+		FRotator SafeRotation = FRotator::ZeroRotator;
+		bool bFoundSpawn = false;
+
+		AMainGameMode* GM = Cast<AMainGameMode>(GetWorld()->GetAuthGameMode());
+		if (GM && GM->SpawnManager)
+		{
+			AA_Spawn* CenterSpawn = GM->SpawnManager->GetRandomCenterSpawnActor();
+			if (CenterSpawn)
+			{
+				SafeLocation = CenterSpawn->GetActorLocation() + FVector(0.f, 0.f, 200.f);
+				SafeRotation = CenterSpawn->GetActorRotation();
+				bFoundSpawn = true;
+			}
+		}
+
+		if (!bFoundSpawn)
+		{
+			SafeLocation = FVector(0.f, 0.f, 500.f);
+		}
+
+		TeleportTo(SafeLocation, SafeRotation);
+
+		AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+		if (PS)
+		{
+			int32 CurrentHP = PS->CurPlayerData.CurrentHP;
+			if (CurrentHP > 0)
+			{
+				PS->ApplyDamage(static_cast<float>(CurrentHP));
+			}
+
+			if (PS->CurPlayerData.CurrentHP <= 0)
+			{
+				OnCharacterDeath();
+			}
+		}
+	}
 }
 
 bool AMainCharacter::IsCharacterAiming() const
