@@ -15,6 +15,7 @@
 #include "Default/Ability/GAS/PFGAbility.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "Game/InGame/Interface/PhasePlayerStateInterface.h"
+#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "GameFramework/PlayerState.h"
 #include "GameFramework/GameStateBase.h"
 
@@ -30,6 +31,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "Game/InGame/TPS/System/HealthRegenComponent.h"
 #include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/ManagerGameMode.h"
 #include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 
@@ -271,10 +273,10 @@ void AMainCharacter::FellOutOfWorld(const UDamageType& DmgType)
 		FRotator SafeRotation = FRotator::ZeroRotator;
 		bool bFoundSpawn = false;
 
-		AMainGameMode* GM = Cast<AMainGameMode>(GetWorld()->GetAuthGameMode());
-		if (GM && GM->SpawnManager)
+		USpawnManagerComponent* ActiveSpawnManager = USpawnManagerComponent::GetActive(this);
+		if (ActiveSpawnManager)
 		{
-			AA_Spawn* CenterSpawn = GM->SpawnManager->GetRandomCenterSpawnActor();
+			AA_Spawn* CenterSpawn = ActiveSpawnManager->GetRandomCenterSpawnActor();
 			if (CenterSpawn)
 			{
 				SafeLocation = CenterSpawn->GetActorLocation() + FVector(0.f, 0.f, 200.f);
@@ -368,6 +370,8 @@ void AMainCharacter::Look(const FInputActionValue& Value)
 
 void AMainCharacter::DoMove(float Right, float Forward)
 {
+	if (IsCharacterDeath()) return;
+
 	if (GetController() != nullptr)
 	{
 		const FRotator Rotation = GetController()->GetControlRotation();
@@ -382,6 +386,8 @@ void AMainCharacter::DoMove(float Right, float Forward)
 
 void AMainCharacter::DoLook(float Yaw, float Pitch)
 {
+	if (IsCharacterDeath()) return;
+
 	if (GetController() != nullptr)
 	{
 		AddControllerYawInput(Yaw);
@@ -423,8 +429,33 @@ void AMainCharacter::OnCharacterDeath()
 {
 	if (!AbilitySystemComponent)
 	{
-		UE_LOG(LogTemp, Warning, TEXT("[DS] TPS DeathTriggerFail Character=%s Reason=NoASC"), *GetName());
 		return;
+	}
+
+	// Release crouch state
+	UnCrouch();
+
+	// Release aim state (cancel aiming ability)
+	static const FGameplayTag AimTag = FGameplayTag::RequestGameplayTag(FName("Ability.Action.Aim"));
+	FGameplayTagContainer AimTags;
+	AimTags.AddTag(AimTag);
+	AbilitySystemComponent->CancelAbilitiesWithTag(AimTags);
+
+	// Stop playing any montages immediately so the death state machine/animation plays cleanly
+	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;
+	if (AnimInstance)
+	{
+		AnimInstance->Montage_Stop(0.2f);
+	}
+
+	// Switch state to Death for the local controller immediately to guarantee Death UI and action deactivation
+	if (IsLocallyControlled())
+	{
+		IPhasePlayerControllerInterface* PC = Cast<IPhasePlayerControllerInterface>(GetController());
+		if (PC)
+		{
+			PC->SwitchState(EGamePhase::Death);
+		}
 	}
 
 	if (!AbilitySystemComponent->HasAnyMatchingGameplayTags(
@@ -432,11 +463,7 @@ void AMainCharacter::OnCharacterDeath()
 	{
 		static const FGameplayTag DeathTag =
 			FGameplayTag::RequestGameplayTag(FName("Ability.Action.Death"));
-		EPFGAbilityActivationResult Result = AbilitySystemComponent->TryActivateAbilityByTag(DeathTag);
-
-		UE_LOG(LogTemp, Warning, TEXT("[DS] TPS DeathAbility Character=%s Result=%d"),
-			*GetName(),
-			static_cast<int32>(Result));
+		AbilitySystemComponent->TryActivateAbilityByTag(DeathTag);
 	}
 }
 

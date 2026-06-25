@@ -4,6 +4,14 @@
 #include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/GameModeBase.h"
+
+USpawnManagerComponent* USpawnManagerComponent::GetActive(const UObject* WorldContextObject)
+{
+	// 게임모드는 서버 권위에만 존재 → 이 헬퍼는 서버 경로(사망/리스폰/낙사/스폰선택)에서 호출됨.
+	AGameModeBase* GM = UGameplayStatics::GetGameMode(WorldContextObject);
+	return GM ? GM->FindComponentByClass<USpawnManagerComponent>() : nullptr;
+}
 
 // Sets default values for this component's properties
 USpawnManagerComponent::USpawnManagerComponent()
@@ -34,25 +42,48 @@ void USpawnManagerComponent::TickComponent(float DeltaTime, ELevelTick TickType,
 
 	// ...
 }
-//������ �ִ� �ֵ� �ʱ�ȭ �� ä���
+//가지고 있는 애들 초기화 및 채우기
 void USpawnManagerComponent::InitializeSpawnPoints() {
-	SpawnPointMap.Empty();
-	AvailableSpawns.Empty();
+	UWorld* World = GetWorld();
+	if (!World) {
+		UE_LOG(LogTemp, Warning, TEXT("[SpawnManager] InitializeSpawnPoints (Owner: %s): World is NULL! Skipping initialization to preserve existing spawns."), *GetOwner()->GetName());
+		return;
+	}
 
 	TArray<AActor*> FoundActors;
-	UGameplayStatics::GetAllActorsOfClass(GetWorld(), AA_Spawn::StaticClass(), FoundActors);
+	UGameplayStatics::GetAllActorsOfClass(World, AA_Spawn::StaticClass(), FoundActors);
+
+	if (FoundActors.Num() == 0) {
+		UE_LOG(LogTemp, Warning, TEXT("[SpawnManager] InitializeSpawnPoints (Owner: %s): Found 0 AA_Spawn actors. Keeping existing spawn points."), *GetOwner()->GetName());
+		return;
+	}
+
+	SpawnPointMap.Empty();
+	AvailableSpawns.Empty();
+	CenterSpawns.Empty();
 
 	for (AActor* Actor : FoundActors) {
 		AA_Spawn* SP = Cast<AA_Spawn>(Actor);
 		if (SP) {
-			if (SpawnPointMap.Contains(SP->SpawnPointID))
-				continue;
-			SpawnPointMap.Add(SP->SpawnPointID,SP);
-			AvailableSpawns.Add(SP);
+			if (SpawnPointMap.Contains(SP->SpawnPointID)) {
+				UE_LOG(LogTemp, Warning, TEXT("[SpawnManager] InitializeSpawnPoints (Owner: %s): DUPLICATE SpawnPointID = %d on '%s' (Already mapped to '%s'). Keeping in spawn list but skipping from lookup map."),
+					*GetOwner()->GetName(), SP->SpawnPointID, *SP->GetName(), *SpawnPointMap[SP->SpawnPointID]->GetName());
+			} else {
+				SpawnPointMap.Add(SP->SpawnPointID, SP);
+			}
+			
+			if (SP->ActorHasTag(TEXT("CenterSpawner"))) {
+				CenterSpawns.Add(SP);
+			} else {
+				AvailableSpawns.Add(SP);
+			}
 		}
 	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[SpawnManager] InitializeSpawnPoints (Owner: %s): Total Found Spawns = %d, Center Spawns = %d, Available Spawns = %d"),
+		*GetOwner()->GetName(), FoundActors.Num(), CenterSpawns.Num(), AvailableSpawns.Num());
 }
-//���̵� �޾Ƽ� ��ġ�� ���� �Լ�
+//아이디를 받아서 위치를 얻어내는 함수
 bool USpawnManagerComponent::GetSpawnLocation(int32 ID, FVector& OutLocation) {
 	AA_Spawn** FoundPoint = SpawnPointMap.Find(ID);
 	if (FoundPoint && *FoundPoint) {
@@ -61,7 +92,7 @@ bool USpawnManagerComponent::GetSpawnLocation(int32 ID, FVector& OutLocation) {
 	}
 	return false;
 }
-//�����ϰ� ���̵� �޾ư��� �Լ�
+//랜덤하게 아이디를 받아가는 함수
 int32 USpawnManagerComponent::GetRandomSpawnID() const{
 	if (SpawnPointMap.Num() == 0)
 		return -1;
@@ -85,4 +116,18 @@ AA_Spawn* USpawnManagerComponent::GetUniqueRandomSpawnActor() {
 }
 int32 USpawnManagerComponent::GetAvailableSpawnCount() const {
 	return AvailableSpawns.Num();
+}
+
+AA_Spawn* USpawnManagerComponent::GetRandomCenterSpawnActor() {
+	if (CenterSpawns.Num() == 0) {
+		UE_LOG(LogTemp, Error, TEXT("[SpawnManager] GetRandomCenterSpawnActor (Owner: %s): CenterSpawns is EMPTY! Falling back to any spawner."), *GetOwner()->GetName());
+		if (SpawnPointMap.Num() == 0) return nullptr;
+		TArray<int32> Keys;
+		SpawnPointMap.GetKeys(Keys);
+		int32 RandomIndex = FMath::RandRange(0, Keys.Num() - 1);
+		return SpawnPointMap[Keys[RandomIndex]];
+	}
+
+	int32 RandomIndex = FMath::RandRange(0, CenterSpawns.Num() - 1);
+	return CenterSpawns[RandomIndex];
 }

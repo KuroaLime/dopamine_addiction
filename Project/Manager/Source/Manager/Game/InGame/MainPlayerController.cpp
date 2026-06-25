@@ -190,15 +190,6 @@ void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
 		InputHandlerMap.Num(),
 		IsLocalPlayerController() ? 1 : 0);
 
-	if (GEngine && IsLocalPlayerController())
-	{
-		GEngine->AddOnScreenDebugMessage(
-			2026062402,
-			5.0f,
-			FColor::Yellow,
-			FString::Printf(TEXT("[DEBUG] ApplySwitchMode phase=%d HasUI=%d"), static_cast<int32>(NewPhase), bHasUIForPhase ? 1 : 0)
-		);
-	}
 	for (auto& Pair : InputHandlerMap)
 	{
 		if (Pair.Value)

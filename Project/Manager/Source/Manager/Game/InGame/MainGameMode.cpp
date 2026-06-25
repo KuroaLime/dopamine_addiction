@@ -4586,14 +4586,15 @@ void AMainGameMode::ShutdownDedicatedServerAfterMatchEnd()
 
 AActor* AMainGameMode::ChoosePlayerStart_Implementation(AController* Player)
 {
-    if (SpawnManager)
+    USpawnManagerComponent* ActiveSpawnManager = USpawnManagerComponent::GetActive(this);
+    if (ActiveSpawnManager)
     {
         UE_LOG(LogTemp, Warning, TEXT("Initialize Random Spawn..."));
-        if (SpawnManager->GetAvailableSpawnCount() == 0)
+        if (ActiveSpawnManager->GetAvailableSpawnCount() == 0)
         {
-            SpawnManager->InitializeSpawnPoints();
+            ActiveSpawnManager->InitializeSpawnPoints();
         }
-        AA_Spawn* RandomSpawn = SpawnManager->GetUniqueRandomSpawnActor();
+        AA_Spawn* RandomSpawn = ActiveSpawnManager->GetUniqueRandomSpawnActor();
         if (RandomSpawn)
         {
             return RandomSpawn;

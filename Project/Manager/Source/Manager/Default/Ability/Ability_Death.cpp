@@ -43,9 +43,13 @@ void UAbility_Death::ActivateAbility()
 
 	RespawnTime = 5;
 
-	IPhasePlayerControllerInterface* PC =
-		Cast<IPhasePlayerControllerInterface>(OwnerCharacter->GetController());
-	if (!PC) return;
+	AController* CharController = OwnerCharacter->GetController();
+	IPhasePlayerControllerInterface* PC = Cast<IPhasePlayerControllerInterface>(CharController);
+	if (!PC)
+	{
+		EndAbilityNow();
+		return;
+	}
 
 	PC->SetUITimer(RespawnTime);
 
@@ -93,9 +97,18 @@ void UAbility_Death::DropAllPlayerCards()
 
 void UAbility_Death::Server_ExecuteCountDown()
 {
-	IPhasePlayerControllerInterface* PC =
-		Cast<IPhasePlayerControllerInterface>(OwnerCharacter->GetController());
-	if (!PC) return;
+	AController* CharController = OwnerCharacter ? OwnerCharacter->GetController() : nullptr;
+	IPhasePlayerControllerInterface* PC = Cast<IPhasePlayerControllerInterface>(CharController);
+	
+	if (!PC)
+	{
+		if (OwnerCharacter)
+		{
+			OwnerCharacter->GetWorldTimerManager().ClearTimer(ServerRespawnTimerHandle);
+		}
+		EndAbilityNow();
+		return;
+	}
 
 	RespawnTime--;
 
@@ -108,7 +121,11 @@ void UAbility_Death::Server_ExecuteCountDown()
 		static const FGameplayTag RespawnTag =
 			FGameplayTag::RequestGameplayTag(FName("Ability.Action.Respawn"));
 
-		EPFGAbilityActivationResult Result = OwnerASC->TryActivateAbilityByTag(RespawnTag);
+		if (OwnerASC)
+		{
+			OwnerASC->TryActivateAbilityByTag(RespawnTag);
+		}
+		return;
 	}
 
 	PC->SetUITimer(RespawnTime);

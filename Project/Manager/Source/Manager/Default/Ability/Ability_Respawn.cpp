@@ -9,6 +9,7 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
 #include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/ManagerGameMode.h"
 #include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 
@@ -51,14 +52,11 @@ void UAbility_Respawn::ActivateAbility()
     IPhasePlayerStateInterface* PS =
         Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
     if (PS) PS->ResetState();
-    AMainGameMode* GM = Cast<AMainGameMode>(GetWorld()->GetAuthGameMode());
-    if (GM && GM->SpawnManager)
+
+    USpawnManagerComponent* ActiveSpawnManager = USpawnManagerComponent::GetActive(OwnerCharacter);
+    if (ActiveSpawnManager)
     {
-        if (GM->SpawnManager->GetAvailableSpawnCount() == 0)
-        {
-            GM->SpawnManager->InitializeSpawnPoints();
-        }
-        AA_Spawn* RandomSpawn = GM->SpawnManager->GetUniqueRandomSpawnActor();
+        AA_Spawn* RandomSpawn = ActiveSpawnManager->GetRandomCenterSpawnActor();
         if (RandomSpawn)
         {
             FVector SpawnLocation = RandomSpawn->GetActorLocation() + FVector(0.f, 0.f, 200.f);
