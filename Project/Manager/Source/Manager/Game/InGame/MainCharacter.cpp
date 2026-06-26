@@ -31,7 +31,6 @@
 #include "GameFramework/PlayerStart.h"
 #include "Game/InGame/TPS/System/HealthRegenComponent.h"
 #include "Game/InGame/MainGameMode.h"
-#include "Game/InGame/ManagerGameMode.h"
 #include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 

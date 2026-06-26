@@ -7,7 +7,7 @@
 #include "Components/WidgetComponent.h"
 
 #include "Kismet/GameplayStatics.h"
-#include "Game/InGame/ManagerCharacter.h"
+#include "Game/InGame/MainCharacter.h"
 // Sets default values
 ACoinRegulator::ACoinRegulator()
 {
@@ -41,9 +41,9 @@ void ACoinRegulator::BeginPlay()
 	{
 		ACharacter* MyCharacter = UGameplayStatics::GetPlayerCharacter(this, 0);
 
-		if (AManagerCharacter* ManagerChar = Cast<AManagerCharacter>(MyCharacter))
+		if (AMainCharacter* MainChar = Cast<AMainCharacter>(MyCharacter))
 		{
-			TargetPS = ManagerChar->CharacterState;
+			TargetPS = MainChar->CharacterState;
 		}
 	}
 
