@@ -18,7 +18,6 @@ public:
 	virtual void OnPhaseStart() override;
 	virtual void OnPhaseEnd() override;
 	virtual void OnTimerTick() override;
-	virtual void OnPlayerAction(AActor* Executor, FName ActionName) override;
 
 protected:
 	virtual void LoadStage() override;

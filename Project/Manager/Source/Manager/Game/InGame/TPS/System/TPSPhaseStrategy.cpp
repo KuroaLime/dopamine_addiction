@@ -1,4 +1,6 @@
 #include "Game/InGame/TPS/System/TPSPhaseStrategy.h"
+#include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/Card/CardGameService.h"
 #include "Game/InGame/Interface/PhasePlayerStateInterface.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "Game/InGame/Interface/PhaseCharacterInterface.h"
@@ -8,6 +10,17 @@
 void UTPSPhaseStrategy::OnPhaseStart()
 {
 	UE_LOG(LogTemp, Warning, TEXT("[DS] TPSPhase OnPhaseStart"));
+
+	// 배틀로얄 진입 셋업. GameMode를 Context로 보고 공개 API로만 조작한다(friend/내부상태 접근 없음).
+	// 상태/타이머/레벨 스트리밍 판단은 GameMode가 소유한다.
+	if (AMainGameMode* GM = GetMainGameMode())
+	{
+		GM->EnsureBattleRoyaleStageLoaded();
+		GM->BroadcastSwitchMode(EGamePhase::TPS);
+		GM->GetCardGameService()->SpawnRoundCardBundleForBattleRoyale();
+		GM->SetPlayerPawnGameplayEnabled(true, TEXT("BattleRoyale"));
+	}
+
 	LoadStage();
 }
 
@@ -22,10 +35,6 @@ void UTPSPhaseStrategy::OnPhaseEnd()
 }
 
 void UTPSPhaseStrategy::OnTimerTick()
-{
-}
-
-void UTPSPhaseStrategy::OnPlayerAction(AActor* Executor, FName ActionName)
 {
 }
 

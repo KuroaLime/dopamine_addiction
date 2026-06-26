@@ -10,6 +10,7 @@
 #include "PhaseStrategy.generated.h"
 
 class AGameModeBase;
+class AMainGameMode;
 
 /**
  * 
@@ -26,7 +27,6 @@ public:
 	virtual void OnPhaseEnd() {}
 
 	virtual void OnTimerTick() {}
-	virtual void OnPlayerAction(AActor* Executor, FName ActionName) {}
 	virtual UWorld* GetWorld() const override;
 
 protected:
@@ -40,6 +40,9 @@ protected:
 	IPhaseGameModeInterface* GetPhaseGameMode() const;
 	IPhaseGameStateInterface* GetPhaseGameState() const;
 	IPhasePlayerControllerInterface* GetPhasePlayerController() const;
+
+	// GameMode를 Context로 사용: 페이즈 셋업 로직이 GameMode의 헬퍼/상태에 접근할 때 사용한다.
+	AMainGameMode* GetMainGameMode() const;
 
 	virtual void LoadStage() {}
 	virtual void UnloadStage() {}

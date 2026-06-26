@@ -11,6 +11,7 @@
 #include "Default/System/UManagerGameInstance.h"
 #include "Game/InGame/MainPlayerState.h"
 #include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/Card/CardGameService.h"
 #include "Game/InGame/Card/Actor/CardDropActor.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
@@ -549,7 +550,7 @@ void AMainPlayerController::Server_RequestPickupCard_Implementation(ACardDropAct
         return;
     }
 
-    GM->TryPickupCard(this, TargetCard);
+    GM->GetCardGameService()->TryPickupCard(this, TargetCard);
 }
 
 
@@ -566,7 +567,7 @@ void AMainPlayerController::Server_RequestPickupNearestCard_Implementation()
         return;
     }
 
-    GM->TryPickupNearestCard(this);
+    GM->GetCardGameService()->TryPickupNearestCard(this);
 }
 
 
@@ -583,7 +584,7 @@ void AMainPlayerController::Server_SubmitSeotdaSelection_Implementation(bool bCa
         return;
     }
 
-    GM->SubmitSeotdaSelection(this, bCard0, bCard1, bCard2);
+    GM->GetCardGameService()->SubmitSeotdaSelection(this, bCard0, bCard1, bCard2);
 }
 
 
@@ -600,7 +601,7 @@ void AMainPlayerController::Server_RequestSeotdaBetAction_Implementation(EBettin
         return;
     }
 
-    GM->SubmitSeotdaBetAction(this, Action);
+    GM->GetCardGameService()->SubmitSeotdaBetAction(this, Action);
 }
 void AMainPlayerController::Client_ShowSeotdaResult_Implementation(const FString& ResultText)
 {
