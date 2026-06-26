@@ -159,11 +159,6 @@ void AMainPlayerController::SetupHandlerInput()
 	}
 }
 
-void AMainPlayerController::PickupNearestCard()
-{
-	Server_RequestPickupNearestCard();
-}
-
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
 // Networked Level Streaming
 void AMainPlayerController::Multicast_SwitchMode_Implementation(EGamePhase NewPhase)
@@ -554,21 +549,6 @@ void AMainPlayerController::Server_RequestPickupCard_Implementation(ACardDropAct
 }
 
 
-bool AMainPlayerController::Server_RequestPickupNearestCard_Validate()
-{
-    return true;
-}
-
-void AMainPlayerController::Server_RequestPickupNearestCard_Implementation()
-{
-    AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
-    if (!GM)
-    {
-        return;
-    }
-
-    GM->GetCardGameService()->TryPickupNearestCard(this);
-}
 
 
 bool AMainPlayerController::Server_SubmitSeotdaSelection_Validate(bool bCard0, bool bCard1, bool bCard2)

@@ -37,6 +37,4 @@ public:
 	virtual void SetUITimer(int32 time) = 0;
 
 	virtual EGamePhase GetCurrentPhase() = 0;
-
-	virtual void PickupNearestCard() = 0;
 };
