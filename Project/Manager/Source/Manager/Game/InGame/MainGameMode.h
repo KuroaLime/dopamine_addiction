@@ -4,8 +4,6 @@
 #include "GameFramework/GameModeBase.h"
 #include "Game/InGame/Interface/PhaseGameModeInterface.h"
 #include "Game/Protocol_Client/Protocol_InGame.h"
-#include "Game/InGame/Card/Data/SeotdaTypes.h"
-#include "Game/InGame/Card/SeotdaRuleService.h"
 #include "Game/InGame/Card/CardPlacementService.h"
 #include "MainGameMode.generated.h"
 
