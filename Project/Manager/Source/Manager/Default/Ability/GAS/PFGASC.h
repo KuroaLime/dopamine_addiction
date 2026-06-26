@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -68,7 +68,7 @@ struct FPFGAbilitySpec : public FFastArraySerializerItem
 	UPROPERTY()
 	float CooldownDuration = 0.f;
 
-	// Äğ´Ù¿î Á¾·á ½Ã°¢ (ServerWorldTimeSeconds ±âÁØ). 0ÀÌ¸é Äğ´Ù¿î ¾øÀ½/¸¸·áµÊ.
+	// ì¿¨ë‹¤ìš´ ì¢…ë£Œ ì‹œê° (ServerWorldTimeSeconds ê¸°ì¤€). 0ì´ë©´ ì¿¨ë‹¤ìš´ ì—†ìŒ/ë§Œë£Œë¨.
 	UPROPERTY()
 	float CooldownEndTime = 0.f;
 
@@ -78,7 +78,7 @@ struct FPFGAbilitySpec : public FFastArraySerializerItem
 	UPROPERTY()
 	int32 Level = 1;
 
-	// ----- ¼­¹ö Àü¿ë, º¹Á¦µÇÁö ¾ÊÀ½ -----
+	// ----- ì„œë²„ ì „ìš©, ë³µì œë˜ì§€ ì•ŠìŒ -----
 	UPROPERTY(NotReplicated, Transient)
 	UPFGAbility* AbilityInstance = nullptr;
 };
@@ -143,7 +143,7 @@ public:
 	virtual bool ReplicateSubobjects(UActorChannel* Channel, FOutBunch* Bunch, FReplicationFlags* RepFlags) override;
 
 	/////////////////////////////////////////////////////////////////////
-	// Ability ºÎ¿© / Á¦°Å / Á¶È¸
+	// Ability ë¶€ì—¬ / ì œê±° / ì¡°íšŒ
 
 	void GiveAbility(TSubclassOf<UPFGAbility> AbilityClass, int32 Level = 1, bool bAllowStacking = false);
 
@@ -154,9 +154,9 @@ public:
 	FPFGAbilitySpec* FindAbilitySpecByClass(TSubclassOf<UPFGAbility> AbilityClass);
 	FPFGAbilitySpec* FindAbilitySpecByTag(FGameplayTag Tag);
 
-	// Å¬¶óÀÌ¾ğÆ®µµ È£Ãâ °¡´É: ¼­¹ö¿¡¼­¸¸ Á¸ÀçÇÏ´Â AbilityInstance ´ë½Å CDO(Å¬·¡½º µğÆúÆ® ¿ÀºêÁ§Æ®)¸¦
-	// ÅëÇØ ¾îºô¸®Æ¼ Á¤ÀÇ Á¤º¸(AbilityTags, CooldownTags µî EditDefaultsOnly °ª)¸¦ Á¶È¸ÇÑ´Ù.
-	// UI(¾ÆÀÌÄÜ, ¼³¸í, ÄÚ½ºÆ® Ç¥½Ã µî)´Â ÀÌ ÇÔ¼ö¸¦ »ç¿ëÇØ¾ß ÇÑ´Ù.
+	// í´ë¼ì´ì–¸íŠ¸ë„ í˜¸ì¶œ ê°€ëŠ¥: ì„œë²„ì—ì„œë§Œ ì¡´ì¬í•˜ëŠ” AbilityInstance ëŒ€ì‹  CDO(í´ë˜ìŠ¤ ë””í´íŠ¸ ì˜¤ë¸Œì íŠ¸)ë¥¼
+	// í†µí•´ ì–´ë¹Œë¦¬í‹° ì •ì˜ ì •ë³´(AbilityTags, CooldownTags ë“± EditDefaultsOnly ê°’)ë¥¼ ì¡°íšŒí•œë‹¤.
+	// UI(ì•„ì´ì½˜, ì„¤ëª…, ì½”ìŠ¤íŠ¸ í‘œì‹œ ë“±)ëŠ” ì´ í•¨ìˆ˜ë¥¼ ì‚¬ìš©í•´ì•¼ í•œë‹¤.
 	static const UPFGAbility* GetAbilityCDO(TSubclassOf<UPFGAbility> AbilityClass);
 
 	/////////////////////////////////////////////////////////////////////
@@ -170,13 +170,13 @@ public:
 	bool HasAnyMatchingGameplayTags(const FGameplayTagContainer& TagContainer) const;
 	bool HasMatchingGameplayTag(FGameplayTag Tag) const;
 
-	// EventTag¿Í ÀÏÄ¡ÇÏ´Â TriggerTags¸¦ °¡Áø "¸ğµç" ¾îºô¸®Æ¼¸¦ ½ÃµµÇÑ´Ù.
-	// (Äğ´Ù¿î/CanExecute µîÀ¸·Î °³º° ½ÇÆĞÇØµµ ³ª¸ÓÁö´Â °è¼Ó ½ÃµµµÊ)
-	// ¹İÈ¯°ª: ÇÏ³ª ÀÌ»ó È°¼ºÈ­¿¡ ¼º°øÇß´ÂÁö ¿©ºÎ.
+	// EventTagì™€ ì¼ì¹˜í•˜ëŠ” TriggerTagsë¥¼ ê°€ì§„ "ëª¨ë“ " ì–´ë¹Œë¦¬í‹°ë¥¼ ì‹œë„í•œë‹¤.
+	// (ì¿¨ë‹¤ìš´/CanExecute ë“±ìœ¼ë¡œ ê°œë³„ ì‹¤íŒ¨í•´ë„ ë‚˜ë¨¸ì§€ëŠ” ê³„ì† ì‹œë„ë¨)
+	// ë°˜í™˜ê°’: í•˜ë‚˜ ì´ìƒ í™œì„±í™”ì— ì„±ê³µí–ˆëŠ”ì§€ ì—¬ë¶€.
 	bool HandleGameplayEvent(FGameplayTag EventTag, const FPFGGameplayEventData& Payload);
 
 	/////////////////////////////////////////////////////////////////////
-	// Cooldown - CooldownEndTime ±â¹İ (lazy cleanup)
+	// Cooldown - CooldownEndTime ê¸°ë°˜ (lazy cleanup)
 
 	bool IsAbilityOnCooldown(FPFGAbilitySpec& Spec);
 	void StartCooldown(FPFGAbilitySpec& Spec);
@@ -194,15 +194,15 @@ public:
 
 	bool RemoveActiveEffect(int32 ActiveHandle);
 
-	// Infinite Effect µî ¸í½ÃÀû Á¦°Å°¡ ÇÊ¿äÇÑ È¿°ú¸¦ À§ÇÑ Ãß°¡ API.
-	// - ByEffectID: °°Àº EffectID¸¦ °¡Áø ActiveEffect¸¦ ¸ğµÎ Á¦°Å (¿¹: Dispel·Î "Poison" ÀüºÎ Á¦°Å)
-	// - BySourceAbilityID: Æ¯Á¤ ¾îºô¸®Æ¼°¡ ºÎ¿©ÇÑ ActiveEffect¸¦ ¸ğµÎ Á¦°Å
-	//   (¿¹: Ã¤³Î¸µ ½ºÅ³ Á¾·á ½Ã ±× ½ºÅ³ÀÌ °Ç ½Çµå/¹öÇÁ Á¦°Å)
-	// ¹İÈ¯°ª: Á¦°ÅµÈ °³¼ö.
+	// Infinite Effect ë“± ëª…ì‹œì  ì œê±°ê°€ í•„ìš”í•œ íš¨ê³¼ë¥¼ ìœ„í•œ ì¶”ê°€ API.
+	// - ByEffectID: ê°™ì€ EffectIDë¥¼ ê°€ì§„ ActiveEffectë¥¼ ëª¨ë‘ ì œê±° (ì˜ˆ: Dispelë¡œ "Poison" ì „ë¶€ ì œê±°)
+	// - BySourceAbilityID: íŠ¹ì • ì–´ë¹Œë¦¬í‹°ê°€ ë¶€ì—¬í•œ ActiveEffectë¥¼ ëª¨ë‘ ì œê±°
+	//   (ì˜ˆ: ì±„ë„ë§ ìŠ¤í‚¬ ì¢…ë£Œ ì‹œ ê·¸ ìŠ¤í‚¬ì´ ê±´ ì‹¤ë“œ/ë²„í”„ ì œê±°)
+	// ë°˜í™˜ê°’: ì œê±°ëœ ê°œìˆ˜.
 	int32 RemoveActiveEffectsByEffectID(int32 EffectID);
 	int32 RemoveActiveEffectsBySourceAbility(int32 SourceAbilityID);
 
-	// ÇöÀç È°¼ºÈ­µÈ Infinite Effect ¸ñ·Ï Á¶È¸ (UI/µğ¹ö±×¿ë)
+	// í˜„ì¬ í™œì„±í™”ëœ Infinite Effect ëª©ë¡ ì¡°íšŒ (UI/ë””ë²„ê·¸ìš©)
 	void GetActiveInfiniteEffects(TArray<FActivePFGGameplayEffect>& OutEffects) const;
 
 protected:
@@ -215,17 +215,17 @@ protected:
 	/////////////////////////////////////////////////////////////////////
 	// GameplayTag Stack
 	//
-	// OwnedTags(FGameplayTagContainer, Set ¹æ½Ä)¸¦ TagStacks(Count ¹æ½Ä)·Î ±³Ã¼.
-	// - HasAnyMatchingGameplayTags / HasMatchingGameplayTag´Â TagStacks.HasAny/HasTag·Î µ¿ÀÛ.
-	// - AddGameplayTags/RemoveGameplayTags´Â °¢ ÅÂ±×ÀÇ Ä«¿îÆ®¸¦ +1/-1.
-	// - µ¿ÀÏ ÅÂ±×°¡ ¿©·¯ ÃâÃ³(Effect 2°³ µî)¿¡¼­ ºÎ¿©µÇ¾îµµ ÇÑÂÊ Á¦°Å ½Ã ´Ù¸¥ ÂÊÀÌ À¯ÁöµÊ.
+	// OwnedTags(FGameplayTagContainer, Set ë°©ì‹)ë¥¼ TagStacks(Count ë°©ì‹)ë¡œ êµì²´.
+	// - HasAnyMatchingGameplayTags / HasMatchingGameplayTagëŠ” TagStacks.HasAny/HasTagë¡œ ë™ì‘.
+	// - AddGameplayTags/RemoveGameplayTagsëŠ” ê° íƒœê·¸ì˜ ì¹´ìš´íŠ¸ë¥¼ +1/-1.
+	// - ë™ì¼ íƒœê·¸ê°€ ì—¬ëŸ¬ ì¶œì²˜(Effect 2ê°œ ë“±)ì—ì„œ ë¶€ì—¬ë˜ì–´ë„ í•œìª½ ì œê±° ì‹œ ë‹¤ë¥¸ ìª½ì´ ìœ ì§€ë¨.
 	UPROPERTY(ReplicatedUsing = OnRep_TagStacks, VisibleAnywhere, Category = "GAS")
 	FPFGGameplayTagStackContainer TagStacks;
 
 	UFUNCTION()
 	void OnRep_TagStacks();
 
-	// Å¬¶óÀÌ¾ğÆ®: ÀÌÀü TagCountMap ½º³À¼¦ (º¯°æºĞ µ¨¸®°ÔÀÌÆ® °è»ê¿ë)
+	// í´ë¼ì´ì–¸íŠ¸: ì´ì „ TagCountMap ìŠ¤ëƒ…ìƒ· (ë³€ê²½ë¶„ ë¸ë¦¬ê²Œì´íŠ¸ ê³„ì‚°ìš©)
 	TMap<FGameplayTag, int32> PreviousTagCountMap;
 
 	void BroadcastTagStackDelta();
@@ -238,8 +238,8 @@ protected:
 
 	int32 NextActiveEffectHandle = 0;
 
-	// (¹®Á¦ 5) ActiveHandle -> Items ÀÎµ¦½º O(1) Á¶È¸ Ä³½Ã.
-	// Items¿¡¼­ Ç×¸ñÀÌ Ãß°¡/Á¦°ÅµÉ ¶§¸¶´Ù ÇÔ²² °»½ÅÇÑ´Ù.
+	// (ë¬¸ì œ 5) ActiveHandle -> Items ì¸ë±ìŠ¤ O(1) ì¡°íšŒ ìºì‹œ.
+	// Itemsì—ì„œ í•­ëª©ì´ ì¶”ê°€/ì œê±°ë  ë•Œë§ˆë‹¤ í•¨ê»˜ ê°±ì‹ í•œë‹¤.
 	TMap<int32, int32> ActiveEffectHandleToIndex;
 
 	void RebuildActiveEffectIndexMap();

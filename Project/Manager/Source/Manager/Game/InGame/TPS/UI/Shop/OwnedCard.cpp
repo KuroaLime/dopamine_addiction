@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Game/InGame/TPS/UI/Shop/OwnedCard.h"
@@ -70,7 +70,7 @@ void UOwnedCard::NativeOnMouseEnter(const FGeometry& MyGeometry, const FPointerE
 	Super::NativeOnMouseEnter(MyGeometry, MouseEvent);
 	bool bIsFlipping = GetWorld()->GetTimerManager().IsTimerActive(ClickSequenceTimerHandle) ||
 		(CardFlipAnim && IsAnimationPlaying(CardFlipAnim));
-	// µÚÁıÈ÷´Â ÁßÀÌ ¾Æ´Ò ¶§¸¸ È£¹ö È®´ë ¾Ö´Ï¸ŞÀÌ¼Ç Àç»ı
+	// ë’¤ì§‘íˆëŠ” ì¤‘ì´ ì•„ë‹ ë•Œë§Œ í˜¸ë²„ í™•ëŒ€ ì• ë‹ˆë©”ì´ì…˜ ì¬ìƒ
 	if (bIsFaceUp && HoverAnim && !bIsFlipping) {
 		PlayAnimation(HoverAnim, 0.f, 1, EUMGSequencePlayMode::Forward);
 	}
@@ -80,7 +80,7 @@ void UOwnedCard::NativeOnMouseLeave(const FPointerEvent& MouseEvent)
 	Super::NativeOnMouseLeave(MouseEvent);
 	bool bIsFlipping = GetWorld()->GetTimerManager().IsTimerActive(ClickSequenceTimerHandle) ||
 		(CardFlipAnim && IsAnimationPlaying(CardFlipAnim));
-	// µÚÁıÈ÷´Â ÁßÀÌ ¾Æ´Ò ¶§¸¸ È£¹ö Ãà¼Ò ¾Ö´Ï¸ŞÀÌ¼Ç Àç»ı
+	// ë’¤ì§‘íˆëŠ” ì¤‘ì´ ì•„ë‹ ë•Œë§Œ í˜¸ë²„ ì¶•ì†Œ ì• ë‹ˆë©”ì´ì…˜ ì¬ìƒ
 	if (bIsFaceUp && HoverAnim && !bIsFlipping) {
 		PlayAnimation(HoverAnim, 0.f, 1, EUMGSequencePlayMode::Reverse);
 	}

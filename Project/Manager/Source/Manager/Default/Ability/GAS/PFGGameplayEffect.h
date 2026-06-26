@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -33,15 +33,15 @@ class MANAGER_API UPFGGameplayEffect : public UObject
 	GENERATED_BODY()
 	
 public:
-	// Å¬¶óÀÌ¾ğÆ®°¡ Ç¥½Ã¿ë µ¥ÀÌÅÍ(¾ÆÀÌÄÜ/ÀÌ¸§ µî)¸¦ Á¶È¸ÇÒ ¶§ ¾µ ¼ö ÀÖ´Â Á¤Àû ½Äº°ÀÚ.
-	// 0Àº "¹ÌÁöÁ¤".
+	// í´ë¼ì´ì–¸íŠ¸ê°€ í‘œì‹œìš© ë°ì´í„°(ì•„ì´ì½˜/ì´ë¦„ ë“±)ë¥¼ ì¡°íšŒí•  ë•Œ ì“¸ ìˆ˜ ìˆëŠ” ì •ì  ì‹ë³„ì.
+	// 0ì€ "ë¯¸ì§€ì •".
 	UPROPERTY(EditDefaultsOnly, Category = "Effect")
 	int32 EffectID = 0;
 
 	UPROPERTY(EditDefaultsOnly, Category = "Effect")
 	EPFGEffectAttribute TargetAttribute = EPFGEffectAttribute::Health;
 
-	// ÇÑ ¹ø Àû¿ë(¶Ç´Â 1Æ½)´ç º¯È­·®. µ¥¹ÌÁö´Â À½¼ö.
+	// í•œ ë²ˆ ì ìš©(ë˜ëŠ” 1í‹±)ë‹¹ ë³€í™”ëŸ‰. ë°ë¯¸ì§€ëŠ” ìŒìˆ˜.
 	UPROPERTY(EditDefaultsOnly, Category = "Effect")
 	float Magnitude = 0.f;
 
@@ -51,11 +51,11 @@ public:
 	UPROPERTY(EditDefaultsOnly, Category = "Effect", meta = (EditCondition = "DurationType != EPFGEffectDurationType::Instant"))
 	float Duration = 0.f;
 
-	// 0º¸´Ù Å©¸é ÁÖ±âÀûÀ¸·Î Magnitude¸¦ ¹İº¹ Àû¿ë (µµÆ®/HoT)
+	// 0ë³´ë‹¤ í¬ë©´ ì£¼ê¸°ì ìœ¼ë¡œ Magnitudeë¥¼ ë°˜ë³µ ì ìš© (ë„íŠ¸/HoT)
 	UPROPERTY(EditDefaultsOnly, Category = "Effect")
 	float Period = 0.f;
 
-	// Àû¿ë ½Ã ´ë»ó¿¡°Ô ºÎ¿©µÇ´Â ÅÂ±× (¹öÇÁ/µğ¹öÇÁ ½Äº°¿ë)
+	// ì ìš© ì‹œ ëŒ€ìƒì—ê²Œ ë¶€ì—¬ë˜ëŠ” íƒœê·¸ (ë²„í”„/ë””ë²„í”„ ì‹ë³„ìš©)
 	UPROPERTY(EditDefaultsOnly, Category = "Effect|Tags")
 	FGameplayTagContainer GrantedTags;
 };
@@ -65,11 +65,11 @@ struct FActivePFGGameplayEffect : public FFastArraySerializerItem
 {
 	GENERATED_BODY()
 
-	// Ç¥½Ã¿ë ½Äº°ÀÚ (¾ÆÀÌÄÜ/ÀÌ¸§ Á¶È¸¿ë)
+	// í‘œì‹œìš© ì‹ë³„ì (ì•„ì´ì½˜/ì´ë¦„ ì¡°íšŒìš©)
 	UPROPERTY()
 	int32 EffectID = 0;
 
-	// ----- Snapshot: Àû¿ë ½ÃÁ¡ÀÇ Effect µ¥ÀÌÅÍ º¹»çº» -----
+	// ----- Snapshot: ì ìš© ì‹œì ì˜ Effect ë°ì´í„° ë³µì‚¬ë³¸ -----
 	UPROPERTY()
 	EPFGEffectAttribute TargetAttribute = EPFGEffectAttribute::Health;
 
@@ -83,11 +83,11 @@ struct FActivePFGGameplayEffect : public FFastArraySerializerItem
 	FGameplayTagContainer GrantedTags;
 	// -----------------------------------------------------
 
-	// ¸¸·á ¿¹Á¤ ½Ã°¢ (¼­¹ö GameState ±âÁØ ServerWorldTimeSeconds). Infinite´Â -1.
+	// ë§Œë£Œ ì˜ˆì • ì‹œê° (ì„œë²„ GameState ê¸°ì¤€ ServerWorldTimeSeconds). InfiniteëŠ” -1.
 	UPROPERTY()
 	float ExpirationTime = -1.f;
 
-	// ÀÌ Active Effect¸¦ ºÎ¿©ÇÑ ¾îºô¸®Æ¼/¼Ò½º ½Äº° (¼±ÅÃ, µğ¹öÇÁ ÃâÃ³ Ç¥½Ã¿ë)
+	// ì´ Active Effectë¥¼ ë¶€ì—¬í•œ ì–´ë¹Œë¦¬í‹°/ì†ŒìŠ¤ ì‹ë³„ (ì„ íƒ, ë””ë²„í”„ ì¶œì²˜ í‘œì‹œìš©)
 	UPROPERTY()
 	int32 SourceAbilityID = -1;
 

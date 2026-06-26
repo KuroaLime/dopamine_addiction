@@ -161,9 +161,9 @@ public:
 		case EBettingAction::Check:
 		case EBettingAction::Call:  return CallDiff;
 		case EBettingAction::Quarter: return CallDiff + FMath::Max<int64>(1, (GlobalPot + CallDiff) / 4);
-   	case EBettingAction::Half:  return CallDiff + FMath::Max<int64>(1, (GlobalPot + CallDiff) / 2);
-   	case EBettingAction::Ddadang: return CallDiff + FMath::Max<int64>(2, GlobalMaxBet);
-   	case EBettingAction::Pping: return CallDiff > 0 ? CallDiff : 2;
+   		case EBettingAction::Half:  return CallDiff + FMath::Max<int64>(1, (GlobalPot + CallDiff) / 2);
+   		case EBettingAction::Ddadang: return CallDiff + FMath::Max<int64>(2, GlobalMaxBet);
+   		case EBettingAction::Pping: return CallDiff > 0 ? CallDiff : 2;
 		case EBettingAction::AllIn: return Money;
 		default:                    return 0;
 		}

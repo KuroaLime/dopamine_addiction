@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Default/Ability/GAS/PFGAbility.h"
@@ -16,7 +16,7 @@
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 
 /////////////////////////////////////////////////////////////////////////////
-// Ability ÃÊ±âÈ­
+// Ability ì´ˆê¸°í™”
 UPFGAbility::UPFGAbility()
 {
 	OwnerASC = nullptr;
@@ -38,7 +38,7 @@ void UPFGAbility::InitializeAbility(UPFGASC* InASC)
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Ability Public ÇÔ¼ö
+// Ability Public í•¨ìˆ˜
 
 UWorld* UPFGAbility::GetWorld() const
 {
@@ -125,7 +125,7 @@ void UPFGAbility::ClearInterfaceCache()
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Ability Private ÇÔ¼ö
+// Ability Private í•¨ìˆ˜
 
 bool UPFGAbility::CanExecute() const
 {
@@ -134,20 +134,20 @@ bool UPFGAbility::CanExecute() const
 		return false;
 	}
 
-	// ÀÌ¹Ì ½ÇÇà ÁßÀÌ¸é ÀçÁøÀÔ Â÷´Ü (ActivationOwnedTags ÁßÃ¸ ºÎ¿© ¹æÁö)
+	// ì´ë¯¸ ì‹¤í–‰ ì¤‘ì´ë©´ ì¬ì§„ì… ì°¨ë‹¨ (ActivationOwnedTags ì¤‘ì²© ë¶€ì—¬ ë°©ì§€)
 	if (bIsActive)
 	{
 		return false;
 	}
 
-	// ActivationBlockedTags: ÇÏ³ª¶óµµ º¸À¯ ÁßÀÌ¸é ½ÇÇà ºÒ°¡ (¿¹: ½ºÅÏ, Ä§¹¬)
+	// ActivationBlockedTags: í•˜ë‚˜ë¼ë„ ë³´ìœ  ì¤‘ì´ë©´ ì‹¤í–‰ ë¶ˆê°€ (ì˜ˆ: ìŠ¤í„´, ì¹¨ë¬µ)
 	if (!ActivationBlockedTags.IsEmpty() &&
 		OwnerASC->HasAnyMatchingGameplayTags(ActivationBlockedTags))
 	{
 		return false;
 	}
 
-	// ActivationRequiredTags: ÀüºÎ º¸À¯ÇØ¾ß ½ÇÇà °¡´É
+	// ActivationRequiredTags: ì „ë¶€ ë³´ìœ í•´ì•¼ ì‹¤í–‰ ê°€ëŠ¥
 	if (!ActivationRequiredTags.IsEmpty())
 	{
 		for (const FGameplayTag& RequiredTag : ActivationRequiredTags)
@@ -164,18 +164,18 @@ bool UPFGAbility::CanExecute() const
 
 void UPFGAbility::ActivateAbility()
 {
-	// ÁÖÀÇ: ¿©±â¼­ CanExecute()¸¦ ´Ù½Ã È£ÃâÇÏ¸é ¾È µÈ´Ù.
-	// TryActivateAbility()°¡ ÀÌ¹Ì CanExecute() Åë°ú¸¦ È®ÀÎÇÑ µÚ bIsActive = true·Î
-	// ¼³Á¤ÇÏ°í ÀÌ ÇÔ¼ö¸¦ È£ÃâÇÏ¹Ç·Î, CanExecute()¸¦ ÀçÈ£ÃâÇÏ¸é "ÀÌ¹Ì ½ÇÇà Áß"
-	// ÀçÁøÀÔ ¹æÁö °Ë»ç¿¡ °É·Á Ç×»ó false°¡ µÈ´Ù.
-	// ±× °á°ú EndAbilityNow()°¡ È£ÃâµÇÁö ¾Ê¾Æ bIsActive°¡ true·Î ¿µ±¸È÷ ³²°í,
-	// ActivationOwnedTagsµµ Àı´ë Á¦°ÅµÇÁö ¾Ê´Â ¹ö±×°¡ ¹ß»ıÇÑ´Ù.
+	// ì£¼ì˜: ì—¬ê¸°ì„œ CanExecute()ë¥¼ ë‹¤ì‹œ í˜¸ì¶œí•˜ë©´ ì•ˆ ëœë‹¤.
+	// TryActivateAbility()ê°€ ì´ë¯¸ CanExecute() í†µê³¼ë¥¼ í™•ì¸í•œ ë’¤ bIsActive = trueë¡œ
+	// ì„¤ì •í•˜ê³  ì´ í•¨ìˆ˜ë¥¼ í˜¸ì¶œí•˜ë¯€ë¡œ, CanExecute()ë¥¼ ì¬í˜¸ì¶œí•˜ë©´ "ì´ë¯¸ ì‹¤í–‰ ì¤‘"
+	// ì¬ì§„ì… ë°©ì§€ ê²€ì‚¬ì— ê±¸ë ¤ í•­ìƒ falseê°€ ëœë‹¤.
+	// ê·¸ ê²°ê³¼ EndAbilityNow()ê°€ í˜¸ì¶œë˜ì§€ ì•Šì•„ bIsActiveê°€ trueë¡œ ì˜êµ¬íˆ ë‚¨ê³ ,
+	// ActivationOwnedTagsë„ ì ˆëŒ€ ì œê±°ë˜ì§€ ì•ŠëŠ” ë²„ê·¸ê°€ ë°œìƒí•œë‹¤.
 	//
-	// ±âº» µ¿ÀÛ: Áï½Ã Á¾·áÇü ¾îºô¸®Æ¼·Î °£ÁÖÇÏ°í ¹Ù·Î EndAbility¸¦ È£ÃâÇØ
-	// ActivationOwnedTags°¡ ¿µ±¸È÷ ³²Áö ¾Ê°Ô ÇÑ´Ù.
-	// Áö¼ÓÇü(Ã¤³Î¸µ/¹öÇÁ/Å¸ÀÌ¸Ó ±â¹İ) ¾îºô¸®Æ¼¸¦ ¸¸µé ¶§´Â ÀÌ ÇÔ¼ö¸¦ ¿À¹ö¶óÀÌµåÇØ
-	// Super::ActivateAbility()¸¦ È£ÃâÇÏÁö ¾Ê°í, È¿°ú°¡ ³¡³ª´Â ½ÃÁ¡¿¡ Á÷Á¢
-	// EndAbilityNow()¸¦ È£ÃâÇØ¾ß ÇÑ´Ù.
+	// ê¸°ë³¸ ë™ì‘: ì¦‰ì‹œ ì¢…ë£Œí˜• ì–´ë¹Œë¦¬í‹°ë¡œ ê°„ì£¼í•˜ê³  ë°”ë¡œ EndAbilityë¥¼ í˜¸ì¶œí•´
+	// ActivationOwnedTagsê°€ ì˜êµ¬íˆ ë‚¨ì§€ ì•Šê²Œ í•œë‹¤.
+	// ì§€ì†í˜•(ì±„ë„ë§/ë²„í”„/íƒ€ì´ë¨¸ ê¸°ë°˜) ì–´ë¹Œë¦¬í‹°ë¥¼ ë§Œë“¤ ë•ŒëŠ” ì´ í•¨ìˆ˜ë¥¼ ì˜¤ë²„ë¼ì´ë“œí•´
+	// Super::ActivateAbility()ë¥¼ í˜¸ì¶œí•˜ì§€ ì•Šê³ , íš¨ê³¼ê°€ ëë‚˜ëŠ” ì‹œì ì— ì§ì ‘
+	// EndAbilityNow()ë¥¼ í˜¸ì¶œí•´ì•¼ í•œë‹¤.
 	EndAbilityNow();
 }
 
@@ -183,7 +183,7 @@ void UPFGAbility::CommitAbility()
 {
 	if (!OwnerASC) return;
 
-	// ´Ù¸¥ ¾îºô¸®Æ¼ °­Á¦ Ãë¼Ò
+	// ë‹¤ë¥¸ ì–´ë¹Œë¦¬í‹° ê°•ì œ ì·¨ì†Œ
 	if (!CancelAbilitiesWithTag.IsEmpty())
 	{
 		OwnerASC->CancelAbilitiesWithTag(CancelAbilitiesWithTag);
@@ -207,7 +207,7 @@ void UPFGAbility::EndAbility(bool bWasCancelled)
 
 void UPFGAbility::EndAbilityNow()
 {
-	if (!bIsActive) return; // ÀÌ¹Ì Á¾·áµÊ (Áßº¹ È£Ãâ ¹æÁö)
+	if (!bIsActive) return; // ì´ë¯¸ ì¢…ë£Œë¨ (ì¤‘ë³µ í˜¸ì¶œ ë°©ì§€)
 	EndAbility(false);
 }
 
@@ -235,7 +235,7 @@ bool UPFGAbility::TryActivateAbilityWithEvent(const FPFGGameplayEventData& Paylo
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// ÀÎÅÍÆäÀÌ½º Ä³½Ã
+// ì¸í„°í˜ì´ìŠ¤ ìºì‹œ
 IPhasePlayerStateInterface* UPFGAbility::GetPSInterface()
 {
 	if (CachedPSInterface) return CachedPSInterface;

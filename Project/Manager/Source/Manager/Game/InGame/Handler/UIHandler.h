@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -64,6 +64,6 @@ public:
 		return PlayerWidget;
 	};
 
-	//ÀÓ½Ã¹æÆí
+	//ìž„ì‹œë°©íŽ¸
 	UUserWidget* GetManagedWidget() const { return ManagedWidget; }
 };

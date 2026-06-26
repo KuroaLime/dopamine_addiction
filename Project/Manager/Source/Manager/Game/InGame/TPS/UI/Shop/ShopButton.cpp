@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Game/InGame/TPS/UI/Shop/ShopButton.h"
@@ -74,7 +74,7 @@ void UShopButton::NativeOnMouseLeave(const FPointerEvent& MouseEvent)
 //	return Super::NativeOnMouseButtonDown(MyGeometry, MouseEvent);
 //}
 void UShopButton::UpdateWidget() {
-	//¹°°áÀÌ Â÷¿À¸£´Â µíÇÑ Ç¥Çö Ãß°¡ ÇÊ¿ä
+	//ë¬¼ê²°ì´ ì°¨ì˜¤ë¥´ëŠ” ë“¯í•œ í‘œí˜„ ì¶”ê°€ í•„ìš”
 }
 void UShopButton::SetItemID(int32 NewID) {
 	ButtonItemID = NewID;

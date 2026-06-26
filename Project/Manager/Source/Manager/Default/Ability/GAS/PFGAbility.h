@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+Ôªø// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -35,12 +35,12 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "GAS|Cooldown")
 	float CooldownDuration;
 
-	// 0¿Ã∏È ƒ⁄Ω∫∆Æ æ¯¿Ω(∞ÀªÁ/¬˜∞® ∏µŒ Ω∫≈µ).
+	// 0Ïù¥Î©¥ ÏΩîÏä§Ìä∏ ÏóÜÏùå(Í≤ÄÏÇ¨/Ï∞®Í∞ê Î™®Îëê Ïä§ÌÇµ).
 	UPROPERTY(EditDefaultsOnly, Category = "GAS|Cost")
 	float CostAmount;
 
 protected:
-	// ability Ωƒ∫∞ ≈¬±◊
+	// ability ÏãùÎ≥Ñ ÌÉúÍ∑∏
 	UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
 	FGameplayTagContainer AbilityTags;
 
@@ -48,37 +48,37 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
 	FGameplayTagContainer TriggerTags;
 
-	// Ω««‡ ∫“∞° ≈¬±◊: OwnerASC∞° ¿Ã ¡ﬂ «œ≥™∂Ûµµ ∞°¡ˆ∞Ì ¿÷¿∏∏È CanExecute = false
-	// (øπ: State.Stunned, State.Silenced)
+	// Ïã§Ìñâ Î∂àÍ∞Ä ÌÉúÍ∑∏: OwnerASCÍ∞Ä Ïù¥ Ï§ë ÌïòÎÇòÎùºÎèÑ Í∞ÄÏßÄÍ≥† ÏûàÏúºÎ©¥ CanExecute = false
+	// (Ïòà: State.Stunned, State.Silenced)
 	UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
 	FGameplayTagContainer ActivationBlockedTags;
 
-	// ¡∂∞« ≈¬±◊: OwnerASC∞° ¿Ã ≈¬±◊∏¶ "∏µŒ" ∞°¡ˆ∞Ì ¿÷æÓæﬂ CanExecute = true
-	// (øπ: State.Combat ¡ﬂø°∏∏ ªÁøÎ ∞°¥…«— Ω∫≈≥)
+	// Ï°∞Í±¥ ÌÉúÍ∑∏: OwnerASCÍ∞Ä Ïù¥ ÌÉúÍ∑∏Î•º "Î™®Îëê" Í∞ÄÏßÄÍ≥† ÏûàÏñ¥Ïïº CanExecute = true
+	// (Ïòà: State.Combat Ï§ëÏóêÎßå ÏÇ¨Ïö© Í∞ÄÎä•Ìïú Ïä§ÌÇ¨)
 	UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
 	FGameplayTagContainer ActivationRequiredTags;
 
-	// Ω««‡ ¡ﬂ ≈¬±◊
+	// Ïã§Ìñâ Ï§ë ÌÉúÍ∑∏
 	UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
 	FGameplayTagContainer ActivationOwnedTags;
 
-	// Ω««‡ Ω√, ¥Ÿ∏• ability ∞≠¡¶ ¡æ∑· ≈¬±◊
+	// Ïã§Ìñâ Ïãú, Îã§Î•∏ ability Í∞ïÏ†ú Ï¢ÖÎ£å ÌÉúÍ∑∏
 	UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
 	FGameplayTagContainer CancelAbilitiesWithTag;
 
-	// Ω««‡ ¡ﬂ, ¥Ÿ∏• ability Ω««‡ ¬˜¥‹ ≈¬±◊
+	// Ïã§Ìñâ Ï§ë, Îã§Î•∏ ability Ïã§Ìñâ Ï∞®Îã® ÌÉúÍ∑∏
 	UPROPERTY(EditDefaultsOnly, Category = "GAS|Tags")
 	FGameplayTagContainer BlockAbilitiesWithTag;
 
-	// ƒ¥ŸøÓ µ«¥¬ ¡ﬂ ≈¬±◊
+	// Ïø®Îã§Ïö¥ ÎêòÎäî Ï§ë ÌÉúÍ∑∏
 	UPROPERTY(EditDefaultsOnly, Category = "GAS|Cooldown")
 	FGameplayTagContainer CooldownTags;
 
-	// «ˆ¿Á ¿Ã æÓ∫Ù∏Æ∆º∞° "Ω««‡ ¡ﬂ"¿Œ¡ˆ ø©∫Œ.
-	// TryActivateAbility(WithEvent) º∫∞¯ Ω√ true, EndAbilityø°º≠ false∑Œ ∫π±Õ.
-	// ActivationOwnedTags¥¬ true¿Œ µøæ»∏∏ OwnerASC->OwnedTagsø° ¡∏¿Á«ÿæﬂ «œ∏Á,
-	// EndAbility∞° »£√‚µ«¡ˆ æ ¿∏∏È øµ±∏¿˚¿∏∑Œ ≥≤¥¬¥Ÿ -> π›µÂΩ√ EndAbility ∞Ê∑Œ∏¶ ∫∏¿Â«ÿæﬂ «‘
-	// (¡ÔΩ√ ¡æ∑·«¸ æÓ∫Ù∏Æ∆º¥¬ ActivateAbility ∏∂¡ˆ∏∑ø° EndAbilityNow()∏¶ »£√‚«ÿæﬂ «—¥Ÿ).
+	// ÌòÑÏû¨ Ïù¥ Ïñ¥ÎπåÎ¶¨Ìã∞Í∞Ä "Ïã§Ìñâ Ï§ë"Ïù∏ÏßÄ Ïó¨Î∂Ä.
+	// TryActivateAbility(WithEvent) ÏÑ±Í≥µ Ïãú true, EndAbilityÏóêÏÑú falseÎ°ú Î≥µÍ∑Ä.
+	// ActivationOwnedTagsÎäî trueÏù∏ ÎèôÏïàÎßå OwnerASC->OwnedTagsÏóê Ï°¥Ïû¨Ìï¥Ïïº ÌïòÎ©∞,
+	// EndAbilityÍ∞Ä Ìò∏Ï∂úÎêòÏßÄ ÏïäÏúºÎ©¥ ÏòÅÍµ¨Ï†ÅÏúºÎ°ú ÎÇ®ÎäîÎã§ -> Î∞òÎìúÏãú EndAbility Í≤ΩÎ°úÎ•º Î≥¥Ïû•Ìï¥Ïïº Ìï®
+	// (Ï¶âÏãú Ï¢ÖÎ£åÌòï Ïñ¥ÎπåÎ¶¨Ìã∞Îäî ActivateAbility ÎßàÏßÄÎßâÏóê EndAbilityNow()Î•º Ìò∏Ï∂úÌï¥Ïïº ÌïúÎã§).
 	UPROPERTY(VisibleAnywhere, Transient, Category = "GAS")
 	bool bIsActive = false;
 
@@ -99,12 +99,12 @@ public:
 	virtual void LocalActivateWithOwner(AActor* InOwner) {}
 	virtual void LocalCancelWithOwner(AActor* InOwner) {}
 
-	// «ˆ¿Á Ω««‡ ¡ﬂ(ActivationOwnedTags∞° ∫Œø©µ» ªÛ≈¬)¿Œ¡ˆ ø©∫Œ.
+	// ÌòÑÏû¨ Ïã§Ìñâ Ï§ë(ActivationOwnedTagsÍ∞Ä Î∂ÄÏó¨Îêú ÏÉÅÌÉú)Ïù∏ÏßÄ Ïó¨Î∂Ä.
 	bool IsActive() const { return bIsActive; }
 
-	// ¡§ªÛ ¡æ∑·(√Îº“ æ∆¥‘). ¡ÔΩ√ ¡æ∑·«¸ æÓ∫Ù∏Æ∆º¥¬ ActivateAbility ∏∂¡ˆ∏∑ø° »£√‚«ÿ
-	// ActivationOwnedTags∞° øµ±∏»˜ ≥≤¡ˆ æ µµ∑œ «ÿæﬂ «—¥Ÿ.
-	// ¡ˆº”«¸ æÓ∫Ù∏Æ∆º(√§≥Œ∏µ, πˆ«¡ ¡ˆº” µÓ)¥¬ »ø∞˙∞° ≥°≥™¥¬ Ω√¡°(≈∏¿Ã∏”/¿Ã∫•∆Æ)ø° »£√‚«—¥Ÿ.
+	// Ï†ïÏÉÅ Ï¢ÖÎ£å(Ï∑®ÏÜå ÏïÑÎãò). Ï¶âÏãú Ï¢ÖÎ£åÌòï Ïñ¥ÎπåÎ¶¨Ìã∞Îäî ActivateAbility ÎßàÏßÄÎßâÏóê Ìò∏Ï∂úÌï¥
+	// ActivationOwnedTagsÍ∞Ä ÏòÅÍµ¨Ìûà ÎÇ®ÏßÄ ÏïäÎèÑÎ°ù Ìï¥Ïïº ÌïúÎã§.
+	// ÏßÄÏÜçÌòï Ïñ¥ÎπåÎ¶¨Ìã∞(Ï±ÑÎÑêÎßÅ, Î≤ÑÌîÑ ÏßÄÏÜç Îì±)Îäî Ìö®Í≥ºÍ∞Ä ÎÅùÎÇòÎäî ÏãúÏ†ê(ÌÉÄÏù¥Î®∏/Ïù¥Î≤§Ìä∏)Ïóê Ìò∏Ï∂úÌïúÎã§.
 	void EndAbilityNow();
 
 	const FGameplayTagContainer& GetAbilityTags() const;
@@ -119,19 +119,19 @@ public:
 
 	virtual void ClearInterfaceCache();
 protected:
-	// CanExecute ∞ÀªÁ º¯º≠:
-	// 1) OwnerASC ¿Ø»øº∫
-	// 2) bIsActive: ¿ÃπÃ Ω««‡ ¡ﬂ¿Ã∏È false (¿Á¡¯¿‘ πÊ¡ˆ. ¿Á¡¯¿‘¿ª «„øÎ«œ∑¡¥¬ æÓ∫Ù∏Æ∆º¥¬
-	//    CanExecute∏¶ ø¿πˆ∂Û¿ÃµÂ«ÿ ¿Ã ∞ÀªÁ∏¶ ∞«≥ ∂€ ºˆ ¿÷¿Ω)
-	// 3) ActivationBlockedTags: OwnerASC∞° «œ≥™∂Ûµµ ∞°¡ˆ∞Ì ¿÷¿∏∏È false
-	// 4) ActivationRequiredTags: OwnerASC∞° ¿¸∫Œ ∞°¡ˆ∞Ì ¿÷¡ˆ æ ¿∏∏È false
-	// 5) CostAmount > 0 ¿Ã∏È OwnerASC->HasEnoughMana(CostAmount) »Æ¿Œ
+	// CanExecute Í≤ÄÏÇ¨ ÏàúÏÑú:
+	// 1) OwnerASC Ïú†Ìö®ÏÑ±
+	// 2) bIsActive: Ïù¥ÎØ∏ Ïã§Ìñâ Ï§ëÏù¥Î©¥ false (Ïû¨ÏßÑÏûÖ Î∞©ÏßÄ. Ïû¨ÏßÑÏûÖÏùÑ ÌóàÏö©ÌïòÎ†§Îäî Ïñ¥ÎπåÎ¶¨Ìã∞Îäî
+	//    CanExecuteÎ•º Ïò§Î≤ÑÎùºÏù¥ÎìúÌï¥ Ïù¥ Í≤ÄÏÇ¨Î•º Í±¥ÎÑàÎõ∏ Ïàò ÏûàÏùå)
+	// 3) ActivationBlockedTags: OwnerASCÍ∞Ä ÌïòÎÇòÎùºÎèÑ Í∞ÄÏßÄÍ≥† ÏûàÏúºÎ©¥ false
+	// 4) ActivationRequiredTags: OwnerASCÍ∞Ä Ï†ÑÎ∂Ä Í∞ÄÏßÄÍ≥† ÏûàÏßÄ ÏïäÏúºÎ©¥ false
+	// 5) CostAmount > 0 Ïù¥Î©¥ OwnerASC->HasEnoughMana(CostAmount) ÌôïÏù∏
 	virtual bool CanExecute() const;
 	virtual void ActivateAbility();
 
-	// CommitAbility: CanExecute∏¶ ≈Î∞˙«— µ⁄ »£√‚µ .
-	// - CancelAbilitiesWithTag∑Œ ¥Ÿ∏• æÓ∫Ù∏Æ∆º √Îº“
-	// - CostAmount > 0 ¿Ã∏È OwnerASC->ApplyManaCost(CostAmount)∑Œ ∏∂≥™ ¬˜∞®
+	// CommitAbility: CanExecuteÎ•º ÌÜµÍ≥ºÌïú Îí§ Ìò∏Ï∂úÎê®.
+	// - CancelAbilitiesWithTagÎ°ú Îã§Î•∏ Ïñ¥ÎπåÎ¶¨Ìã∞ Ï∑®ÏÜå
+	// - CostAmount > 0 Ïù¥Î©¥ OwnerASC->ApplyManaCost(CostAmount)Î°ú ÎßàÎÇò Ï∞®Í∞ê
 	virtual void CommitAbility();
 	virtual void EndAbility(bool bWasCancelled);
 

@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Game/InGame/MainPlayerState.h"
@@ -12,7 +12,7 @@ AMainPlayerState::AMainPlayerState()
 	CurPlayerData.CurrentHP = 150;
 
 
-	//ÇÏµå ÄÚµù ¹Ù²ÙÀÚ
+	//í•˜ë“œ ì½”ë”© ë°”ê¾¸ì
 	CarriedAmmoList.Init(0, 6);
 	CarriedAmmoList[static_cast<uint8>(EWeaponType::AR)] = 90;
 	CarriedAmmoList[static_cast<uint8>(EWeaponType::PISTOL)] = 30;
