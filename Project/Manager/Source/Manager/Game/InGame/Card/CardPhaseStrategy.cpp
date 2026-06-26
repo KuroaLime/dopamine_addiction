@@ -29,6 +29,18 @@ void UCardPhaseStrategy::OnPhaseEnd()
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("[DS] CardPhase OnPhaseEnd"));
+
+	// 카드게임 종료 마무리: 라운드 결과가 아직 안 났으면 정산(기존 StartResultPhase 폴백에서 이전).
+	if (AMainGameMode* GM = GetMainGameMode())
+	{
+		if (UCardGameService* Cards = GM->GetCardGameService())
+		{
+			if (!Cards->IsRoundResolved() && Cards->GetRoundStateCount() > 0)
+			{
+				Cards->ResolveSeotdaRoundResult(TEXT("ResultPhaseFallback"));
+			}
+		}
+	}
 }
 
 void UCardPhaseStrategy::OnTimerTick()

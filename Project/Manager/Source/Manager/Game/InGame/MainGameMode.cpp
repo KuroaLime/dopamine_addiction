@@ -459,10 +459,9 @@ void AMainGameMode::StartTransitionToCardPhase()
         return;
     }
 
+    // TPS 종료 teardown(폰 비활성/카드 드롭 정리/무브먼트 베이스 정리)은
+    // UTPSPhaseStrategy::OnPhaseEnd(EndPhase 호출 시점)로 이전됨. 여기선 전환 글루만 수행.
     EndPhase();
-    SetPlayerPawnGameplayState(false, false, true, TEXT("TransitionToCard"));
-    CardGameService->ClearCardDrops();
-    ClearPlayerPawnMovementBases(TEXT("TransitionToCard"));
     BroadcastSwitchLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
     RequestMovePlayersToCardIslandSeats(TEXT("TransitionToCard"));
     StartTimedServerPhase(EDediServerPhase::TransitionToCard, GetTransitionDuration());
@@ -498,12 +497,8 @@ void AMainGameMode::StartResultPhase()
         return;
     }
 
+    // 라운드 결과 정산(미정산 시 폴백)은 UCardPhaseStrategy::OnPhaseEnd(EndPhase 호출)로 이전됨.
     EndPhase();
-
-    if (!CardGameService->IsRoundResolved() && CardGameService->GetRoundStateCount() > 0)
-    {
-        CardGameService->ResolveSeotdaRoundResult(TEXT("ResultPhaseFallback"));
-    }
 
     UE_LOG(LogTemp, Warning, TEXT("[DS] RoundResult Round=%d Summary=%s"),
         CurrentRound,

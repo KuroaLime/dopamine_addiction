@@ -32,6 +32,15 @@ void UTPSPhaseStrategy::OnPhaseEnd()
 	}
 
 	UE_LOG(LogTemp, Warning, TEXT("[DS] TPSPhase OnPhaseEnd"));
+
+	// 배틀로얄 종료 teardown: 기존 AMainGameMode::StartTransitionToCardPhase 본문에서 이전.
+	// 전략이 페이즈 진입/종료를 모두 소유한다. (레벨 전환·좌석 이동은 전환 글루로 GameMode 유지)
+	if (AMainGameMode* GM = GetMainGameMode())
+	{
+		GM->SetPlayerPawnGameplayState(false, false, true, TEXT("TransitionToCard"));
+		GM->GetCardGameService()->ClearCardDrops();
+		GM->ClearPlayerPawnMovementBases(TEXT("TransitionToCard"));
+	}
 }
 
 void UTPSPhaseStrategy::OnTimerTick()
