@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/TPS/UI/Shop/UpgradeSelectionWidget.h"
+#include "Manager.h"
 #include "Game/InGame/TPS/UI/Shop/CardWidget.h"
 void UUpgradeSelectionWidget::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
 
@@ -36,9 +37,9 @@ void UUpgradeSelectionWidget::SetCardID(const TArray<FRandomCardOption>& Options
 	FString EnumString = Options[0].CardRowName.ToString();
 	FString EnumString1 = Options[1].CardRowName.ToString();
 	FString EnumString2 = Options[2].CardRowName.ToString();
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, EnumString);
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, EnumString1);
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, EnumString2);
+	DS_SCREEN(-1, 8.f, FColor::Cyan, EnumString);
+	DS_SCREEN(-1, 8.f, FColor::Cyan, EnumString1);
+	DS_SCREEN(-1, 8.f, FColor::Cyan, EnumString2);
 
 
 }

@@ -1,10 +1,11 @@
 #include "Game/InGame/Card/CardPhaseStrategy.h"
+#include "Manager.h"
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/Card/CardGameService.h"
 
 void UCardPhaseStrategy::OnPhaseStart()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[DS] CardPhase OnPhaseStart"));
+	DS_LOG(TEXT("[DS] CardPhase OnPhaseStart"));
 
 	// 카드게임 진입 셋업: 기존 AMainGameMode::StartCardGamePhase 본문에서 이전.
 	// 페이즈 상태/타이머 관리는 GameMode(Context)에 그대로 남아 있다.
@@ -28,7 +29,7 @@ void UCardPhaseStrategy::OnPhaseEnd()
 		World->GetTimerManager().ClearTimer(RoundTimerHandle);
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[DS] CardPhase OnPhaseEnd"));
+	DS_LOG(TEXT("[DS] CardPhase OnPhaseEnd"));
 
 	// 카드게임 종료 마무리: 라운드 결과가 아직 안 났으면 정산(기존 StartResultPhase 폴백에서 이전).
 	if (AMainGameMode* GM = GetMainGameMode())
@@ -49,7 +50,7 @@ void UCardPhaseStrategy::OnTimerTick()
 
 void UCardPhaseStrategy::LoadStage()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[DS] CardPhase LoadStage"));
+	DS_LOG(TEXT("[DS] CardPhase LoadStage"));
 }
 
 void UCardPhaseStrategy::UnloadStage()

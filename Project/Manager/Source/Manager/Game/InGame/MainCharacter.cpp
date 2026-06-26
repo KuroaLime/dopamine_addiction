@@ -411,7 +411,7 @@ float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& 
 
 		if (OldHP > 0 && PS->CurPlayerData.CurrentHP <= 0)
 		{
-			UE_LOG(LogTemp, Warning, TEXT("[DS] TPS DeathTrigger Player=%s Damage=%.2f HP=%d->%d"),
+			DS_LOG(TEXT("[DS] TPS DeathTrigger Player=%s Damage=%.2f HP=%d->%d"),
 				*PS->GetPlayerName(),
 				ActualDamage,
 				OldHP,

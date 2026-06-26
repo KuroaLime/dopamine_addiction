@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Game/InGame/Card/CardGameService.h"
+#include "Manager.h"
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/MainGameState.h"
 #include "Game/InGame/MainPlayerState.h"
@@ -60,13 +61,13 @@ bool UCardGameService::TryPickupCard(AMainPlayerController* RequestingPC, ACardD
 
     if (!RequestingPC || !TargetCard)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=InvalidRequest"));
+        DS_LOG(TEXT("[DS] Card PickupReject Reason=InvalidRequest"));
         return false;
     }
 
     if (!IsCardPickupAllowed())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=InvalidPhase Player=%s Phase=%s"),
+        DS_LOG(TEXT("[DS] Card PickupReject Reason=InvalidPhase Player=%s Phase=%s"),
             *RequestingPC->GetName(),
             OwnerGM->GetServerPhaseName(OwnerGM->GetCurrentServerPhase()));
         return false;
@@ -74,7 +75,7 @@ bool UCardGameService::TryPickupCard(AMainPlayerController* RequestingPC, ACardD
 
     if (TargetCard->IsPickedUp())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=AlreadyPicked Player=%s Instance=%d"),
+        DS_LOG(TEXT("[DS] Card PickupReject Reason=AlreadyPicked Player=%s Instance=%d"),
             *RequestingPC->GetName(),
             TargetCard->GetCardInstanceId());
         return false;
@@ -84,13 +85,13 @@ bool UCardGameService::TryPickupCard(AMainPlayerController* RequestingPC, ACardD
     AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
     if (!Pawn || !PS)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=MissingPawnOrPS Player=%s"), *RequestingPC->GetName());
+        DS_LOG(TEXT("[DS] Card PickupReject Reason=MissingPawnOrPS Player=%s"), *RequestingPC->GetName());
         return false;
     }
 
     if (PS->OwnedCards.Num() >= MaxCardsPerPlayerPerRound)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=CardLimit Player=%s Owned=%d Max=%d OwnedCards=[%s]"),
+        DS_LOG(TEXT("[DS] Card PickupReject Reason=CardLimit Player=%s Owned=%d Max=%d OwnedCards=[%s]"),
             *RequestingPC->GetName(),
             PS->OwnedCards.Num(),
             MaxCardsPerPlayerPerRound,
@@ -102,7 +103,7 @@ bool UCardGameService::TryPickupCard(AMainPlayerController* RequestingPC, ACardD
     const float Distance = FVector::Dist(Pawn->GetActorLocation(), TargetCard->GetActorLocation());
     if (Distance > CardPickupRange)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=Distance Player=%s Instance=%d Distance=%.2f Range=%.2f"),
+        DS_LOG(TEXT("[DS] Card PickupReject Reason=Distance Player=%s Instance=%d Distance=%.2f Range=%.2f"),
             *RequestingPC->GetName(),
             TargetCard->GetCardInstanceId(),
             Distance,
@@ -113,7 +114,7 @@ bool UCardGameService::TryPickupCard(AMainPlayerController* RequestingPC, ACardD
     FServerCardRecord* Record = ServerCardRecords.Find(TargetCard->GetCardInstanceId());
     if (!Record)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=NoRecord Player=%s Instance=%d"),
+        DS_LOG(TEXT("[DS] Card PickupReject Reason=NoRecord Player=%s Instance=%d"),
             *RequestingPC->GetName(),
             TargetCard->GetCardInstanceId());
         return false;
@@ -121,7 +122,7 @@ bool UCardGameService::TryPickupCard(AMainPlayerController* RequestingPC, ACardD
 
     if (Record->State != ECardRuntimeState::WorldDrop || Record->DropActor.Get() != TargetCard)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=StateMismatch Player=%s Instance=%d State=%d"),
+        DS_LOG(TEXT("[DS] Card PickupReject Reason=StateMismatch Player=%s Instance=%d State=%d"),
             *RequestingPC->GetName(),
             Record->CardInstanceId,
             static_cast<int32>(Record->State));
@@ -145,7 +146,7 @@ bool UCardGameService::TryPickupCard(AMainPlayerController* RequestingPC, ACardD
     });
     TargetCard->Destroy();
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupOK Player=%s Instance=%d Card=%d Name=%s OwnedCount=%d OwnedCards=[%s]"),
+    DS_LOG(TEXT("[DS] Card PickupOK Player=%s Instance=%d Card=%d Name=%s OwnedCount=%d OwnedCards=[%s]"),
         *PS->GetPlayerName(),
         CardInfo.CardInstanceId,
         static_cast<int32>(CardInfo.CardID),
@@ -168,13 +169,13 @@ bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC
 
     if (!RequestingPC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidRequest"));
+        DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=InvalidRequest"));
         return false;
     }
 
     if (OwnerGM->GetCurrentServerPhase() != EDediServerPhase::CardGame)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidPhase Player=%s Phase=%s"),
+        DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=InvalidPhase Player=%s Phase=%s"),
             *RequestingPC->GetName(),
             OwnerGM->GetServerPhaseName(OwnerGM->GetCurrentServerPhase()));
         return false;
@@ -183,13 +184,13 @@ bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC
     AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
     if (!PS)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=MissingPS Player=%s"), *RequestingPC->GetName());
+        DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=MissingPS Player=%s"), *RequestingPC->GetName());
         return false;
     }
 
     if (PS->OwnedCards.Num() != MaxCardsPerPlayerPerRound)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidCardCount Player=%s Count=%d Required=%d"),
+        DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=InvalidCardCount Player=%s Count=%d Required=%d"),
             *PS->GetPlayerName(),
             PS->OwnedCards.Num(),
             MaxCardsPerPlayerPerRound);
@@ -199,7 +200,7 @@ bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC
     const int32 SelectedCount = (bCard0 ? 1 : 0) + (bCard1 ? 1 : 0) + (bCard2 ? 1 : 0);
     if (SelectedCount != 2)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidSelectCount Player=%s Count=%d"),
+        DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=InvalidSelectCount Player=%s Count=%d"),
             *PS->GetPlayerName(),
             SelectedCount);
         return false;
@@ -208,7 +209,7 @@ bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC
     FSeotdaPlayerRoundState* ExistingState = SeotdaRoundStates.Find(PS);
     if (ExistingState && ExistingState->bSubmitted)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=AlreadySubmitted Player=%s"), *PS->GetPlayerName());
+        DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=AlreadySubmitted Player=%s"), *PS->GetPlayerName());
         return false;
     }
 
@@ -249,7 +250,7 @@ bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitOK Player=%s Selected=[#%d:%s, #%d:%s] Combo=%s Rank=%d SubRank=%d AllCards=[%s]"),
+    DS_LOG(TEXT("[DS] Seotda SubmitOK Player=%s Selected=[#%d:%s, #%d:%s] Combo=%s Rank=%d SubRank=%d AllCards=[%s]"),
         *PS->GetPlayerName(),
 
         SelectedCards[0].CardInstanceId,
@@ -286,7 +287,7 @@ void UCardGameService::ResetSeotdaRoundStates()
     bSeotdaRoundResolved = false;
     LastSeotdaRoundResultSummary = TEXT("Pending");
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda Reset Round=%d"), OwnerGM->GetCurrentRound());
+    DS_LOG(TEXT("[DS] Seotda Reset Round=%d"), OwnerGM->GetCurrentRound());
 }
 
 void UCardGameService::TryResolveSeotdaRoundIfReady()
@@ -321,7 +322,7 @@ void UCardGameService::TryResolveSeotdaRoundIfReady()
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitProgress submitted=%d targets=%d Round=%d"), SubmittedCount, TargetCount, OwnerGM->GetCurrentRound());
+    DS_LOG(TEXT("[DS] Seotda SubmitProgress submitted=%d targets=%d Round=%d"), SubmittedCount, TargetCount, OwnerGM->GetCurrentRound());
 
     if (TargetCount <= 0 || SubmittedCount < TargetCount || bSeotdaBettingActive)
     {
@@ -374,7 +375,7 @@ bSeotdaBettingActive = true;
     OwnerGM->SetRemainingPhaseSeconds(0);
     OwnerGM->SetServerRemainingTime(0);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BettingTimerDisabled Round=%d Pot=%d CurrentBet=%d"),
+    DS_LOG(TEXT("[DS] Seotda BettingTimerDisabled Round=%d Pot=%d CurrentBet=%d"),
         OwnerGM->GetCurrentRound(),
         SeotdaPot,
         SeotdaCurrentBet);
@@ -406,7 +407,7 @@ bSeotdaBettingActive = true;
         SeotdaTurnOrder.Add(PS);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BettingStart players=%d pot=%d currentBet=%d round=%d"),
+    DS_LOG(TEXT("[DS] Seotda BettingStart players=%d pot=%d currentBet=%d round=%d"),
         SeotdaTurnOrder.Num(),
         SeotdaPot,
         SeotdaCurrentBet,
@@ -419,7 +420,7 @@ bSeotdaBettingActive = true;
     }
 
     AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetTurn Player=%s Index=%d Pot=%d CurrentBet=%d"),
+    DS_LOG(TEXT("[DS] Seotda BetTurn Player=%s Index=%d Pot=%d CurrentBet=%d"),
         TurnPS ? *TurnPS->GetPlayerName() : TEXT("<NULL>"),
         SeotdaCurrentTurnIndex,
         SeotdaPot,
@@ -438,13 +439,13 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
 
     if (!RequestingPC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidRequest Action=%d"), static_cast<int32>(Action));
+        DS_LOG(TEXT("[DS] Seotda BetReject Reason=InvalidRequest Action=%d"), static_cast<int32>(Action));
         return false;
     }
 
     if (OwnerGM->GetCurrentServerPhase() != EDediServerPhase::CardGame)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidPhase Player=%s Phase=%s Action=%d"),
+        DS_LOG(TEXT("[DS] Seotda BetReject Reason=InvalidPhase Player=%s Phase=%s Action=%d"),
             *RequestingPC->GetName(),
             OwnerGM->GetServerPhaseName(OwnerGM->GetCurrentServerPhase()),
             static_cast<int32>(Action));
@@ -453,7 +454,7 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
 
     if (!bSeotdaBettingActive)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=BettingNotActive Player=%s Action=%d"),
+        DS_LOG(TEXT("[DS] Seotda BetReject Reason=BettingNotActive Player=%s Action=%d"),
             *RequestingPC->GetName(),
             static_cast<int32>(Action));
         return false;
@@ -462,7 +463,7 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
     AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
     if (!PS)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=MissingPS Player=%s Action=%d"),
+        DS_LOG(TEXT("[DS] Seotda BetReject Reason=MissingPS Player=%s Action=%d"),
             *RequestingPC->GetName(),
             static_cast<int32>(Action));
         return false;
@@ -471,7 +472,7 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
     AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
     if (TurnPS != PS)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=NotYourTurn Player=%s Turn=%s Action=%d"),
+        DS_LOG(TEXT("[DS] Seotda BetReject Reason=NotYourTurn Player=%s Turn=%s Action=%d"),
             *PS->GetPlayerName(),
             TurnPS ? *TurnPS->GetPlayerName() : TEXT("<NULL>"),
             static_cast<int32>(Action));
@@ -481,7 +482,7 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
     FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
     if (!State || !State->bSubmitted || State->bFolded)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidState Player=%s Action=%d"),
+        DS_LOG(TEXT("[DS] Seotda BetReject Reason=InvalidState Player=%s Action=%d"),
             *PS->GetPlayerName(),
             static_cast<int32>(Action));
         return false;
@@ -497,7 +498,7 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
     case EBettingAction::Check:
         if (CallAmount > 0)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=CheckNeedsCall Player=%s Call=%d"), *PS->GetPlayerName(), CallAmount);
+            DS_LOG(TEXT("[DS] Seotda BetReject Reason=CheckNeedsCall Player=%s Call=%d"), *PS->GetPlayerName(), CallAmount);
             return false;
         }
         RequestedPay = 0;
@@ -524,7 +525,7 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
         bFoldAction = true;
         break;
     default:
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidAction Player=%s Action=%d"),
+        DS_LOG(TEXT("[DS] Seotda BetReject Reason=InvalidAction Player=%s Action=%d"),
             *PS->GetPlayerName(),
             static_cast<int32>(Action));
         return false;
@@ -560,7 +561,7 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
         State->bActedThisBetRound = true;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetOK Player=%s Action=%d Paid=%d BetMoney=%d Pot=%d CurrentBet=%d Money=%d Folded=%d"),
+    DS_LOG(TEXT("[DS] Seotda BetOK Player=%s Action=%d Paid=%d BetMoney=%d Pot=%d CurrentBet=%d Money=%d Folded=%d"),
         *PS->GetPlayerName(),
         static_cast<int32>(Action),
         Paid,
@@ -602,7 +603,7 @@ void UCardGameService::AdvanceSeotdaBettingTurn()
         FSeotdaPlayerRoundState* State = CandidatePS ? SeotdaRoundStates.Find(CandidatePS) : nullptr;
         if (CandidatePS && State && State->bSubmitted && !State->bFolded)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetTurn Player=%s Index=%d Pot=%d CurrentBet=%d NeedCall=%d"),
+            DS_LOG(TEXT("[DS] Seotda BetTurn Player=%s Index=%d Pot=%d CurrentBet=%d NeedCall=%d"),
                 *CandidatePS->GetPlayerName(),
                 SeotdaCurrentTurnIndex,
                 SeotdaPot,
@@ -627,7 +628,7 @@ void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
 
     if (bSeotdaRoundResolved)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda ResultSkip AlreadyResolved Summary=%s"),
+        DS_LOG(TEXT("[DS] Seotda ResultSkip AlreadyResolved Summary=%s"),
             *LastSeotdaRoundResultSummary);
         return;
     }
@@ -636,7 +637,7 @@ void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
     {
         if (!TryApplySeotdaRedealFromRemainingCards(Reason))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealStop Reason=NotEnoughRemainingCards Attempt=%d"), RedealAttempt);
+            DS_LOG(TEXT("[DS] Seotda RedealStop Reason=NotEnoughRemainingCards Attempt=%d"), RedealAttempt);
             break;
         }
     }
@@ -685,7 +686,7 @@ void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
         bSeotdaRoundResolved = true;
         BroadcastSeotdaState();
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda ResultFailed %s"), *LastSeotdaRoundResultSummary);
+        DS_LOG(TEXT("[DS] Seotda ResultFailed %s"), *LastSeotdaRoundResultSummary);
         return;
     }
 
@@ -709,7 +710,7 @@ void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
         WinnerPS ? GetSeotdaPlayerMoney(WinnerPS) : 0
     );
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda Winner %s"), *LastSeotdaRoundResultSummary);
+    DS_LOG(TEXT("[DS] Seotda Winner %s"), *LastSeotdaRoundResultSummary);
 
     bSeotdaBettingActive = false;
     bSeotdaRoundResolved = true;
@@ -911,13 +912,13 @@ bool UCardGameService::TryPickupNearestCard(AMainPlayerController* RequestingPC)
 
     if (!RequestingPC)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=InvalidRequest"));
+        DS_LOG(TEXT("[DS] Card PickupNearestReject Reason=InvalidRequest"));
         return false;
     }
 
     if (!IsCardPickupAllowed())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=InvalidPhase Player=%s Phase=%s"),
+        DS_LOG(TEXT("[DS] Card PickupNearestReject Reason=InvalidPhase Player=%s Phase=%s"),
             *RequestingPC->GetName(),
             OwnerGM->GetServerPhaseName(OwnerGM->GetCurrentServerPhase()));
         return false;
@@ -926,7 +927,7 @@ bool UCardGameService::TryPickupNearestCard(AMainPlayerController* RequestingPC)
     APawn* Pawn = RequestingPC->GetPawn();
     if (!Pawn)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=MissingPawn Player=%s"), *RequestingPC->GetName());
+        DS_LOG(TEXT("[DS] Card PickupNearestReject Reason=MissingPawn Player=%s"), *RequestingPC->GetName());
         return false;
     }
 
@@ -959,13 +960,13 @@ bool UCardGameService::TryPickupNearestCard(AMainPlayerController* RequestingPC)
 
     if (!BestCard)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=NoNearbyCard Player=%s Range=%.2f"),
+        DS_LOG(TEXT("[DS] Card PickupNearestReject Reason=NoNearbyCard Player=%s Range=%.2f"),
             *RequestingPC->GetName(),
             CardPickupRange);
         return false;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearest Player=%s Instance=%d Card=%d Name=%s Distance=%.2f"),
+    DS_LOG(TEXT("[DS] Card PickupNearest Player=%s Instance=%d Card=%d Name=%s Distance=%.2f"),
         *RequestingPC->GetName(),
         BestCard->GetCardInstanceId(),
         static_cast<int32>(BestCard->GetCardID()),
@@ -992,7 +993,7 @@ int32 UCardGameService::CreateCardInstance(ECardID CardID)
 
     ServerCardRecords.Add(NewInstanceId, Record);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Create Instance=%d Card=%d Name=%s Round=%d"),
+    DS_LOG(TEXT("[DS] Card Create Instance=%d Card=%d Name=%s Round=%d"),
         NewInstanceId,
         static_cast<int32>(CardID),
         *CardDebug::ToString(CardID),
@@ -1044,7 +1045,7 @@ ACardDropActor* UCardGameService::SpawnCardDrop(ECardID CardID, const FVector& S
         Record->DropActor = CardActor;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Drop Instance=%d Card=%d Name=%s Actor=%s Location=%s Round=%d"),
+    DS_LOG(TEXT("[DS] Card Drop Instance=%d Card=%d Name=%s Actor=%s Location=%s Round=%d"),
         InstanceId,
         static_cast<int32>(CardID),
         *CardDebug::ToString(CardID),
@@ -1066,7 +1067,7 @@ int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, con
     const TArray<FOwnedCardInfo> CardsToDrop = TargetPS->GetOwnedCards();
     if (CardsToDrop.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropSkip Player=%s Reason=NoOwnedCards"),
+        DS_LOG(TEXT("[DS] Card DeathDropSkip Player=%s Reason=NoOwnedCards"),
             *TargetPS->GetPlayerName());
         return 0;
     }
@@ -1086,7 +1087,7 @@ int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, con
         const FOwnedCardInfo& CardInfo = CardsToDrop[CardIndex];
         if (CardInfo.CardID == ECardID::None)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Reason=NoneCardID"),
+            DS_LOG(TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Reason=NoneCardID"),
                 *TargetPS->GetPlayerName(),
                 CardInfo.CardInstanceId);
             continue;
@@ -1102,7 +1103,7 @@ int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, con
             DropLocation.Y += FMath::Sin(Angle) * DropRadius;
             DropLocation.Z += FMath::Max(80.0f, OwnerGM->GetCardDeathDropGroundOffsetZ());
 
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropLocationFallback Player=%s Index=%d Instance=%d Card=%d Location=%s"),
+            DS_LOG(TEXT("[DS] Card DeathDropLocationFallback Player=%s Index=%d Instance=%d Card=%d Location=%s"),
                 *TargetPS->GetPlayerName(),
                 CardIndex,
                 CardInfo.CardInstanceId,
@@ -1116,7 +1117,7 @@ int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, con
             ACardDropActor* FallbackActor = SpawnCardDrop(CardInfo.CardID, DropLocation);
             if (!FallbackActor)
             {
-                UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Card=%d Name=%s Reason=MissingRecordFallbackSpawnFail Location=%s"),
+                DS_LOG(TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Card=%d Name=%s Reason=MissingRecordFallbackSpawnFail Location=%s"),
                     *TargetPS->GetPlayerName(),
                     CardInfo.CardInstanceId,
                     static_cast<int32>(CardInfo.CardID),
@@ -1130,7 +1131,7 @@ int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, con
             SpawnedCount++;
             ExistingDropLocations.Add(DropLocation);
 
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFallback Player=%s OldInstance=%d NewInstance=%d Card=%d Name=%s Location=%s"),
+            DS_LOG(TEXT("[DS] Card DeathDropFallback Player=%s OldInstance=%d NewInstance=%d Card=%d Name=%s Location=%s"),
                 *TargetPS->GetPlayerName(),
                 CardInfo.CardInstanceId,
                 FallbackActor->GetCardInstanceId(),
@@ -1152,7 +1153,7 @@ int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, con
         ACardDropActor* CardActor = GetWorld()->SpawnActor<ACardDropActor>(SpawnClass, DropLocation, FRotator::ZeroRotator, Params);
         if (!CardActor)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Card=%d Name=%s Reason=SpawnNull Location=%s"),
+            DS_LOG(TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Card=%d Name=%s Reason=SpawnNull Location=%s"),
                 *TargetPS->GetPlayerName(),
                 CardInfo.CardInstanceId,
                 static_cast<int32>(CardInfo.CardID),
@@ -1173,7 +1174,7 @@ int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, con
         SpawnedCount++;
         ExistingDropLocations.Add(DropLocation);
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDrop Player=%s Instance=%d Card=%d Name=%s Actor=%s Location=%s RemainingOwned=%d"),
+        DS_LOG(TEXT("[DS] Card DeathDrop Player=%s Instance=%d Card=%d Name=%s Actor=%s Location=%s RemainingOwned=%d"),
             *TargetPS->GetPlayerName(),
             Record->CardInstanceId,
             static_cast<int32>(Record->CardID),
@@ -1183,7 +1184,7 @@ int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, con
             TargetPS->PublicCardCount);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropComplete Player=%s Requested=%d Spawned=%d RemainingOwned=%d"),
+    DS_LOG(TEXT("[DS] Card DeathDropComplete Player=%s Requested=%d Spawned=%d RemainingOwned=%d"),
         *TargetPS->GetPlayerName(),
         CardsToDrop.Num(),
         SpawnedCount,
@@ -1215,14 +1216,14 @@ void UCardGameService::SpawnRoundCardBundleForBattleRoyale()
 
     if (IslandDropZones.Num() != OwnerGM->GetCardIslandDropExpectedZoneCount())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandDropZoneCountWarning Found=%d Expected=%d"),
+        DS_LOG(TEXT("[DS] Card IslandDropZoneCountWarning Found=%d Expected=%d"),
             IslandDropZones.Num(),
             OwnerGM->GetCardIslandDropExpectedZoneCount());
     }
 
     if (IslandDropZones.Num() > IslandCardGroups.Num())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandDropExtraZonesIgnored Found=%d Used=%d"),
+        DS_LOG(TEXT("[DS] Card IslandDropExtraZonesIgnored Found=%d Used=%d"),
             IslandDropZones.Num(),
             IslandCardGroups.Num());
     }
@@ -1236,7 +1237,7 @@ void UCardGameService::SpawnRoundCardBundleForBattleRoyale()
         const int32 BalanceValue = CardPlacement.GetCardIslandGroupBalanceValue(CardsInIsland);
 
         AActor* ZoneActor = DropZone.ZoneActor.Get();
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandGroup Island=%d Zone=%s Key=%s Source=%s Cards=%d BalanceValue=%d BoundsCenter=%s BoundsExtent=%s"),
+        DS_LOG(TEXT("[DS] Card IslandGroup Island=%d Zone=%s Key=%s Source=%s Cards=%d BalanceValue=%d BoundsCenter=%s BoundsExtent=%s"),
             IslandIndex,
             ZoneActor ? *ZoneActor->GetName() : TEXT("None"),
             *DropZone.IslandKey.ToString(),
@@ -1269,17 +1270,17 @@ void UCardGameService::SpawnRoundCardBundleForBattleRoyale()
             ACardDropActor* SpawnedCard = SpawnCardDrop(CardID, SpawnLocation);
             if (SpawnedCard) { ++IslandPlaced; }
 
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DropInstanceFinal Island=%d Slot=%d Card=%d Name=%s Result=%s Location=%s SpawnZ=%.1f"),
+            DS_LOG(TEXT("[DS] Card DropInstanceFinal Island=%d Slot=%d Card=%d Name=%s Result=%s Location=%s SpawnZ=%.1f"),
                 IslandIndex, SlotIndex, static_cast<int32>(CardID), *CardDebug::ToString(CardID),
                 SpawnedCard ? TEXT("OK") : TEXT("SpawnNull"), *SpawnLocation.ToCompactString(), SpawnLocation.Z);
         }
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandDropSummary Island=%d Zone=%s Key=%s Source=%s Placed=%d Requested=%d Center=%s Extent=%s"),
+        DS_LOG(TEXT("[DS] Card IslandDropSummary Island=%d Zone=%s Key=%s Source=%s Placed=%d Requested=%d Center=%s Extent=%s"),
             IslandIndex, ZoneActor ? *ZoneActor->GetName() : TEXT("None"), *DropZone.IslandKey.ToString(), *DropZone.Source,
             IslandPlaced, CardsInIsland.Num(), *DropZone.Center.ToCompactString(), *DropZone.Bounds.GetExtent().ToCompactString());
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandDropComplete Spawned=%d Planned=%d Islands=%d Round=%d Phase=%s"),
+    DS_LOG(TEXT("[DS] Card IslandDropComplete Spawned=%d Planned=%d Islands=%d Round=%d Phase=%s"),
         ActiveCardDrops.Num(),
         PlannedCount,
         IslandCardGroups.Num(),
@@ -1316,7 +1317,7 @@ void UCardGameService::ClearCardDrops()
 
     if (ClearCount > 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card ClearDrops Count=%d Round=%d"), ClearCount, OwnerGM->GetCurrentRound());
+        DS_LOG(TEXT("[DS] Card ClearDrops Count=%d Round=%d"), ClearCount, OwnerGM->GetCurrentRound());
     }
 }
 
@@ -1390,7 +1391,7 @@ void UCardGameService::EnsureThreeCardsForCardGame()
             }
         }
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card EnsureThree Player=%s Count=%d Max=%d Round=%d Cards=[%s]"),
+        DS_LOG(TEXT("[DS] Card EnsureThree Player=%s Count=%d Max=%d Round=%d Cards=[%s]"),
             *PS->GetPlayerName(),
             PS->OwnedCards.Num(),
             TargetCardCount,
@@ -1400,7 +1401,7 @@ void UCardGameService::EnsureThreeCardsForCardGame()
         TargetCount++;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card EnsureThreeComplete targets=%d round=%d"), TargetCount, OwnerGM->GetCurrentRound());
+    DS_LOG(TEXT("[DS] Card EnsureThreeComplete targets=%d round=%d"), TargetCount, OwnerGM->GetCurrentRound());
 }
 
 void UCardGameService::ClearRoundCardsForAllPlayers()
@@ -1444,7 +1445,7 @@ void UCardGameService::ClearRoundCardsForAllPlayers()
 
     SeotdaRoundStates.Empty();
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card ClearRoundCards targets=%d cards=%d round=%d"), TargetCount, CardCount, OwnerGM->GetCurrentRound());
+    DS_LOG(TEXT("[DS] Card ClearRoundCards targets=%d cards=%d round=%d"), TargetCount, CardCount, OwnerGM->GetCurrentRound());
 }
 
 bool UCardGameService::GrantCardRecordToPlayer(int32 CardInstanceId, AMainPlayerState* TargetPS, const TCHAR* Context)
@@ -1475,7 +1476,7 @@ bool UCardGameService::GrantCardRecordToPlayer(int32 CardInstanceId, AMainPlayer
     Record->OwnerPlayerState = TargetPS;
     Record->DropActor = nullptr;
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Grant Player=%s Instance=%d Card=%d Context=%s Count=%d"),
+    DS_LOG(TEXT("[DS] Card Grant Player=%s Instance=%d Card=%d Context=%s Count=%d"),
         *TargetPS->GetPlayerName(),
         CardInfo.CardInstanceId,
         static_cast<int32>(CardInfo.CardID),
@@ -1583,7 +1584,7 @@ bool UCardGameService::ShouldForceSeotdaRedeal() const
 
         if (!bHasOpponent)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealRule Skip Player=%s Rule=%s Reason=NoActiveOpponent"),
+            DS_LOG(TEXT("[DS] Seotda RedealRule Skip Player=%s Rule=%s Reason=NoActiveOpponent"),
                 *RedealPS->GetPlayerName(),
                 *RedealState.HandResult.Name);
             continue;
@@ -1594,7 +1595,7 @@ bool UCardGameService::ShouldForceSeotdaRedeal() const
         const int32 AllowedMaxRank = bIsMeongGusa ? 10009 : 9000;
         const bool bAllowRedeal = BestOpponentResult.Rank <= AllowedMaxRank;
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealRule Check Player=%s Rule=%s Opponent=%s OpponentCombo=%s OpponentRank=%d AllowedMaxRank=%d Redeal=%d"),
+        DS_LOG(TEXT("[DS] Seotda RedealRule Check Player=%s Rule=%s Opponent=%s OpponentCombo=%s OpponentRank=%d AllowedMaxRank=%d Redeal=%d"),
             *RedealPS->GetPlayerName(),
             *RedealState.HandResult.Name,
             *BestOpponentName,
@@ -1661,14 +1662,14 @@ bool UCardGameService::TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reaso
 
     if (RemainingRecordIds.Num() < NeedCardCount)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealReject Reason=NotEnoughCards Need=%d Remain=%d Round=%d"),
+        DS_LOG(TEXT("[DS] Seotda RedealReject Reason=NotEnoughCards Need=%d Remain=%d Round=%d"),
             NeedCardCount,
             RemainingRecordIds.Num(),
             OwnerGM->GetCurrentRound());
         return false;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealStart Reason=%s ActivePlayers=%d NeedCards=%d RemainCards=%d Round=%d Pot=%d"),
+    DS_LOG(TEXT("[DS] Seotda RedealStart Reason=%s ActivePlayers=%d NeedCards=%d RemainCards=%d Round=%d Pot=%d"),
         Reason ? Reason : TEXT("<NULL>"),
         ActivePlayers.Num(),
         NeedCardCount,
@@ -1735,7 +1736,7 @@ bool UCardGameService::TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reaso
         State->bSubmitted = true;
         State->bActedThisBetRound = true;
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealCard Player=%s Cards=%d:%s,%d:%s Combo=%s Rank=%d SubRank=%d"),
+        DS_LOG(TEXT("[DS] Seotda RedealCard Player=%s Cards=%d:%s,%d:%s Combo=%s Rank=%d SubRank=%d"),
             *PS->GetPlayerName(),
             FirstRecordId,
             *CardDebug::ToString(FirstInfo.CardID),
@@ -1762,7 +1763,7 @@ bool UCardGameService::TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reaso
                 *State->HandResult.Name
             );
 
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealNotice Player=%s Text=%s"),
+            DS_LOG(TEXT("[DS] Seotda RedealNotice Player=%s Text=%s"),
                 *PS->GetPlayerName(),
                 *RedealNotice);
 

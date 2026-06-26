@@ -1,4 +1,5 @@
 #include "Game/InGame/MainGameMode.h"
+#include "Manager.h"
 #include "Sockets.h"
 #include "SocketSubsystem.h"
 #include "IPAddress.h"
@@ -81,7 +82,7 @@ void AMainGameMode::InitGame(const FString& MapName, const FString& Options, FSt
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitGame Map=%s Options=%s RoomId=%d RequiredPlayers=%d"),
+    DS_LOG(TEXT("[DS] Main InitGame Map=%s Options=%s RoomId=%d RequiredPlayers=%d"),
         *MapName,
         *Options,
         DediRoomId,
@@ -96,7 +97,7 @@ void AMainGameMode::PreLogin(
 {
     const FString Ticket = UGameplayStatics::ParseOption(Options, TEXT("ticket"));
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main PreLogin Address=%s Ticket=%s Options=%s"),
+    DS_LOG(TEXT("[DS] Main PreLogin Address=%s Ticket=%s Options=%s"),
         *Address,
         Ticket.IsEmpty() ? TEXT("<EMPTY>") : *Ticket,
         *Options);
@@ -105,14 +106,14 @@ void AMainGameMode::PreLogin(
 
     if (!ErrorMessage.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main PreLogin rejected by Super. Error=%s"), *ErrorMessage);
+        DS_LOG(TEXT("[DS] Main PreLogin rejected by Super. Error=%s"), *ErrorMessage);
         return;
     }
 
     //if (Ticket.IsEmpty())
     //{
     //    ErrorMessage = TEXT("MissingTicket");
-    //    UE_LOG(LogTemp, Warning, TEXT("[DS] Main PreLogin rejected. Error=%s"), *ErrorMessage);
+    //    DS_LOG(TEXT("[DS] Main PreLogin rejected. Error=%s"), *ErrorMessage);
     //    return;
     //}
 }
@@ -130,14 +131,14 @@ FString AMainGameMode::InitNewPlayer(
     if (PS && !PlayerName.IsEmpty())
     {
         PS->SetPlayerName(PlayerName);
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitNewPlayer PlayerName=%s Controller=%s Options=%s"),
+        DS_LOG(TEXT("[DS] Main InitNewPlayer PlayerName=%s Controller=%s Options=%s"),
             *PlayerName,
             NewPlayerController ? *NewPlayerController->GetName() : TEXT("<NULL>"),
             *Options);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitNewPlayer PlayerNameFallback CurrentName=%s Controller=%s Options=%s"),
+        DS_LOG(TEXT("[DS] Main InitNewPlayer PlayerNameFallback CurrentName=%s Controller=%s Options=%s"),
             PS ? *PS->GetPlayerName() : TEXT("<NO_PLAYER_STATE>"),
             NewPlayerController ? *NewPlayerController->GetName() : TEXT("<NULL>"),
             *Options);
@@ -156,7 +157,7 @@ void AMainGameMode::BeginPlay()
     CardGameService = NewObject<UCardGameService>(this);
     CardGameService->Init(this);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main BeginPlay RoomId=%d RequiredPlayers=%d InitialPhase=%d Strategies=%d DebugPhase=%d RealReady=%d RealBattle=%d RealTransition=%d RealCard=%d RealResult=%d DebugReady=%d DebugBattle=%d DebugTransition=%d DebugCard=%d DebugResult=%d"),
+    DS_LOG(TEXT("[DS] Main BeginPlay RoomId=%d RequiredPlayers=%d InitialPhase=%d Strategies=%d DebugPhase=%d RealReady=%d RealBattle=%d RealTransition=%d RealCard=%d RealResult=%d DebugReady=%d DebugBattle=%d DebugTransition=%d DebugCard=%d DebugResult=%d"),
         DediRoomId,
         RequiredPlayerCount,
         static_cast<int32>(InitialPhase),
@@ -178,7 +179,7 @@ void AMainGameMode::PostLogin(APlayerController* NewPlayer)
 {
     Super::PostLogin(NewPlayer);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main PostLogin Controller=%s RoomId=%d HumanPlayers=%d/%d"),
+    DS_LOG(TEXT("[DS] Main PostLogin Controller=%s RoomId=%d HumanPlayers=%d/%d"),
         NewPlayer ? *NewPlayer->GetName() : TEXT("<NULL>"),
         DediRoomId,
         CountConnectedHumanPlayers(),
@@ -189,7 +190,7 @@ void AMainGameMode::PostLogin(APlayerController* NewPlayer)
 
 void AMainGameMode::Logout(AController* Exiting)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main Logout Controller=%s RoomId=%d HumanPlayersBeforeSuper=%d/%d"),
+    DS_LOG(TEXT("[DS] Main Logout Controller=%s RoomId=%d HumanPlayersBeforeSuper=%d/%d"),
         Exiting ? *Exiting->GetName() : TEXT("<NULL>"),
         DediRoomId,
         CountConnectedHumanPlayers(),
@@ -197,7 +198,7 @@ void AMainGameMode::Logout(AController* Exiting)
 
     Super::Logout(Exiting);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main Logout Complete HumanPlayers=%d/%d GameStarted=%d Phase=%s Round=%d"),
+    DS_LOG(TEXT("[DS] Main Logout Complete HumanPlayers=%d/%d GameStarted=%d Phase=%s Round=%d"),
         CountConnectedHumanPlayers(),
         RequiredPlayerCount,
         bGameStarted ? 1 : 0,
@@ -214,14 +215,14 @@ void AMainGameMode::BeginPhase(EGamePhase CurrPhase)
     else
     {
         CurrentStrategy = nullptr;
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main BeginPhase failed. Missing strategy phase=%d Round=%d ServerPhase=%s"),
+        DS_LOG(TEXT("[DS] Main BeginPhase failed. Missing strategy phase=%d Round=%d ServerPhase=%s"),
             static_cast<int32>(CurrPhase),
             CurrentRound,
             GetServerPhaseName(CurrentServerPhase));
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main BeginPhase phase=%d strategy=%s Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Main BeginPhase phase=%d strategy=%s Round=%d ServerPhase=%s"),
         static_cast<int32>(CurrPhase),
         CurrentStrategy ? *CurrentStrategy->GetName() : TEXT("<NULL>"),
         CurrentRound,
@@ -237,7 +238,7 @@ void AMainGameMode::EndPhase()
 {
     if (CurrentStrategy)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main EndPhase strategy=%s Round=%d ServerPhase=%s"),
+        DS_LOG(TEXT("[DS] Main EndPhase strategy=%s Round=%d ServerPhase=%s"),
             *CurrentStrategy->GetName(),
             CurrentRound,
             GetServerPhaseName(CurrentServerPhase));
@@ -248,7 +249,7 @@ void AMainGameMode::EndPhase()
 
 void AMainGameMode::ChangePhase(EGamePhase NewPhase)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main ChangePhase ignored newPhase=%d Round=%d CurrentServerPhase=%s GameEnd=%d"),
+    DS_LOG(TEXT("[DS] Main ChangePhase ignored newPhase=%d Round=%d CurrentServerPhase=%s GameEnd=%d"),
         static_cast<int32>(NewPhase),
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase),
@@ -268,7 +269,7 @@ void AMainGameMode::BroadcastSwitchMode(EGamePhase NewPhase)
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main BroadcastSwitchMode phase=%d targets=%d Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Main BroadcastSwitchMode phase=%d targets=%d Round=%d ServerPhase=%s"),
         static_cast<int32>(NewPhase),
         TargetCount,
         CurrentRound,
@@ -290,7 +291,7 @@ void AMainGameMode::BroadcastSwitchLevel(FName LevelToUnload, FName LevelToLoad)
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main BroadcastSwitchLevel unload=%s load=%s targets=%d Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Main BroadcastSwitchLevel unload=%s load=%s targets=%d Round=%d ServerPhase=%s"),
         *LevelToUnload.ToString(),
         *LevelToLoad.ToString(),
         TargetCount,
@@ -317,7 +318,7 @@ void AMainGameMode::LoadServerStreamLevelForPhase(FName LevelToLoad, const TCHAR
 
     UGameplayStatics::LoadStreamLevel(World, LevelToLoad, true, true, LoadInfo);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main ServerLoadStreamLevel load=%s Context=%s Round=%d ServerPhase=%s UUID=%d"),
+    DS_LOG(TEXT("[DS] Main ServerLoadStreamLevel load=%s Context=%s Round=%d ServerPhase=%s UUID=%d"),
         *LevelToLoad.ToString(),
         Context ? Context : TEXT("<NULL>"),
         CurrentRound,
@@ -338,7 +339,7 @@ void AMainGameMode::InitStrategy()
     {
         if (!Pair.Value)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitStrategy skipped null phase=%d"), static_cast<int32>(Pair.Key));
+            DS_LOG(TEXT("[DS] Main InitStrategy skipped null phase=%d"), static_cast<int32>(Pair.Key));
             continue;
         }
 
@@ -348,7 +349,7 @@ void AMainGameMode::InitStrategy()
             Strategy->Initialize(this);
             StrategyMap.Add(Pair.Key, Strategy);
 
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitStrategy phase=%d strategy=%s"),
+            DS_LOG(TEXT("[DS] Main InitStrategy phase=%d strategy=%s"),
                 static_cast<int32>(Pair.Key),
                 *Strategy->GetName());
         }
@@ -359,7 +360,7 @@ void AMainGameMode::TryStartGameIfReady()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main TryStart ignored. GameEnd reached RoomId=%d Round=%d"), DediRoomId, CurrentRound);
+        DS_LOG(TEXT("[DS] Main TryStart ignored. GameEnd reached RoomId=%d Round=%d"), DediRoomId, CurrentRound);
         return;
     }
 
@@ -371,7 +372,7 @@ void AMainGameMode::TryStartGameIfReady()
     const int32 HumanPlayers = CountConnectedHumanPlayers();
     if (HumanPlayers < RequiredPlayerCount)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main WaitingPlayers HumanPlayers=%d/%d"),
+        DS_LOG(TEXT("[DS] Main WaitingPlayers HumanPlayers=%d/%d"),
             HumanPlayers,
             RequiredPlayerCount);
         return;
@@ -385,7 +386,7 @@ void AMainGameMode::TryStartGameIfReady()
         GS->CurrentRound = CurrentRound;
         GS->OnRep_CurrentRound();
     }
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main RequiredPlayersReady HumanPlayers=%d/%d StartRound=%d MaxRound=%d"),
+    DS_LOG(TEXT("[DS] Main RequiredPlayersReady HumanPlayers=%d/%d StartRound=%d MaxRound=%d"),
         HumanPlayers,
         RequiredPlayerCount,
         CurrentRound,
@@ -431,7 +432,7 @@ void AMainGameMode::EnsureBattleRoyaleStageLoaded()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main SkipDuplicateTPSLoad Round=%d ServerPhase=%s"),
+        DS_LOG(TEXT("[DS] Main SkipDuplicateTPSLoad Round=%d ServerPhase=%s"),
             CurrentRound,
             GetServerPhaseName(CurrentServerPhase));
     }
@@ -441,7 +442,7 @@ void AMainGameMode::StartBattleRoyalePhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartBattleRoyale after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartBattleRoyale after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
@@ -455,7 +456,7 @@ void AMainGameMode::StartTransitionToCardPhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartTransitionToCard after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartTransitionToCard after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
@@ -471,7 +472,7 @@ void AMainGameMode::StartCardGamePhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartCardGame after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartCardGame after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
@@ -484,7 +485,7 @@ void AMainGameMode::StartCardGamePhase()
     RemainingPhaseSeconds = 0;
     SetServerRemainingTime(0);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseStart Round=%d Phase=%s Duration=0 ManualCardGame=1"),
+    DS_LOG(TEXT("[DS] PhaseStart Round=%d Phase=%s Duration=0 ManualCardGame=1"),
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));
 }
@@ -493,14 +494,14 @@ void AMainGameMode::StartResultPhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartResult after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartResult after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
     // 라운드 결과 정산(미정산 시 폴백)은 UCardPhaseStrategy::OnPhaseEnd(EndPhase 호출)로 이전됨.
     EndPhase();
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] RoundResult Round=%d Summary=%s"),
+    DS_LOG(TEXT("[DS] RoundResult Round=%d Summary=%s"),
         CurrentRound,
         *CardGameService->GetLastRoundResultSummary());
 
@@ -511,7 +512,7 @@ void AMainGameMode::StartTransitionToBattlePhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartTransitionToBattle after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartTransitionToBattle after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
@@ -527,7 +528,7 @@ void AMainGameMode::StartGameEndPhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] GameEnd ignored duplicate RoomId=%d Round=%d"), DediRoomId, CurrentRound);
+        DS_LOG(TEXT("[DS] GameEnd ignored duplicate RoomId=%d Round=%d"), DediRoomId, CurrentRound);
         return;
     }
 
@@ -597,7 +598,7 @@ void AMainGameMode::StartGameEndPhase()
         WinnerName = FString::Printf(TEXT("Tie(%d players, Money=%d)"), BestMoneyPlayerCount, BestMoney);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] GameEnd RoomId=%d Round=%d MaxRound=%d Winner=%s MoneySummary=%s"),
+    DS_LOG(TEXT("[DS] GameEnd RoomId=%d Round=%d MaxRound=%d Winner=%s MoneySummary=%s"),
         DediRoomId,
         CurrentRound,
         MaxRoundCount,
@@ -636,7 +637,7 @@ void AMainGameMode::StartGameEndPhase()
             false
         );
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] MatchEndShutdownScheduled Delay=10.0 RoomId=%d Round=%d"),
+        DS_LOG(TEXT("[DS] MatchEndShutdownScheduled Delay=10.0 RoomId=%d Round=%d"),
             DediRoomId,
             CurrentRound);
     }
@@ -748,7 +749,7 @@ void AMainGameMode::SetPlayerPawnGameplayState(bool bVisible, bool bMovementEnab
         TargetCount++;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main SetPlayerPawnGameplayState visible=%d movement=%d collision=%d controllers=%d pawns=%d weapons=%d Context=%s Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Main SetPlayerPawnGameplayState visible=%d movement=%d collision=%d controllers=%d pawns=%d weapons=%d Context=%s Round=%d ServerPhase=%s"),
         bVisible ? 1 : 0,
         bMovementEnabled ? 1 : 0,
         bCollisionEnabled ? 1 : 0,
@@ -791,7 +792,7 @@ void AMainGameMode::ClearPlayerPawnMovementBases(const TCHAR* Context)
         TargetCount++;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main ClearPlayerPawnMovementBases targets=%d Context=%s Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Main ClearPlayerPawnMovementBases targets=%d Context=%s Round=%d ServerPhase=%s"),
         TargetCount,
         Context ? Context : TEXT("<NULL>"),
         CurrentRound,
@@ -915,7 +916,7 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
             SeatTransforms.Add(FTransform(SeatRotation, SeatLocation));
         }
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=1 Center=%s Radius=%.1f Source=%s Tag=%s Spacing=%.1f ZOffset=%.1f"),
+        DS_LOG(TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=1 Center=%s Radius=%.1f Source=%s Tag=%s Spacing=%.1f ZOffset=%.1f"),
             RequiredCount,
             TaggedSeatCount,
             ComponentTaggedSeatCount,
@@ -929,7 +930,7 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
 
     if (RequiredCount <= 0 || TaggedSeatCount >= RequiredCount)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=0 Fallback=0 FallbackEnabled=%d Tag=%s Spacing=%.1f ZOffset=%.1f"),
+        DS_LOG(TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=0 Fallback=0 FallbackEnabled=%d Tag=%s Spacing=%.1f ZOffset=%.1f"),
             RequiredCount,
             TaggedSeatCount,
             ComponentTaggedSeatCount,
@@ -1090,7 +1091,7 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
             return SeatTransforms;
         }
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuildAutoFallback Required=%d Tagged=0 ComponentTagged=%d Source=%s Center=%s FallbackEnabled=%d Tag=%s"),
+        DS_LOG(TEXT("[DS] Card SeatBuildAutoFallback Required=%d Tagged=0 ComponentTagged=%d Source=%s Center=%s FallbackEnabled=%d Tag=%s"),
             RequiredCount,
             ComponentTaggedSeatCount,
             FallbackSource,
@@ -1140,7 +1141,7 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
         SeatTransforms.Add(FTransform(SeatRotation, SeatLocation));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuild Required=%d Tagged=%d GeneratedFromCenter=0 Fallback=%d FallbackEnabled=%d Tag=%s FallbackCenter=%s Spacing=%.1f ZOffset=%.1f"),
+    DS_LOG(TEXT("[DS] Card SeatBuild Required=%d Tagged=%d GeneratedFromCenter=0 Fallback=%d FallbackEnabled=%d Tag=%s FallbackCenter=%s Spacing=%.1f ZOffset=%.1f"),
         RequiredCount,
         TaggedSeatCount,
         SeatTransforms.Num() - TaggedSeatCount,
@@ -1197,7 +1198,7 @@ void AMainGameMode::ScheduleCardSeatMoveRetry(const TCHAR* Context)
         RetryInterval,
         false);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMoveRetryScheduled Retry=%d MaxRetries=%d Interval=%.2f Context=%s Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Card SeatMoveRetryScheduled Retry=%d MaxRetries=%d Interval=%.2f Context=%s Round=%d ServerPhase=%s"),
         CardSeatMoveRetryCount,
         CardPlayerSeatMoveMaxRetries,
         RetryInterval,
@@ -1238,7 +1239,7 @@ bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
         APawn* Pawn = MainPC ? MainPC->GetPawn() : nullptr;
         if (!Pawn || !SeatTransforms.IsValidIndex(Index))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMoveSkip Index=%d HasPC=%d HasPawn=%d HasSeat=%d Context=%s"),
+            DS_LOG(TEXT("[DS] Card SeatMoveSkip Index=%d HasPC=%d HasPawn=%d HasSeat=%d Context=%s"),
                 Index,
                 MainPC ? 1 : 0,
                 Pawn ? 1 : 0,
@@ -1268,7 +1269,7 @@ bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
         Pawn->ForceNetUpdate();
         MovedCount++;
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMove Player=%s Index=%d Teleport=%d Location=%s Rotation=%s Context=%s"),
+        DS_LOG(TEXT("[DS] Card SeatMove Player=%s Index=%d Teleport=%d Location=%s Rotation=%s Context=%s"),
             *GetNameSafe(MainPC->PlayerState),
             Index,
             bTeleported ? 1 : 0,
@@ -1277,7 +1278,7 @@ bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
             Context ? Context : TEXT("<NULL>"));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMoveComplete Moved=%d Planned=%d Context=%s Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Card SeatMoveComplete Moved=%d Planned=%d Context=%s Round=%d ServerPhase=%s"),
         MovedCount,
         Controllers.Num(),
         Context ? Context : TEXT("<NULL>"),
@@ -1291,7 +1292,7 @@ void AMainGameMode::StartTimedServerPhase(EDediServerPhase NewPhase, int32 Durat
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartTimedServerPhase phase=%s after GameEnd Round=%d"),
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartTimedServerPhase phase=%s after GameEnd Round=%d"),
             GetServerPhaseName(NewPhase),
             CurrentRound);
         return;
@@ -1303,7 +1304,7 @@ void AMainGameMode::StartTimedServerPhase(EDediServerPhase NewPhase, int32 Durat
     RemainingPhaseSeconds = FMath::Max(0, DurationSeconds);
     SetServerRemainingTime(RemainingPhaseSeconds);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseStart Round=%d Phase=%s Duration=%d Debug=%d"),
+    DS_LOG(TEXT("[DS] PhaseStart Round=%d Phase=%s Duration=%d Debug=%d"),
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase),
         RemainingPhaseSeconds,
@@ -1331,7 +1332,7 @@ void AMainGameMode::OnServerPhaseTick()
     if (bGameEndReached || CurrentServerPhase == EDediServerPhase::GameEnd)
     {
         ClearServerPhaseTimer();
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard ClearTick after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard ClearTick after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
@@ -1340,7 +1341,7 @@ void AMainGameMode::OnServerPhaseTick()
 
     if (RemainingPhaseSeconds <= 5 || RemainingPhaseSeconds % 10 == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseTick Round=%d Phase=%s Remaining=%d"),
+        DS_LOG(TEXT("[DS] PhaseTick Round=%d Phase=%s Remaining=%d"),
             CurrentRound,
             GetServerPhaseName(CurrentServerPhase),
             RemainingPhaseSeconds);
@@ -1357,7 +1358,7 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
     if (bGameEndReached || CurrentServerPhase == EDediServerPhase::GameEnd)
     {
         ClearServerPhaseTimer();
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore FinishCurrentServerPhase after GameEnd Round=%d Reason=%s"),
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore FinishCurrentServerPhase after GameEnd Round=%d Reason=%s"),
             CurrentRound,
             Reason ? Reason : TEXT("<NULL>"));
         return;
@@ -1367,7 +1368,7 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
 
     ClearServerPhaseTimer();
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseEnd Round=%d Phase=%s Reason=%s"),
+    DS_LOG(TEXT("[DS] PhaseEnd Round=%d Phase=%s Reason=%s"),
         CurrentRound,
         GetServerPhaseName(FinishedPhase),
         Reason);
@@ -1400,7 +1401,7 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
                 GS->CurrentRound = CurrentRound;
                 GS->OnRep_CurrentRound();
             }
-            UE_LOG(LogTemp, Warning, TEXT("[DS] NextRound Round=%d/%d"), CurrentRound, MaxRoundCount);
+            DS_LOG(TEXT("[DS] NextRound Round=%d/%d"), CurrentRound, MaxRoundCount);
             StartTransitionToBattlePhase();
         }
         break;
@@ -1523,7 +1524,7 @@ void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString&
 
     if (DediRoomId <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] IOCP MatchEndNotify skipped. Invalid RoomId=%d Winner=%s"),
+        DS_LOG(TEXT("[DS] IOCP MatchEndNotify skipped. Invalid RoomId=%d Winner=%s"),
             DediRoomId,
             *WinnerName);
         return;
@@ -1578,7 +1579,7 @@ void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString&
         bSent = Socket->Send(Packet.GetData(), Packet.Num(), BytesSent);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] IOCP MatchEndNotify RoomId=%d Winner=%s Money=%s Connected=%d Sent=%d Bytes=%d/%d"),
+    DS_LOG(TEXT("[DS] IOCP MatchEndNotify RoomId=%d Winner=%s Money=%s Connected=%d Sent=%d Bytes=%d/%d"),
         DediRoomId,
         *WinnerName,
         *MoneySummary,
@@ -1593,7 +1594,7 @@ void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString&
 
 void AMainGameMode::ShutdownDedicatedServerAfterMatchEnd()
 {
-    UE_LOG(LogTemp, Warning, TEXT("[DS] ShutdownDedicatedServerAfterMatchEnd RoomId=%d Round=%d Phase=%s"),
+    DS_LOG(TEXT("[DS] ShutdownDedicatedServerAfterMatchEnd RoomId=%d Round=%d Phase=%s"),
         DediRoomId,
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));

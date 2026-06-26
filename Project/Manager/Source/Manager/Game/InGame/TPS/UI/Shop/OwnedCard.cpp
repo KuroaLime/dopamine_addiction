@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/TPS/UI/Shop/OwnedCard.h"
+#include "Manager.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Button.h"
@@ -117,7 +118,7 @@ void UOwnedCard::PlayFlipAnimation()
 {
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow, TEXT("PlayFlipAnimation Called!"));
+		DS_SCREEN(-1, 3.f, FColor::Yellow, TEXT("PlayFlipAnimation Called!"));
 	}
 	if (ClickAnim)
 	{

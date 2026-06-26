@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/MainPlayerController.h"
+#include "Manager.h"
 #include "Engine/Engine.h"
 #include "EnhancedInputComponent.h"
 #include "Game/InGame/Handler/UIHandler.h"
@@ -397,7 +398,7 @@ void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
 		}
 		CurrentUpgradeOptions.Add(NewOption);
 	}
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Rand Status UP")));
+	DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Rand Status UP")));
 
 	Client_ReceiveRandomUpgradeOptions(CurrentUpgradeOptions);
 }
@@ -452,19 +453,19 @@ EUpgradeType AMainPlayerController::GetStaticUpgradeTypeFromIndex(int32 Index)
 	switch (Index)
 	{
 	case 0:
-		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_Health")));
+		DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_Health")));
 
 		return EUpgradeType::Player_Health;
 	case 1:
-		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_MoveSpeed")));
+		DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_MoveSpeed")));
 
 		return EUpgradeType::Player_MoveSpeed;
 	case 2:
-		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_HealthRegeneration")));
+		DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_HealthRegeneration")));
 
 		return EUpgradeType::Player_HealthRegeneration;
 	default:
-		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("None")));
+		DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("None")));
 
 		return EUpgradeType::None;
 	}
@@ -516,7 +517,7 @@ void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int3
 
 	PS->AddGold(-Cost);
 	PS->Server_ApplyUpgrad_Implementation(UpgradeType);
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("static Status UP")));
+	DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("static Status UP")));
 
 }
 void AMainPlayerController::Server_SetUITimer_Implementation(int32 time)
@@ -592,7 +593,7 @@ UE_LOG(LogTemp, Warning, TEXT("[CL] Seotda Result: %s"), *ResultText);
 
 if (GEngine)
 {
-GEngine->AddOnScreenDebugMessage(
+DS_SCREEN(
 2026062501,
 8.0f,
 FColor::Green,

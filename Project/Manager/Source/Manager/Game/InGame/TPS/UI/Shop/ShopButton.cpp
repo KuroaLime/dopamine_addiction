@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/TPS/UI/Shop/ShopButton.h"
+#include "Manager.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Button.h"
@@ -49,7 +50,7 @@ void UShopButton::NativeOnMouseEnter(const FGeometry& MyGeometry, const FPointer
 {
 	if (GEngine)
 	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Mouse Entered Card Widget!"));
+		DS_SCREEN(-1, 2.f, FColor::Green, TEXT("Mouse Entered Card Widget!"));
 	}
 	Super::NativeOnMouseEnter(MyGeometry, MouseEvent);
 	if (HoverAnim) {
