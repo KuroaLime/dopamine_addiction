@@ -20,6 +20,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "Components/ActorComponent.h"
 #include "Kismet/GameplayStatics.h"
+#include "Engine/World.h"
 #include "EngineUtils.h"
 #include "NavigationSystem.h"
 #include "TimerManager.h"
@@ -318,7 +319,15 @@ void AMainGameMode::LoadServerStreamLevelForPhase(FName LevelToLoad, const TCHAR
 
     UGameplayStatics::LoadStreamLevel(World, LevelToLoad, true, true, LoadInfo);
 
-    DS_LOG(TEXT("[DS] Main ServerLoadStreamLevel load=%s Context=%s Round=%d ServerPhase=%s UUID=%d"),
+    // [멀티 카드 드롭 버그 핵심 수정]
+    // LoadStreamLevel은 latent(비동기)라, 호출 직후 다음 줄(카드 번들 스폰 등)이 실행될 때
+    // 섬(시즌 PackedLevelActor)/내비메시가 아직 월드에 없어서 FindCardIslandDropZones가 0개를
+    // 반환 -> NotEnoughDropZones로 카드가 안 뿌려졌다. 데디 서버는 렌더링이 없으므로 여기서
+    // 동기 플러시로 로드+가시화를 즉시 끝내, 이후 로직이 항상 로드 완료된 월드를 보게 한다.
+    // (폴링/재시도 없이 결정론적으로 보장. 실제 디스크 로드 시간만 소요)
+    World->FlushLevelStreaming(EFlushLevelStreamingType::Full);
+
+    DS_LOG(TEXT("[DS] Main ServerLoadStreamLevel load=%s Context=%s Round=%d ServerPhase=%s UUID=%d Flushed=1"),
         *LevelToLoad.ToString(),
         Context ? Context : TEXT("<NULL>"),
         CurrentRound,
