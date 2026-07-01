@@ -4,7 +4,7 @@
 #include "Default/Component/Player/InteractionComponent.h"
 #include "DrawDebugHelpers.h"
 #include "Default/Actor/InteractableInterface.h"
-#include "Game/InGame/MainCharacter.h"
+#include "Game/InGame/ManagerCharacter.h"
 #include "Camera/CameraComponent.h"
 // Sets default values for this component's properties
 UInteractionComponent::UInteractionComponent()
@@ -51,16 +51,16 @@ void UInteractionComponent::PerformLineTrace() {
 	AActor* Owner = GetOwner();
 	if (!Owner) return;
 
-	// 1. Ä³ï¿½ï¿½ï¿½Í¿ï¿½ Ä«ï¿½Þ¶ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½
-	AMainCharacter* MyChar = Cast<AMainCharacter>(Owner);
+	// 1. Ä³¸¯ÅÍ¿Í Ä«¸Þ¶ó °¡Á®¿À±â
+	AManagerCharacter* MyChar = Cast<AManagerCharacter>(Owner);
 	if (!MyChar || !MyChar->GetFollowCamera()) return;
 
-	// 2. Ä³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Æ´ï¿½, ï¿½ï¿½ï¿½ï¿½ TPS 'Ä«ï¿½Þ¶ï¿½'ï¿½ï¿½ ï¿½ï¿½Ä¡ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½Ï´ï¿½.
+	// 2. Ä³¸¯ÅÍÀÇ ´«ÀÌ ¾Æ´Ñ, ½ÇÁ¦ TPS 'Ä«¸Þ¶ó'ÀÇ À§Ä¡¿Í ¹æÇâÀ» ½ÃÀÛÁ¡À¸·Î Àâ½À´Ï´Ù.
 	FVector Start = MyChar->GetFollowCamera()->GetComponentLocation();
 	FRotator Rotation = MyChar->GetFollowCamera()->GetComponentRotation();
 
-	// 3. Ä«ï¿½Þ¶ï¿½ï¿½ Ä³ï¿½ï¿½ï¿½ï¿½ ï¿½Ú¿ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Ç·ï¿½, ï¿½ï¿½ï¿½ï¿½ TraceDistance(300)ï¿½Î´ï¿½ Ä³ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Û¿ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½Ê½ï¿½ï¿½Ï´ï¿½.
-	// ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ È­ï¿½ï¿½ ï¿½ß¾ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½(ï¿½ï¿½: 1500) ï¿½ï¿½ï¿½Ý´Ï´ï¿½.
+	// 3. Ä«¸Þ¶ó´Â Ä³¸¯ÅÍ µÚ¿¡ ÀÖÀ¸¹Ç·Î, ±âÁ¸ TraceDistance(300)·Î´Â Ä³¸¯ÅÍ ¾ÕÀÇ ¾ÆÀÌÅÛ¿¡ ´êÁö ¾Ê½À´Ï´Ù.
+	// µû¶ó¼­ ·¹ÀÌÀú¸¦ È­¸é Áß¾ÓÀ» ÇâÇØ ¾ÆÁÖ ±æ°Ô(¿¹: 1500) ½÷ÁÝ´Ï´Ù.
 	float MaxTraceLength = 1500.0f;
 	FVector End = Start + (Rotation.Vector() * MaxTraceLength);
 
@@ -68,13 +68,13 @@ void UInteractionComponent::PerformLineTrace() {
 
 	FHitResult HitResult;
 	FCollisionQueryParams Params;
-	Params.AddIgnoredActor(Owner); // ï¿½ï¿½ Ä³ï¿½ï¿½ï¿½Í´ï¿½ ï¿½ï¿½ï¿½ï¿½
+	Params.AddIgnoredActor(Owner); // ³» Ä³¸¯ÅÍ´Â ¹«½Ã
 
 	if (GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params))
 	{
 		DrawDebugPoint(GetWorld(), HitResult.ImpactPoint, 10.f, FColor::Red, false, -1.f);
 
-		// 4. [ï¿½Ù½ï¿½] Ä«ï¿½Þ¶ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ 'Ä³ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½Ä¡'ï¿½Îºï¿½ï¿½ï¿½ ï¿½ï¿½È£ï¿½Û¿ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½Å¸ï¿½(TraceDistance) ï¿½ï¿½ï¿½ï¿½ ï¿½Ö´ï¿½ï¿½ï¿½ ï¿½Ë»ï¿½ï¿½Õ´Ï´ï¿½.
+		// 4. [ÇÙ½É] Ä«¸Þ¶ó ·¹ÀÌÀú°¡ ¸ÂÀº ÁöÁ¡ÀÌ 'Ä³¸¯ÅÍÀÇ À§Ä¡'·ÎºÎÅÍ »óÈ£ÀÛ¿ë °¡´ÉÇÑ °Å¸®(TraceDistance) ³»¿¡ ÀÖ´ÂÁö °Ë»çÇÕ´Ï´Ù.
 		float DistanceToPlayer = FVector::Dist(Owner->GetActorLocation(), HitResult.ImpactPoint);
 
 		if (DistanceToPlayer <= TraceDistance)
@@ -88,12 +88,12 @@ void UInteractionComponent::PerformLineTrace() {
 					FocusedActor = HitActor;
 					IInteractableInterface::Execute_OnBeginFocus(FocusedActor);
 				}
-				return; // ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ Ã£ï¿½ï¿½ï¿½ï¿½ï¿½Ç·ï¿½ ï¿½ï¿½ï¿½â¼­ ï¿½ï¿½ï¿½ï¿½
+				return; // ¼º°øÀûÀ¸·Î ¾ÆÀÌÅÛÀ» Ã£¾ÒÀ¸¹Ç·Î ¿©±â¼­ Á¾·á
 			}
 		}
 	}
 
-	// 5. ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½Å³ï¿½, ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½(TraceDistance) ï¿½ï¿½ï¿½Ì¸ï¿½ ï¿½ï¿½Ä¿ï¿½ï¿½ï¿½ï¿½ ï¿½ï¿½ï¿½ï¿½ï¿½Õ´Ï´ï¿½.
+	// 5. Çã°øÀ» º¸°Å³ª, ¾ÆÀÌÅÛÀÌ ¹üÀ§(TraceDistance) ¹ÛÀÌ¸é Æ÷Ä¿½º¸¦ ÇØÁ¦ÇÕ´Ï´Ù.
 	if (FocusedActor)
 	{
 		IInteractableInterface::Execute_OnEndFocus(FocusedActor);

@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Default/Ability/GAS/PFGGameplayTagStack.h"
@@ -18,7 +18,7 @@ bool FPFGGameplayTagStackContainer::ApplyTagCountDelta(FGameplayTag Tag, int32 D
 		return false;
 	}
 
-	// Items ë°°ì—´ì—ì„œ í•´ë‹¹ Tag í•­ëª© ì°¾ê¸°
+	// Items ¹è¿­¿¡¼­ ÇØ´ç Tag Ç×¸ñ Ã£±â
 	int32 FoundIndex = INDEX_NONE;
 	for (int32 i = 0; i < Items.Num(); ++i)
 	{
@@ -43,7 +43,7 @@ bool FPFGGameplayTagStackContainer::ApplyTagCountDelta(FGameplayTag Tag, int32 D
 			MarkItemDirty(Items.Last());
 		}
 	}
-	else // NewCount == 0 -> í•­ëª© ì œê±°
+	else // NewCount == 0 -> Ç×¸ñ Á¦°Å
 	{
 		if (FoundIndex != INDEX_NONE)
 		{
@@ -58,7 +58,7 @@ bool FPFGGameplayTagStackContainer::ApplyTagCountDelta(FGameplayTag Tag, int32 D
 		TagCountMap.Remove(Tag);
 	}
 
-	// ì¡´ì¬ ì—¬ë¶€(0 <-> ì–‘ìˆ˜) ì „í™˜ì´ ìˆì—ˆëŠ”ì§€
+	// Á¸Àç ¿©ºÎ(0 <-> ¾ç¼ö) ÀüÈ¯ÀÌ ÀÖ¾ú´ÂÁö
 	const bool bWasPresent = OldCount > 0;
 	const bool bIsPresent = NewCount > 0;
 	return bWasPresent != bIsPresent;
@@ -78,8 +78,8 @@ void FPFGGameplayTagStackContainer::RebuildTagCountMap()
 
 void FPFGGameplayTagStackContainer::PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize)
 {
-	// ì œê±°ëœ ì¸ë±ìŠ¤ë“¤ì„ ë¯¸ë¦¬ ë§µì—ì„œ ë¹¼ë‘”ë‹¤ (Itemsê°€ ì•„ì§ ê·¸ëŒ€ë¡œì¸ ì‹œì ì´ë¼
-	// ì¸ë±ìŠ¤ ê¸°ë°˜ìœ¼ë¡œ ì§ì ‘ ì œê±° ê°€ëŠ¥)
+	// Á¦°ÅµÈ ÀÎµ¦½ºµéÀ» ¹Ì¸® ¸Ê¿¡¼­ »©µĞ´Ù (Items°¡ ¾ÆÁ÷ ±×´ë·ÎÀÎ ½ÃÁ¡ÀÌ¶ó
+	// ÀÎµ¦½º ±â¹İÀ¸·Î Á÷Á¢ Á¦°Å °¡´É)
 	for (int32 Index : RemovedIndices)
 	{
 		if (Items.IsValidIndex(Index))

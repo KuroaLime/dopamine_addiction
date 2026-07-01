@@ -1,4 +1,4 @@
-Ôªø// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -14,10 +14,10 @@ struct FLobbySlotData
     GENERATED_BODY()
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    int32 SlotIndex = -1; // Ï¥àÍ∏∞Í∞í ÏÑ§Ï†ï
+    int32 SlotIndex = -1; // √ ±‚∞™ º≥¡§
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    TObjectPtr<APlayerState> PlayerState = nullptr; // Ìè¨Ïù∏ÌÑ∞ ÏïàÏ†ÑÏÑ± Í∞ïÌôî
+    TObjectPtr<APlayerState> PlayerState = nullptr; // ∆˜¿Œ≈Õ æ»¿¸º∫ ∞≠»≠
 
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     bool bIsReady = false;

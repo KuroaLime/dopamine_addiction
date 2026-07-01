@@ -27,6 +27,7 @@ public:
 	virtual void PopMode() override;
 	virtual void SetUITimer(int32 time) override;
 	virtual EGamePhase GetCurrentPhase() override;
+	virtual void PickupNearestCard() override;
 
 protected:
 	virtual void BeginPlay() override;
@@ -102,6 +103,9 @@ public:
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestPickupCard(ACardDropActor* TargetCard);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RequestPickupNearestCard();
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SubmitSeotdaSelection(bool bCard0, bool bCard1, bool bCard2);

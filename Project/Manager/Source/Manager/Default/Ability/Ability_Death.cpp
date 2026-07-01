@@ -6,7 +6,6 @@
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/MainPlayerState.h"
-#include "Game/InGame/Card/CardGameService.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 
@@ -93,7 +92,7 @@ void UAbility_Death::DropAllPlayerCards()
 		return;
 	}
 
-	GameMode->GetCardGameService()->DropOwnedCardsFromPlayer(PlayerState, OwnerCharacter->GetActorLocation());
+	GameMode->DropOwnedCardsFromPlayer(PlayerState, OwnerCharacter->GetActorLocation());
 }
 
 void UAbility_Death::Server_ExecuteCountDown()

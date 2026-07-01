@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -46,7 +46,7 @@ protected:
 	bool bReady = false;
 
 	////////////////////////////////////////////////////////////////
-	// ìì—°ìŠ¤ëŸ¬ìš´ ë°© ì´ë™ì„ ìœ„í•œ íƒ€ì´ë¨¸ í•¸ë“¤ëŸ¬ì™€ ë³´ê°„ ë³€ìˆ˜ë“¤
+	// ÀÚ¿¬½º·¯¿î ¹æ ÀÌµ¿À» À§ÇÑ Å¸ÀÌ¸Ó ÇÚµé·¯¿Í º¸°£ º¯¼öµé
 	FTimerHandle MovementTimerHandle;
 	FVector StartLocation;
 	FVector TargetLocation;

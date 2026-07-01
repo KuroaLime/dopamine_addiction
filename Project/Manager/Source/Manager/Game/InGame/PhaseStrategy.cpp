@@ -2,7 +2,6 @@
 
 
 #include "Game/InGame/PhaseStrategy.h"
-#include "Game/InGame/MainGameMode.h"
 #include "GameFramework/GameModeBase.h"
 #include "GameFramework/GameStateBase.h"
 #include "GameFramework/PlayerController.h"
@@ -36,9 +35,4 @@ IPhasePlayerControllerInterface* UPhaseStrategy::GetPhasePlayerController() cons
     if (UWorld* World = GetWorld())
         return Cast<IPhasePlayerControllerInterface>(World->GetFirstPlayerController());
     return nullptr;
-}
-
-AMainGameMode* UPhaseStrategy::GetMainGameMode() const
-{
-    return Cast<AMainGameMode>(OwnerGameMode);
 }

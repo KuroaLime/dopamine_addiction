@@ -11,7 +11,7 @@
 class AMainCharacter;
 
 /**
- * AMainCharacter의 데이터를 매 프레임 캐싱하여
+ * AManagerCharacter의 데이터를 매 프레임 캐싱하여
  * 애니메이션 블루프린트(ABP)에 형변환 오버헤드 없이 전달하는 뼈대 AnimInstance.
  *
  * 데이터 소스: 이동=무브먼트 컴포넌트 / 조준·사격=GAS 태그 / 무기=PlayerState / 사망=HP / 왼손IK=장착 무기 소켓.

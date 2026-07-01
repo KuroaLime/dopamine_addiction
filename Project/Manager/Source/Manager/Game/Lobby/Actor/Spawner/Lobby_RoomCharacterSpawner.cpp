@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Game/Lobby/Actor/Spawner/Lobby_RoomCharacterSpawner.h"
@@ -20,7 +20,7 @@ ALobby_RoomCharacterSpawner::ALobby_RoomCharacterSpawner()
 	UserInfoWidget = CreateDefaultSubobject<UWidgetComponent>(TEXT("UserInfoWidget"));
 	UserInfoWidget->SetupAttachment(RootComponent);
 
-	// UserInfoWidget ì´ˆê¸° ì„¤ì •
+	// UserInfoWidget ÃÊ±â ¼³Á¤
     UserInfoWidget->SetWidgetSpace(EWidgetSpace::World);
     UserInfoWidget->SetDrawSize(FVector2D(300.f, 300.f));
     UserInfoWidget->SetVisibility(false);
@@ -97,8 +97,8 @@ void ALobby_RoomCharacterSpawner::UpdateLobbyCharacters(const TArray<FRoomMember
     {
         if (!SpawnedCharacter) SpawnCharacter();
 		UpdateUserInfoWidget(Members[SpawnPointID]);
-        // (ì„ íƒ ì‚¬í•­) ë‚˜ì¤‘ì— ì—¬ê¸°ì„œ Members[SpawnPointID].isReady ê°’ì— ë”°ë¼ 
-        // SpawnedCharacterì˜ ì• ë‹ˆë©”ì´ì…˜ì„ ë°”ê¾¸ê±°ë‚˜ í•  ìˆ˜ ìžˆìŠµë‹ˆë‹¤!
+        // (¼±ÅÃ »çÇ×) ³ªÁß¿¡ ¿©±â¼­ Members[SpawnPointID].isReady °ª¿¡ µû¶ó 
+        // SpawnedCharacterÀÇ ¾Ö´Ï¸ÞÀÌ¼ÇÀ» ¹Ù²Ù°Å³ª ÇÒ ¼ö ÀÖ½À´Ï´Ù!
     }
     else
         if (SpawnedCharacter) ClearCharacter();

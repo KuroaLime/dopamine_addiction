@@ -31,6 +31,7 @@
 #include "GameFramework/PlayerStart.h"
 #include "Game/InGame/TPS/System/HealthRegenComponent.h"
 #include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/ManagerGameMode.h"
 #include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 
@@ -411,7 +412,7 @@ float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& 
 
 		if (OldHP > 0 && PS->CurPlayerData.CurrentHP <= 0)
 		{
-			DS_LOG(TEXT("[DS] TPS DeathTrigger Player=%s Damage=%.2f HP=%d->%d"),
+			UE_LOG(LogTemp, Warning, TEXT("[DS] TPS DeathTrigger Player=%s Damage=%.2f HP=%d->%d"),
 				*PS->GetPlayerName(),
 				ActualDamage,
 				OldHP,

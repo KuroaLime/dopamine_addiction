@@ -1,8 +1,7 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Game/InGame/TPS/UI/Shop/OwnedCard.h"
-#include "Manager.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Button.h"
@@ -71,7 +70,7 @@ void UOwnedCard::NativeOnMouseEnter(const FGeometry& MyGeometry, const FPointerE
 	Super::NativeOnMouseEnter(MyGeometry, MouseEvent);
 	bool bIsFlipping = GetWorld()->GetTimerManager().IsTimerActive(ClickSequenceTimerHandle) ||
 		(CardFlipAnim && IsAnimationPlaying(CardFlipAnim));
-	// ë’¤ì§‘ížˆëŠ” ì¤‘ì´ ì•„ë‹ ë•Œë§Œ í˜¸ë²„ í™•ëŒ€ ì• ë‹ˆë©”ì´ì…˜ ìž¬ìƒ
+	// µÚÁýÈ÷´Â ÁßÀÌ ¾Æ´Ò ¶§¸¸ È£¹ö È®´ë ¾Ö´Ï¸ÞÀÌ¼Ç Àç»ý
 	if (bIsFaceUp && HoverAnim && !bIsFlipping) {
 		PlayAnimation(HoverAnim, 0.f, 1, EUMGSequencePlayMode::Forward);
 	}
@@ -81,7 +80,7 @@ void UOwnedCard::NativeOnMouseLeave(const FPointerEvent& MouseEvent)
 	Super::NativeOnMouseLeave(MouseEvent);
 	bool bIsFlipping = GetWorld()->GetTimerManager().IsTimerActive(ClickSequenceTimerHandle) ||
 		(CardFlipAnim && IsAnimationPlaying(CardFlipAnim));
-	// ë’¤ì§‘ížˆëŠ” ì¤‘ì´ ì•„ë‹ ë•Œë§Œ í˜¸ë²„ ì¶•ì†Œ ì• ë‹ˆë©”ì´ì…˜ ìž¬ìƒ
+	// µÚÁýÈ÷´Â ÁßÀÌ ¾Æ´Ò ¶§¸¸ È£¹ö Ãà¼Ò ¾Ö´Ï¸ÞÀÌ¼Ç Àç»ý
 	if (bIsFaceUp && HoverAnim && !bIsFlipping) {
 		PlayAnimation(HoverAnim, 0.f, 1, EUMGSequencePlayMode::Reverse);
 	}
@@ -118,7 +117,7 @@ void UOwnedCard::PlayFlipAnimation()
 {
 	if (GEngine)
 	{
-		DS_SCREEN(-1, 3.f, FColor::Yellow, TEXT("PlayFlipAnimation Called!"));
+		GEngine->AddOnScreenDebugMessage(-1, 3.f, FColor::Yellow, TEXT("PlayFlipAnimation Called!"));
 	}
 	if (ClickAnim)
 	{

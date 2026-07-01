@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Game/InGame/TPS/System/HealthRegenComponent.h"
@@ -25,7 +25,7 @@ void UHealthRegenComponent::BeginPlay()
     AActor* OwnerActor = GetOwner();
     if (OwnerActor && OwnerActor->HasAuthority())
     {
-        //ëšœê¹Œ ë§ì„ë•Œ í•´ë‹¹ í•¨ìˆ˜ë¥¼ ì‹¤í–‰í•˜ë¼
+        //¶Ñ±î ¸ÂÀ»¶§ ÇØ´ç ÇÔ¼ö¸¦ ½ÇÇàÇÏ¶ó
         OwnerActor->OnTakeAnyDamage.AddDynamic(this, &UHealthRegenComponent::OnOwnerTakeDamage);
         StartRegenCooldown();
     }
@@ -42,11 +42,11 @@ void UHealthRegenComponent::OnOwnerTakeDamage(AActor* DamagedActor, float Damage
 {
     if (Damage > 0.0f)
     {
-        //íƒ€ì´ë¨¸ ê°•ì œ ì¢…ë£Œ ë° ì´ˆê¸°í™”
+        //Å¸ÀÌ¸Ó °­Á¦ Á¾·á ¹× ÃÊ±âÈ­
         GetWorld()->GetTimerManager().ClearTimer(RegenLoopTimerHandle);
         GetWorld()->GetTimerManager().ClearTimer(RegenCooldownTimerHandle);
         FractionalHP = 0.0f;
-        //ì¬ì‹œì‘ ëŒ€ê¸°ì‹œê°„ íƒ€ì´ë¨¸ ì‹œì‘
+        //Àç½ÃÀÛ ´ë±â½Ã°£ Å¸ÀÌ¸Ó ½ÃÀÛ
         StartRegenCooldown();
     }
 }

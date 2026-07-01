@@ -4,7 +4,7 @@
 #include "GameFramework/GameModeBase.h"
 #include "Game/InGame/Interface/PhaseGameModeInterface.h"
 #include "Game/Protocol_Client/Protocol_InGame.h"
-#include "Game/InGame/Card/CardPlacementService.h"
+#include "Game/InGame/Card/Data/SeotdaTypes.h"
 #include "MainGameMode.generated.h"
 
 class UPhaseStrategy;
@@ -14,7 +14,6 @@ class AMainPlayerController;
 class AMainPlayerState;
 class ACardDropActor;
 class USpawnManagerComponent;
-class UCardGameService;
 
 enum class EDediServerPhase : uint8
 {
@@ -66,31 +65,12 @@ public:
     virtual void BroadcastSwitchLevel(FName LevelToUnload, FName LevelToLoad) override;
 
 public:
-    // ===== Phase Strategy Context API =====
-    // 페이즈 전략(UTPSPhaseStrategy/UCardPhaseStrategy)이 셋업을 수행할 때 호출하는 공개 연산.
-    // 상태/타이머는 GameMode가 소유하며, 전략은 friend 없이 이 API로만 Context를 조작한다.
-    void EnsureBattleRoyaleStageLoaded();
-    void SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context);
-    void SetPlayerPawnGameplayState(bool bVisible, bool bMovementEnabled, bool bCollisionEnabled, const TCHAR* Context);
-    void ClearPlayerPawnMovementBases(const TCHAR* Context);
-    void RequestMovePlayersToCardIslandSeats(const TCHAR* Context);
-
-public:
-    // 카드게임 도메인(카드/섯다 상태·로직)은 UCardGameService(CardGameService.h)가 소유.
-    // 외부(PC RPC)·전략은 이 접근자를 통해 서비스에 위임한다.
-    UCardGameService* GetCardGameService() const { return CardGameService; }
-
-    // 서비스가 참조하는 매치 상태/설정 접근자(서비스 Init/런타임에서 사용).
-    int32 GetCurrentRound() const { return CurrentRound; }
-    EDediServerPhase GetCurrentServerPhase() const { return CurrentServerPhase; }
-    float GetCardPickupRange() const { return CardPickupRange; }
-    int32 GetMaxCardsPerPlayerPerRound() const { return MaxCardsPerPlayerPerRound; }
-    TSubclassOf<ACardDropActor> GetCardDropActorClass() const { return CardDropActorClass; }
-    int32 GetSeotdaServerSeedPot() const { return SeotdaServerSeedPot; }
-    int32 GetSeotdaBaseCallBet() const { return SeotdaBaseCallBet; }
-
-public:
+    void OnPlayerAction(AActor* Executor, FName ActionName);
     bool IsBattleRoyalePhase() const;
+    bool TryPickupCard(AMainPlayerController* RequestingPC, ACardDropActor* TargetCard);
+    bool TryPickupNearestCard(AMainPlayerController* RequestingPC);
+    bool SubmitSeotdaSelection(AMainPlayerController* RequestingPC, bool bCard0, bool bCard1, bool bCard2);
+    bool SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, EBettingAction Action);
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "GameMode|Setup")
@@ -283,10 +263,71 @@ private:
     EDediServerPhase CurrentServerPhase = EDediServerPhase::None;
     bool bGameEndReached = false;
 
-    // 카드/섯다 런타임 상태(ServerCardRecords/SeotdaRoundStates 등)와 구조체는
-    // UCardGameService(CardGameService.h)로 이전됨. GameMode는 서비스 포인터만 보유한다.
+    struct FServerCardRecord
+    {
+        int32 CardInstanceId = 0;
+        ECardID CardID = ECardID::None;
+        ECardRuntimeState State = ECardRuntimeState::None;
+        TWeakObjectPtr<AMainPlayerState> OwnerPlayerState;
+        TWeakObjectPtr<ACardDropActor> DropActor;
+        int32 CreatedRound = 0;
+    };
+
+    struct FCardIslandDropZone
+    {
+        TWeakObjectPtr<AActor> ZoneActor;
+        FBox Bounds;
+        FVector Center = FVector::ZeroVector;
+        FName IslandKey = NAME_None;
+        FString Source;
+        int32 SortOrder = 1000;
+    };
+
+    int32 NextCardInstanceId = 1;
+    TMap<int32, FServerCardRecord> ServerCardRecords;
+
     UPROPERTY()
-    UCardGameService* CardGameService = nullptr;
+    TArray<TObjectPtr<ACardDropActor>> ActiveCardDrops;
+
+    enum class ESeotdaSpecialRule : uint8
+    {
+        None = 0,
+        TtaengJabi,
+        Gusa,
+        MeongteongguriGusa,
+        AmhaengEosa
+    };
+
+    struct FSeotdaHandResult
+    {
+        int32 Rank = 0;
+        int32 SubRank = 0;
+        FString Name;
+        TArray<int32> UsedCardInstanceIds;
+        ESeotdaSpecialRule SpecialRule = ESeotdaSpecialRule::None;
+        bool bForcesRedeal = false;
+
+    };
+
+    struct FSeotdaPlayerRoundState
+    {
+        TWeakObjectPtr<AMainPlayerState> PlayerState;
+        TArray<int32> SelectedCardInstanceIds;
+        FSeotdaHandResult HandResult;
+        bool bSubmitted = false;
+        bool bFolded = false;
+        bool bActedThisBetRound = false;
+        int32 BetMoney = 0;
+    };
+
+    TMap<AMainPlayerState*, FSeotdaPlayerRoundState> SeotdaRoundStates;
+    TArray<TWeakObjectPtr<AMainPlayerState>> SeotdaTurnOrder;
+    int32 SeotdaPot = 0;
+    int32 SeotdaCurrentBet = 0;
+    int32 SeotdaCurrentTurnIndex = 0;
+    bool bSeotdaBettingActive = false;
+    bool bSeotdaRoundResolved = false;
+    FString LastSeotdaRoundResultSummary = TEXT("Pending");
 
     // ?쒕쾭媛 踰좏똿 ?쒖옉 ??湲곕낯?쇰줈 ?ｌ뼱二쇰뒗 ?먮룉. ?뚮젅?댁뼱 ?덉뿉?쒕뒗 李④컧?섏? ?딆쓬.
     UPROPERTY(EditDefaultsOnly, Category = "Seotda|Betting")
@@ -315,6 +356,10 @@ private:
     void LoadServerStreamLevelForPhase(FName LevelToLoad, const TCHAR* Context);
 
 
+    void SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context);
+    void SetPlayerPawnGameplayState(bool bVisible, bool bMovementEnabled, bool bCollisionEnabled, const TCHAR* Context);
+    void ClearPlayerPawnMovementBases(const TCHAR* Context);
+    void RequestMovePlayersToCardIslandSeats(const TCHAR* Context);
     void ScheduleCardSeatMoveRetry(const TCHAR* Context);
     void RetryMovePlayersToCardIslandSeats();
     bool MovePlayersToCardIslandSeats(const TCHAR* Context);
@@ -322,21 +367,65 @@ private:
 
     void StartTimedServerPhase(EDediServerPhase NewPhase, int32 DurationSeconds);
     void OnServerPhaseTick();
-public:
-    // UCardGameService가 OwnerGM을 통해 호출하는 GameMode 연산(서버 페이즈/카드 배치/설정).
-    void SetServerRemainingTime(int32 NewTime);
-    void SetRemainingPhaseSeconds(int32 NewValue) { RemainingPhaseSeconds = NewValue; }
     void FinishCurrentServerPhase(const TCHAR* Reason);
     void ClearServerPhaseTimer();
-    FCardPlacementService MakeCardPlacementService() const;
-    const TCHAR* GetServerPhaseName(EDediServerPhase Phase) const;
-    float GetCardDeathDropStartRadius() const { return CardDeathDropStartRadius; }
-    float GetCardDeathDropGroundOffsetZ() const { return CardDeathDropGroundOffsetZ; }
-    int32 GetCardIslandDropExpectedZoneCount() const { return CardIslandDropExpectedZoneCount; }
+    void SetServerRemainingTime(int32 NewTime);
+
+    FString GetOwnedCardsDebugString(const AMainPlayerState* PS) const;
+    TArray<ECardID> BuildCardBundleIDs() const;
+    void ShuffleCardIDs(TArray<ECardID>& CardIDs) const;
+    FVector GetDistributedCardDropLocation(int32 Index, int32 TotalCount) const;
+
+    TArray<TArray<ECardID>> BuildBalancedIslandCardGroups() const;
+    int32 GetCardIslandBalanceValue(ECardID CardID) const;
+    int32 GetCardIslandGroupBalanceValue(const TArray<ECardID>& CardIDs) const;
+    TArray<FCardIslandDropZone> FindCardIslandDropZones() const;
+    bool IsSeasonIslandActorName(const FString& ActorName) const;
+    bool IsCardIslandSurfaceWalkable(const FHitResult& Hit) const;
+    bool IsCardDropLocationClear(const FVector& CandidateLocation) const;
+    bool IsFarEnoughFromIslandCards(const FVector& CandidateLocation, const TArray<FVector>& ExistingIslandLocations) const;
+    bool PickIslandCardDropLocation(const FCardIslandDropZone& DropZone, const TArray<FVector>& ExistingIslandLocations, int32 IslandIndex, int32 SlotIndex, FVector& OutLocation) const;
+    bool IsCardDropZSane(const FCardIslandDropZone& DropZone, float ReferenceNavZ, const FVector& Candidate) const;
+    bool IsInsideNoDropZone(const FVector& Candidate) const;
+    bool HasOverheadClearance(const FVector& Candidate) const;
+    bool PickDeathCardDropLocation(const FVector& DeathLocation, const TArray<FVector>& ExistingDropLocations, int32 CardIndex, FVector& OutLocation) const;
+
+    int32 CreateCardInstance(ECardID CardID);
+
+public:
+    ACardDropActor* SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation);
+    int32 DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const FVector& BaseDropLocation);
 
 private:
-    // 카드/섯다 진입점·로직(TryPickupCard/SubmitSeotda*/ResolveSeotdaRoundResult 등)은
-    // UCardGameService(CardGameService.h)로 이전됨.
+    void SpawnRoundCardBundleForBattleRoyale();
+    void ClearCardDrops();
+
+    void EnsureThreeCardsForCardGame();
+    void ClearRoundCardsForAllPlayers();
+    bool GrantCardRecordToPlayer(int32 CardInstanceId, AMainPlayerState* TargetPS, const TCHAR* Context);
+    bool GrantNewCardToPlayer(AMainPlayerState* TargetPS, ECardID CardID, const TCHAR* Context);
+    ECardID PickSupplementCardIDForPlayer(const AMainPlayerState* TargetPS) const;
+    bool IsCardPickupAllowed() const;
+
+    void ResetSeotdaRoundStates();
+    void TryResolveSeotdaRoundIfReady();
+    void StartSeotdaBettingRound();
+    void AdvanceSeotdaBettingTurn();
+    void ResolveSeotdaRoundResult(const TCHAR* Reason);
+    void BroadcastSeotdaState() const;
+
+    AMainPlayerState* GetCurrentSeotdaTurnPlayer() const;
+    int32 GetSeotdaPlayerMoney(const AMainPlayerState* TargetPS) const;
+    int32 PaySeotdaBet(AMainPlayerState* TargetPS, int32 Amount);
+    int32 GetActiveSeotdaPlayerCount() const;
+    bool AreSeotdaBetsSettled() const;
+    FSeotdaHandResult EvaluateSeotdaHand(const FOwnedCardInfo& FirstCard, const FOwnedCardInfo& SecondCard) const;
+    int32 GetSeotdaCardMonth(ECardID CardID) const;
+    bool IsSeotdaGwang(ECardID CardID) const;
+    bool HasSeotdaMonths(int32 FirstMonth, int32 SecondMonth, int32 A, int32 B) const;
+    int32 CompareSeotdaHands(const FSeotdaHandResult& A, const FSeotdaHandResult& B) const;
+    bool ShouldForceSeotdaRedeal() const;
+    bool TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reason);
 
 
     int32 GetReadyDuration() const;
@@ -344,6 +433,7 @@ private:
     int32 GetTransitionDuration() const;
     int32 GetCardGameDuration() const;
     int32 GetResultDuration() const;
+    const TCHAR* GetServerPhaseName(EDediServerPhase Phase) const;
 
     public:
         UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameMode|Spawn")

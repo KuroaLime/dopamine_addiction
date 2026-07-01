@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Default/Data/CharacterStateComponent.h"
@@ -101,7 +101,7 @@ int32 UCharacterStateComponent::GetCurrentAmmoCount() {
 	return 0;
 }
 
-//ë°ì´í„° í…Œì´ë¸” ë§Œë“¤ì–´ì„œ ìˆ˜ì • í•„ìš”(í•˜ë“œ)
+//µ¥ÀÌÅÍ Å×ÀÌºí ¸¸µé¾î¼­ ¼öÁ¤ ÇÊ¿ä(ÇÏµå)
 int32 UCharacterStateComponent::GetMaxAmmoCount() {
 	if (APawn* Pawn = Cast<APawn>(GetOwner())) {
 		if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {

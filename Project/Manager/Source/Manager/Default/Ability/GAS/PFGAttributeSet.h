@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -36,10 +36,10 @@ public:
 
 	virtual UWorld* GetWorld() const override;
 
-	// SubObject Replication ìš”êµ¬ì‚¬í•­:
-	// UActorComponent í•˜ìœ„ì˜ UObject(AttributeSet)ëŠ” ê¸°ë³¸ì ìœ¼ë¡œ ë„¤íŠ¸ì›Œí¬ ë³µì œ
-	// ëŒ€ìƒìœ¼ë¡œ ê°„ì£¼ë˜ì§€ ì•ŠëŠ”ë‹¤. trueë¥¼ ë°˜í™˜í•´ì•¼ ReplicateSubobjectsì—ì„œ
-	// ì´ ê°ì²´ë¥¼ ì±„ë„ì— ë“±ë¡í•˜ê³ , ì´ ê°ì²´ì˜ Replicated í”„ë¡œí¼í‹°ë“¤ì´ ì „ì†¡ëœë‹¤.
+	// SubObject Replication ¿ä±¸»çÇ×:
+	// UActorComponent ÇÏÀ§ÀÇ UObject(AttributeSet)´Â ±âº»ÀûÀ¸·Î ³×Æ®¿öÅ© º¹Á¦
+	// ´ë»óÀ¸·Î °£ÁÖµÇÁö ¾Ê´Â´Ù. true¸¦ ¹İÈ¯ÇØ¾ß ReplicateSubobjects¿¡¼­
+	// ÀÌ °´Ã¼¸¦ Ã¤³Î¿¡ µî·ÏÇÏ°í, ÀÌ °´Ã¼ÀÇ Replicated ÇÁ·ÎÆÛÆ¼µéÀÌ Àü¼ÛµÈ´Ù.
 	virtual bool IsSupportedForNetworking() const override { return true; }
 
 
@@ -51,10 +51,10 @@ public:
 
 	void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 
-	// ì„œë²„ ì „ìš©: Delta ì ìš© + Clamp
+	// ¼­¹ö Àü¿ë: Delta Àû¿ë + Clamp
 	void ApplyHealthDelta(float Delta);
 
-	// ì„œë²„ ì „ìš©: MaxHealth/MaxMana ë³€ê²½ ì‹œ CurrentValueë¥¼ ìƒˆ ë²”ìœ„ë¡œ ì¬ì¡°ì •
+	// ¼­¹ö Àü¿ë: MaxHealth/MaxMana º¯°æ ½Ã CurrentValue¸¦ »õ ¹üÀ§·Î ÀçÁ¶Á¤
 	void SetMaxHealth(float NewMaxHealth);
 
 	DECLARE_MULTICAST_DELEGATE_TwoParams(FOnAttributeChanged, float /*OldValue*/, float /*NewValue*/);
@@ -68,7 +68,7 @@ protected:
 	void OnRep_MaxHealth(FPFGAttributeData OldValue);
 
 private:
-	// ë‚´ë¶€ ì „ìš©: Clampë¥¼ ê°•ì œí•˜ëŠ” ë‹¨ì¼ ì§„ì…ì .
-	// Attribute/MaxAttribute ì–‘ìª½ì—ì„œ ê³µí†µìœ¼ë¡œ ì‚¬ìš©í•´ Clamp ëˆ„ë½ì„ ë°©ì§€í•œë‹¤.
+	// ³»ºÎ Àü¿ë: Clamp¸¦ °­Á¦ÇÏ´Â ´ÜÀÏ ÁøÀÔÁ¡.
+	// Attribute/MaxAttribute ¾çÂÊ¿¡¼­ °øÅëÀ¸·Î »ç¿ëÇØ Clamp ´©¶ôÀ» ¹æÁöÇÑ´Ù.
 	static void ClampToMax(FPFGAttributeData& Attribute, const FPFGAttributeData& MaxAttribute);
 };

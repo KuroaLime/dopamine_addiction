@@ -2,7 +2,6 @@
 
 
 #include "Game/InGame/TPS/UI/Shop/ShopWidget.h"
-#include "Manager.h"
 #include "Game/InGame/TPS/UI/Shop/ShopButton.h"
 #include "Framework/Application/SlateApplication.h"
 #include "Game/InGame/TPS/UI/Shop/UpgradeSelectionWidget.h"
@@ -119,7 +118,7 @@ void UShopWidget::Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>&
 
 void UShopWidget::bRandomCardSelected(int32 CardID)
 {
-	DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("bRandomCardSelected")));
+	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("bRandomCardSelected")));
 
 	ReturnToShopButtons();
 	SendToSelectionCardID(CardID);

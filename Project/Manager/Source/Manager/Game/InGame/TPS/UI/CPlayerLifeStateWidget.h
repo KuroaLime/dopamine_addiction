@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -25,10 +25,10 @@ protected:
 
 private:
 
-	//ë°°ê²½
+	//¹è°æ
 	UPROPERTY()
 	class UImage* PSU_Background[2];
-	//í”Œë ˆì´ì–´ ì•„ì´ì½˜
+	//ÇÃ·¹ÀÌ¾î ¾ÆÀÌÄÜ
 	UPROPERTY()
 	class UImage* Player[4];
 };

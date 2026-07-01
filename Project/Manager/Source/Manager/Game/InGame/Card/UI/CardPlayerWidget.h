@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -31,7 +31,7 @@ public:
 	UPROPERTY(meta = (BindWidget))
 	UCardButtonWidget* Btn_Card3;
 
-	// ë‚´ í”Œë ˆì´ì–´ ì •ë³´ (ì¢Œì¸¡ í•˜ë‹¨)
+	// ³» ÇÃ·¹ÀÌ¾î Á¤º¸ (ÁÂÃø ÇÏ´Ü)
 	UPROPERTY(meta = (BindWidget))
 	UTextBlock* Txt_MyName;
 

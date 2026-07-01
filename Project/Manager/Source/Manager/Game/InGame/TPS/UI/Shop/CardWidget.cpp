@@ -2,7 +2,6 @@
 
 
 #include "Game/InGame/TPS/UI/Shop/CardWidget.h"
-#include "Manager.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Components/Button.h"
@@ -118,7 +117,7 @@ FReply UCardWidget::NativeOnMouseButtonDown(const FGeometry& MyGeometry, const F
 {
 	if (GEngine)
 	{
-		DS_SCREEN(-1, 2.f, FColor::Green, TEXT("Mouse Entered Card Widget!"));
+		GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Green, TEXT("Mouse Entered Card Widget!"));
 	}
 	if (MouseEvent.GetEffectingButton() == EKeys::LeftMouseButton) {
 		

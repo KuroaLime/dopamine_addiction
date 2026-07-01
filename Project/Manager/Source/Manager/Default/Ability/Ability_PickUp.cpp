@@ -2,11 +2,9 @@
 
 
 #include "Default/Ability/Ability_PickUp.h"
-#include "Game/InGame/MainGameMode.h"
-#include "Game/InGame/MainPlayerController.h"
-#include "Game/InGame/Card/CardGameService.h"
+#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "GameFramework/Character.h"
-#include "Engine/World.h"
+#include "GameFramework/Controller.h"
 
 UAbility_PickUp::UAbility_PickUp()
 {
@@ -28,21 +26,12 @@ void UAbility_PickUp::ActivateAbility()
 {
 	if (!OwnerCharacter || !OwnerCharacter->HasAuthority()) return;
 
-	// 이미 서버 권위 컨텍스트이므로 컨트롤러 Server RPC를 거치지 않고 카드 서비스를 직접 호출한다.
-	// (Ability_Death가 GetCardGameService()를 직접 쓰는 패턴과 동일)
-	if (AMainPlayerController* PC = Cast<AMainPlayerController>(OwnerCharacter->GetController()))
-	{
-		if (UWorld* World = OwnerCharacter->GetWorld())
-		{
-			if (AMainGameMode* GM = World->GetAuthGameMode<AMainGameMode>())
-			{
-				if (UCardGameService* Cards = GM->GetCardGameService())
-				{
-					Cards->TryPickupNearestCard(PC);
-				}
-			}
-		}
-	}
+	IPhasePlayerControllerInterface* PC_Interface =
+		Cast<IPhasePlayerControllerInterface>(OwnerCharacter->GetController());
+
+	if (!PC_Interface) return;
+
+	PC_Interface->PickupNearestCard();
 
 	EndAbilityNow();
 }

@@ -2,7 +2,6 @@
 
 
 #include "Default/Animation/PlayerAnimInstance.h"
-#include "Manager.h"
 #include "KismetAnimationLibrary.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -81,7 +80,8 @@ void UPlayerAnimInstance::PlayFireMontage(EWeaponType WeaponType)
 {
 	if (WeaponFireMontages.Contains(WeaponType)) {
 		if (UAnimMontage* TargetMontage = WeaponFireMontages[WeaponType]) {
-			DS_SCREEN(1, 1.1f, FColor::Yellow, TEXT("WeaponActorsss"));
+			if (GEngine)
+				GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Yellow, TEXT("WeaponActorsss"));
 			Montage_Play(TargetMontage);
 		}
 	}

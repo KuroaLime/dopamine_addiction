@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Default/Ability/GAS/PFGASC.h"
@@ -65,7 +65,7 @@ void UPFGASC::TickComponent(float DeltaTime, ELevelTick TickType, FActorComponen
 	Super::TickComponent(DeltaTime, TickType, ThisTickFunction);
 }
 
-// ë³µì œí•  ë³€ìˆ˜ë“¤ ë“±ë¡
+// º¹Á¦ÇÒ º¯¼öµé µî·Ï
 void UPFGASC::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
@@ -98,7 +98,7 @@ float UPFGASC::GetServerWorldTime() const
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// (ë¬¸ì œ 1) Ability CDO ì¡°íšŒ - í´ë¼ì´ì–¸íŠ¸ë„ ì •ì˜ ë°ì´í„° ì ‘ê·¼ ê°€ëŠ¥
+// (¹®Á¦ 1) Ability CDO Á¶È¸ - Å¬¶óÀÌ¾ğÆ®µµ Á¤ÀÇ µ¥ÀÌÅÍ Á¢±Ù °¡´É
 /////////////////////////////////////////////////////////////////////////////
 
 const UPFGAbility* UPFGASC::GetAbilityCDO(TSubclassOf<UPFGAbility> AbilityClass)
@@ -108,13 +108,13 @@ const UPFGAbility* UPFGASC::GetAbilityCDO(TSubclassOf<UPFGAbility> AbilityClass)
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// (ë¬¸ì œ 2) GameplayTag Stack
+// (¹®Á¦ 2) GameplayTag Stack
 /////////////////////////////////////////////////////////////////////////////
 
 void UPFGASC::OnRep_TagStacks()
 {
-	// RebuildTagCountMapì€ FastArray Pre/PostReplicated ì½œë°±ì—ì„œ ì´ë¯¸ í˜¸ì¶œë¨.
-	// ì—¬ê¸°ì„œëŠ” ë³€ê²½ë¶„(Added/Removed) ë¸ë¦¬ê²Œì´íŠ¸ë§Œ ë°œí–‰.
+	// RebuildTagCountMapÀº FastArray Pre/PostReplicated Äİ¹é¿¡¼­ ÀÌ¹Ì È£ÃâµÊ.
+	// ¿©±â¼­´Â º¯°æºĞ(Added/Removed) µ¨¸®°ÔÀÌÆ®¸¸ ¹ßÇà.
 	TagStacks.RebuildTagCountMap();
 	BroadcastTagStackDelta();
 }
@@ -202,7 +202,7 @@ bool UPFGASC::HasMatchingGameplayTag(FGameplayTag Tag) const
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// FastArray ì½œë°±
+// FastArray Äİ¹é
 /////////////////////////////////////////////////////////////////////////////
 
 void FPFGAbilitySpecContainer::PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize) {}
@@ -230,7 +230,7 @@ void UPFGASC::RebuildActiveEffectIndexMap()
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Ability ë¶€ì—¬ / ì œê±° / ì¡°íšŒ
+// Ability ºÎ¿© / Á¦°Å / Á¶È¸
 /////////////////////////////////////////////////////////////////////////////
 
 void UPFGASC::GiveAbility(TSubclassOf<UPFGAbility> AbilityClass, int32 Level, bool bAllowStacking)
@@ -284,9 +284,9 @@ bool UPFGASC::RemoveAbility(int32 AbilityID)
 		{
 			if (Spec.AbilityInstance)
 			{
-				// (ë¬¸ì œ 7) ì§„í–‰ ì¤‘ì¸ ì–´ë¹Œë¦¬í‹°ë¥¼ ë¨¼ì € ì·¨ì†Œ(íƒ€ì´ë¨¸/ë¸ë¦¬ê²Œì´íŠ¸ ì •ë¦¬)í•œ ë’¤,
-				// GCê°€ ìˆ˜ê±°í•˜ë„ë¡ ëª…ì‹œì ìœ¼ë¡œ Mark. ì°¸ì¡°ë¥¼ ëŠê¸° ì „ì— CancelAbilityë¥¼ í˜¸ì¶œí•´
-				// EndAbility ë‚´ë¶€ì—ì„œ OwnerASC ë“± ë©¤ë²„ë¥¼ ì•ˆì „í•˜ê²Œ ì‚¬ìš©í•  ìˆ˜ ìˆê²Œ í•œë‹¤.
+				// (¹®Á¦ 7) ÁøÇà ÁßÀÎ ¾îºô¸®Æ¼¸¦ ¸ÕÀú Ãë¼Ò(Å¸ÀÌ¸Ó/µ¨¸®°ÔÀÌÆ® Á¤¸®)ÇÑ µÚ,
+				// GC°¡ ¼ö°ÅÇÏµµ·Ï ¸í½ÃÀûÀ¸·Î Mark. ÂüÁ¶¸¦ ²÷±â Àü¿¡ CancelAbility¸¦ È£ÃâÇØ
+				// EndAbility ³»ºÎ¿¡¼­ OwnerASC µî ¸â¹ö¸¦ ¾ÈÀüÇÏ°Ô »ç¿ëÇÒ ¼ö ÀÖ°Ô ÇÑ´Ù.
 				Spec.AbilityInstance->CancelAbility();
 				Spec.AbilityInstance->ClearInterfaceCache();
 				Spec.AbilityInstance->MarkAsGarbage();
@@ -371,8 +371,8 @@ EPFGAbilityActivationResult UPFGASC::TryActivateAbilityByTag(FGameplayTag Abilit
 		return EPFGAbilityActivationResult::Failed_OnCooldown;
 	}
 
-	// í´ë¼ì´ì–¸íŠ¸ì—ì„œë„ CDO ê¸°ë°˜ìœ¼ë¡œ ì‚¬ì „ ê²€ì‚¬(ë¹ ë¥¸ ì‹¤íŒ¨) ê°€ëŠ¥.
-	// ì‹¤ì œ ê¶Œí•œ ìˆëŠ” íŒì •ì€ ì„œë²„ì˜ InternalTryActivateAbilityByTag(CanExecute)ì—ì„œ ìˆ˜í–‰ë¨.
+	// Å¬¶óÀÌ¾ğÆ®¿¡¼­µµ CDO ±â¹İÀ¸·Î »çÀü °Ë»ç(ºü¸¥ ½ÇÆĞ) °¡´É.
+	// ½ÇÁ¦ ±ÇÇÑ ÀÖ´Â ÆÇÁ¤Àº ¼­¹öÀÇ InternalTryActivateAbilityByTag(CanExecute)¿¡¼­ ¼öÇàµÊ.
 	if (const UPFGAbility* CDO = GetAbilityCDO(Spec->AbilityClass))
 	{
 		if (!CDO->GetActivationBlockedTags().IsEmpty() &&
@@ -401,7 +401,7 @@ EPFGAbilityActivationResult UPFGASC::TryActivateAbilityByTag(FGameplayTag Abilit
 	{
 		const FPFGPredictionKey NewKey = GenerateNewPredictionKey();
 
-		// TODO(Prediction í™•ì¥): ë¡œì»¬ cosmetic ì¦‰ì‹œ ì¬ìƒ + NewKey ë³´ë¥˜ ëª©ë¡ ì €ì¥
+		// TODO(Prediction È®Àå): ·ÎÄÃ cosmetic Áï½Ã Àç»ı + NewKey º¸·ù ¸ñ·Ï ÀúÀå
 
 		APawn* OwnerPawn = Cast<APawn>(GetOwner());
 		if (OwnerPawn && OwnerPawn->IsLocallyControlled())
@@ -475,7 +475,7 @@ bool UPFGASC::InternalTryActivateAbilityByTag(FGameplayTag AbilityTag, FPFGPredi
 		return false;
 	}
 
-	// ìµœì¢… ê¶Œí•œ íŒì •ì€ TryActivateAbility ë‚´ë¶€ì˜ CanExecute (BlockedTags/RequiredTags/Cost í¬í•¨)
+	// ÃÖÁ¾ ±ÇÇÑ ÆÇÁ¤Àº TryActivateAbility ³»ºÎÀÇ CanExecute (BlockedTags/RequiredTags/Cost Æ÷ÇÔ)
 	const bool bActivated = Spec->AbilityInstance->TryActivateAbility();
 	if (bActivated && Spec->CooldownDuration > 0.f && !Spec->CooldownTags.IsEmpty())
 	{
@@ -538,13 +538,13 @@ bool UPFGASC::HandleGameplayEvent(FGameplayTag EventTag, const FPFGGameplayEvent
 
 	bool bAnyActivated = false;
 
-	// EventTagì™€ ì¼ì¹˜í•˜ëŠ” TriggerTagsë¥¼ ê°€ì§„ ëª¨ë“  ì–´ë¹Œë¦¬í‹°ë¥¼ ì‹œë„í•œë‹¤.
-	// ê°œë³„ ì–´ë¹Œë¦¬í‹°ê°€ ì¿¨ë‹¤ìš´/CanExecuteë¡œ ì‹¤íŒ¨í•´ë„ ë‚˜ë¨¸ì§€ ì–´ë¹Œë¦¬í‹°ëŠ” ê³„ì† ì‹œë„ëœë‹¤.
+	// EventTag¿Í ÀÏÄ¡ÇÏ´Â TriggerTags¸¦ °¡Áø ¸ğµç ¾îºô¸®Æ¼¸¦ ½ÃµµÇÑ´Ù.
+	// °³º° ¾îºô¸®Æ¼°¡ Äğ´Ù¿î/CanExecute·Î ½ÇÆĞÇØµµ ³ª¸ÓÁö ¾îºô¸®Æ¼´Â °è¼Ó ½ÃµµµÈ´Ù.
 	//
-	// ì£¼ì˜: TryActivateAbilityWithEvent ë‚´ë¶€(CancelAbilitiesWithTag ë“±)ì—ì„œ
-	// AbilitySpecContainer.Itemsê°€ ë³€ê²½(Remove ë“±)ë  ê°€ëŠ¥ì„±ì´ ìˆëŠ” ì½”ë“œë² ì´ìŠ¤ë¼ë©´
-	// ì¸ë±ìŠ¤ ê¸°ë°˜ ìˆœíšŒë¡œ ë°”ê¾¸ëŠ” ê²ƒì„ ê³ ë ¤í•  ê²ƒ. í˜„ì¬ êµ¬í˜„ì—ì„œëŠ” ì–´ë¹Œë¦¬í‹° ì‹¤í–‰ ê²½ë¡œê°€
-	// Spec ë°°ì—´ì„ ì§ì ‘ ë³€í˜•í•˜ì§€ ì•Šìœ¼ë¯€ë¡œ range-forë¡œ ì¶©ë¶„í•˜ë‹¤.
+	// ÁÖÀÇ: TryActivateAbilityWithEvent ³»ºÎ(CancelAbilitiesWithTag µî)¿¡¼­
+	// AbilitySpecContainer.Items°¡ º¯°æ(Remove µî)µÉ °¡´É¼ºÀÌ ÀÖ´Â ÄÚµåº£ÀÌ½º¶ó¸é
+	// ÀÎµ¦½º ±â¹İ ¼øÈ¸·Î ¹Ù²Ù´Â °ÍÀ» °í·ÁÇÒ °Í. ÇöÀç ±¸Çö¿¡¼­´Â ¾îºô¸®Æ¼ ½ÇÇà °æ·Î°¡
+	// Spec ¹è¿­À» Á÷Á¢ º¯ÇüÇÏÁö ¾ÊÀ¸¹Ç·Î range-for·Î ÃæºĞÇÏ´Ù.
 	for (FPFGAbilitySpec& Spec : AbilitySpecContainer.Items)
 	{
 		if (Spec.AbilityInstance && Spec.TriggerTags.HasTag(EventTag))
@@ -626,7 +626,7 @@ void UPFGASC::ClientRPC_ReceiveGameplayEvent_Implementation(FGameplayTag EventTa
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Cooldown - CooldownEndTime ê¸°ë°˜ (lazy cleanup)
+// Cooldown - CooldownEndTime ±â¹İ (lazy cleanup)
 /////////////////////////////////////////////////////////////////////////////
 
 bool UPFGASC::IsAbilityOnCooldown(FPFGAbilitySpec& Spec)
@@ -671,12 +671,12 @@ void UPFGASC::StartCooldown(FPFGAbilitySpec& Spec)
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// GameplayEffect / AttributeSet - Snapshot ê¸°ë°˜, ì´ë²¤íŠ¸ ë“œë¦¬ë¸
+// GameplayEffect / AttributeSet - Snapshot ±â¹İ, ÀÌº¥Æ® µå¸®ºì
 /////////////////////////////////////////////////////////////////////////////
 
 FActivePFGGameplayEffect* UPFGASC::FindActiveEffect(int32 ActiveHandle)
 {
-	// (ë¬¸ì œ 5) O(1) ì¡°íšŒ
+	// (¹®Á¦ 5) O(1) Á¶È¸
 	if (const int32* Index = ActiveEffectHandleToIndex.Find(ActiveHandle))
 	{
 		if (ActiveEffectsContainer.Items.IsValidIndex(*Index) &&
@@ -686,7 +686,7 @@ FActivePFGGameplayEffect* UPFGASC::FindActiveEffect(int32 ActiveHandle)
 		}
 	}
 
-	// ìºì‹œ ë¯¸ìŠ¤(ì¸ë±ìŠ¤ ë¶ˆì¼ì¹˜) ì‹œ 1íšŒ ì¬êµ¬ì¶• í›„ ì¬ì‹œë„ - ë°©ì–´ì  ì²˜ë¦¬
+	// Ä³½Ã ¹Ì½º(ÀÎµ¦½º ºÒÀÏÄ¡) ½Ã 1È¸ Àç±¸Ãà ÈÄ Àç½Ãµµ - ¹æ¾îÀû Ã³¸®
 	RebuildActiveEffectIndexMap();
 	if (const int32* Index = ActiveEffectHandleToIndex.Find(ActiveHandle))
 	{
@@ -756,7 +756,7 @@ void UPFGASC::ApplyGameplayEffectToSelf(UPFGGameplayEffect* Effect, int32 Source
 		ActiveEffectsContainer.Items.Add(Active);
 		ActiveEffectsContainer.MarkItemDirty(ActiveEffectsContainer.Items.Last());
 
-		// (ë¬¸ì œ 5) ì¸ë±ìŠ¤ ë§µ ê°±ì‹ 
+		// (¹®Á¦ 5) ÀÎµ¦½º ¸Ê °»½Å
 		ActiveEffectHandleToIndex.Add(NewHandle, ActiveEffectsContainer.Items.Num() - 1);
 
 		UWorld* World = GetWorld();
@@ -822,7 +822,7 @@ bool UPFGASC::RemoveActiveEffect(int32 ActiveHandle)
 	AActor* OwnerActor = GetOwner();
 	if (OwnerActor && !OwnerActor->HasAuthority()) return false;
 
-	// (ë¬¸ì œ 5) O(1) ì¸ë±ìŠ¤ ì¡°íšŒ
+	// (¹®Á¦ 5) O(1) ÀÎµ¦½º Á¶È¸
 	const int32* IndexPtr = ActiveEffectHandleToIndex.Find(ActiveHandle);
 	int32 FoundIndex = INDEX_NONE;
 
@@ -873,14 +873,14 @@ bool UPFGASC::RemoveActiveEffect(int32 ActiveHandle)
 	ActiveEffectsContainer.Items.RemoveAt(FoundIndex);
 	ActiveEffectsContainer.MarkArrayDirty();
 
-	// (ë¬¸ì œ 5) ì¸ë±ìŠ¤ ë§µ ì¬êµ¬ì¶• (RemoveAtìœ¼ë¡œ ë’¤ìª½ ì¸ë±ìŠ¤ ì „ë¶€ -1 ì‹œí”„íŠ¸ë˜ë¯€ë¡œ ì „ì²´ ì¬êµ¬ì¶•ì´ ê°€ì¥ ë‹¨ìˆœ/ì•ˆì „)
+	// (¹®Á¦ 5) ÀÎµ¦½º ¸Ê Àç±¸Ãà (RemoveAtÀ¸·Î µÚÂÊ ÀÎµ¦½º ÀüºÎ -1 ½ÃÇÁÆ®µÇ¹Ç·Î ÀüÃ¼ Àç±¸ÃàÀÌ °¡Àå ´Ü¼ø/¾ÈÀü)
 	RebuildActiveEffectIndexMap();
 
 	return true;
 }
 
 /////////////////////////////////////////////////////////////////////////////
-// Infinite Effect ë“± ëª…ì‹œì  ì œê±° API
+// Infinite Effect µî ¸í½ÃÀû Á¦°Å API
 /////////////////////////////////////////////////////////////////////////////
 
 int32 UPFGASC::RemoveActiveEffectsByEffectID(int32 EffectID)
@@ -888,7 +888,7 @@ int32 UPFGASC::RemoveActiveEffectsByEffectID(int32 EffectID)
 	AActor* OwnerActor = GetOwner();
 	if (OwnerActor && !OwnerActor->HasAuthority()) return 0;
 
-	// RemoveActiveEffectê°€ ë°°ì—´ì„ ìˆ˜ì •í•˜ë¯€ë¡œ, ë¨¼ì € ëŒ€ìƒ í•¸ë“¤ì„ ì „ë¶€ ëª¨ì•„ë‘” ë’¤ ìˆœíšŒ ì œê±°.
+	// RemoveActiveEffect°¡ ¹è¿­À» ¼öÁ¤ÇÏ¹Ç·Î, ¸ÕÀú ´ë»ó ÇÚµéÀ» ÀüºÎ ¸ğ¾ÆµĞ µÚ ¼øÈ¸ Á¦°Å.
 	TArray<int32> HandlesToRemove;
 	for (const FActivePFGGameplayEffect& Active : ActiveEffectsContainer.Items)
 	{

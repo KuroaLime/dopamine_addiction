@@ -1,4 +1,4 @@
-ï»¿// Fill out your copyright notice in the Description page of Project Settings.
+// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Default/Ability/GAS/PFGAttributeSet.h"
@@ -53,7 +53,7 @@ void UPFGAttributeSet::SetMaxHealth(float NewMaxHealth)
 	MaxHealth.CurrentValue = NewMaxHealth;
 	MaxHealth.BaseValue = NewMaxHealth;
 
-	// Maxê°€ ì¤„ì–´ë“¤ì–´ CurrentValueê°€ ì´ˆê³¼ë˜ëŠ” ìƒí™©ì„ ì¦‰ì‹œ ì¬ì¡°ì •
+	// Max°¡ ÁÙ¾îµé¾î CurrentValue°¡ ÃÊ°úµÇ´Â »óÈ²À» Áï½Ã ÀçÁ¶Á¤
 	const float OldHealth = Health.CurrentValue;
 	ClampToMax(Health, MaxHealth);
 
@@ -63,8 +63,8 @@ void UPFGAttributeSet::SetMaxHealth(float NewMaxHealth)
 	}
 }
 
-// í´ë¼ì´ì–¸íŠ¸ OnRep: ì„œë²„ê°€ ë³´ë‚¸ ê°’ì„ ê·¸ëŒ€ë¡œ ì‹ ë¢°í•˜ê³  ë¸ë¦¬ê²Œì´íŠ¸ë§Œ ë¸Œë¡œë“œìºìŠ¤íŠ¸í•œë‹¤.
-// ì—¬ê¸°ì„œ Clampë‚˜ ì¬ê³„ì‚°ì„ í•˜ë©´ ì„œë²„ì™€ í´ë¼ì´ì–¸íŠ¸ ìƒíƒœê°€ ë¶„ê¸°ë  ìˆ˜ ìˆìœ¼ë¯€ë¡œ ì ˆëŒ€ í•˜ì§€ ì•ŠëŠ”ë‹¤.
+// Å¬¶óÀÌ¾ğÆ® OnRep: ¼­¹ö°¡ º¸³½ °ªÀ» ±×´ë·Î ½Å·ÚÇÏ°í µ¨¸®°ÔÀÌÆ®¸¸ ºê·ÎµåÄ³½ºÆ®ÇÑ´Ù.
+// ¿©±â¼­ Clamp³ª Àç°è»êÀ» ÇÏ¸é ¼­¹ö¿Í Å¬¶óÀÌ¾ğÆ® »óÅÂ°¡ ºĞ±âµÉ ¼ö ÀÖÀ¸¹Ç·Î Àı´ë ÇÏÁö ¾Ê´Â´Ù.
 void UPFGAttributeSet::OnRep_Health(FPFGAttributeData OldValue)
 {
 	OnHealthChanged.Broadcast(OldValue.CurrentValue, Health.CurrentValue);
@@ -72,5 +72,5 @@ void UPFGAttributeSet::OnRep_Health(FPFGAttributeData OldValue)
 
 void UPFGAttributeSet::OnRep_MaxHealth(FPFGAttributeData OldValue)
 {
-	// Max ë³€ê²½ ì•Œë¦¼ì´ í•„ìš”í•˜ë©´ ë³„ë„ ë¸ë¦¬ê²Œì´íŠ¸ ì¶”ê°€ ê°€ëŠ¥. ì—¬ê¸°ì„œëŠ” UI ê°±ì‹  íŠ¸ë¦¬ê±°ë¡œ ì¶©ë¶„.
+	// Max º¯°æ ¾Ë¸²ÀÌ ÇÊ¿äÇÏ¸é º°µµ µ¨¸®°ÔÀÌÆ® Ãß°¡ °¡´É. ¿©±â¼­´Â UI °»½Å Æ®¸®°Å·Î ÃæºĞ.
 }

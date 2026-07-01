@@ -134,18 +134,20 @@ void UTPSInputHandler::Input_Jump()
 
 void UTPSInputHandler::Input_Crouch()
 {
-	if (UPFGASC* ASC = ResolveOwnerASC())
+	if (ACharacter* OwnerCharacter = Cast<ACharacter>(OwnerController->GetPawn()))
 	{
-		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Crouch")));
+		if (!OwnerCharacter->GetCharacterMovement()->IsFalling())
+		{
+			OwnerCharacter->Crouch();
+		}
 	}
 }
 
 void UTPSInputHandler::Input_CrouchEnd()
 {
-	if (UPFGASC* ASC = ResolveOwnerASC())
+	if (ACharacter* OwnerCharacter = Cast<ACharacter>(OwnerController->GetPawn()))
 	{
-		ASC->CancelAbilitiesWithTag(
-			FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Crouch"))));
+		OwnerCharacter->UnCrouch();
 	}
 }
 

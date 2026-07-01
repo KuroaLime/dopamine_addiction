@@ -14,6 +14,9 @@ void UPlayerManager::Deinitialize()
 	PendingAdd.Empty();
 	PendingRemove.Empty();
 
+	FPlayerCommand Dummy;
+	while (CommandInbox.Dequeue(Dummy)) {}
+
 	UE_LOG(LogTemp, Warning, TEXT("[PlayerManager] Deinitialize"));
 	Super::Deinitialize();
 }
@@ -47,9 +50,24 @@ TArray<ACharacter*> UPlayerManager::GetAllPlayers() const
 	return Result;
 }
 
+void UPlayerManager::AddCommand(AActor* InExecutor, FName InAction)
+{
+	if (!IsValid(InExecutor) || InAction.IsNone()) return;
+	CommandInbox.Enqueue(FPlayerCommand(InExecutor, InAction));
+}
+
 void UPlayerManager::Tick(float DeltaTime)
 {
 	ApplyPending();
+
+	FPlayerCommand Cmd;
+	while (CommandInbox.Dequeue(Cmd))
+	{
+		if (AActor* Exec = Cmd.Executor.Get())
+		{
+			OnPlayerActionEvent.Broadcast(Exec, Cmd.ActionName);
+		}
+	}
 
 	CleanupInvalid();
 }
