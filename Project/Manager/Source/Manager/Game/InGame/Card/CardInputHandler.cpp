@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/Card/CardInputHandler.h"
+#include "Manager.h"
 #include "EnhancedInputComponent.h"
 #include "GameFramework/PlayerController.h"
 #include "Game/InGame/MainPlayerController.h"
@@ -81,7 +82,7 @@ void UCardInputHandler::Input_Check()
     {
         MainPC->Server_RequestSeotdaBetAction(EBettingAction::Check);
     }
-    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[Card] Check"));
+    DS_SCREEN(-1, 2.0f, FColor::Cyan, TEXT("[Card] Check"));
 }
 
 void UCardInputHandler::Input_Call()
@@ -90,7 +91,7 @@ void UCardInputHandler::Input_Call()
     {
         MainPC->Server_RequestSeotdaBetAction(EBettingAction::Call);
     }
-    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[Card] Call"));
+    DS_SCREEN(-1, 2.0f, FColor::Cyan, TEXT("[Card] Call"));
 }
 
 void UCardInputHandler::Input_Half()
@@ -99,7 +100,7 @@ void UCardInputHandler::Input_Half()
     {
         MainPC->Server_RequestSeotdaBetAction(EBettingAction::Half);
     }
-    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Cyan, TEXT("[Card] Half"));
+    DS_SCREEN(-1, 2.0f, FColor::Cyan, TEXT("[Card] Half"));
 }
 
 void UCardInputHandler::Input_Die()
@@ -108,7 +109,7 @@ void UCardInputHandler::Input_Die()
     {
         MainPC->Server_RequestSeotdaBetAction(EBettingAction::Die);
     }
-    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Red, TEXT("[Card] Die"));
+    DS_SCREEN(-1, 2.0f, FColor::Red, TEXT("[Card] Die"));
 }
 
 void UCardInputHandler::Input_AllIn()
@@ -117,7 +118,7 @@ void UCardInputHandler::Input_AllIn()
     {
         MainPC->Server_RequestSeotdaBetAction(EBettingAction::AllIn);
     }
-    if (GEngine) GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Magenta, TEXT("[Card] AllIn"));
+    DS_SCREEN(-1, 2.0f, FColor::Magenta, TEXT("[Card] AllIn"));
 }
 
 void UCardInputHandler::Input_SelectCard1()
@@ -125,7 +126,7 @@ void UCardInputHandler::Input_SelectCard1()
     bSelectedCard0 = !bSelectedCard0;
     if (GEngine)
     {
-        GEngine->AddOnScreenDebugMessage(-1, 2.0f, bSelectedCard0 ? FColor::Green : FColor::Yellow,
+        DS_SCREEN(-1, 2.0f, bSelectedCard0 ? FColor::Green : FColor::Yellow,
             FString::Printf(TEXT("[Card] SelectCard1=%d"), bSelectedCard0 ? 1 : 0));
     }
 }
@@ -135,7 +136,7 @@ void UCardInputHandler::Input_SelectCard2()
     bSelectedCard1 = !bSelectedCard1;
     if (GEngine)
     {
-        GEngine->AddOnScreenDebugMessage(-1, 2.0f, bSelectedCard1 ? FColor::Green : FColor::Yellow,
+        DS_SCREEN(-1, 2.0f, bSelectedCard1 ? FColor::Green : FColor::Yellow,
             FString::Printf(TEXT("[Card] SelectCard2=%d"), bSelectedCard1 ? 1 : 0));
     }
 }
@@ -145,7 +146,7 @@ void UCardInputHandler::Input_SelectCard3()
     bSelectedCard2 = !bSelectedCard2;
     if (GEngine)
     {
-        GEngine->AddOnScreenDebugMessage(-1, 2.0f, bSelectedCard2 ? FColor::Green : FColor::Yellow,
+        DS_SCREEN(-1, 2.0f, bSelectedCard2 ? FColor::Green : FColor::Yellow,
             FString::Printf(TEXT("[Card] SelectCard3=%d"), bSelectedCard2 ? 1 : 0));
     }
 }
@@ -162,7 +163,7 @@ void UCardInputHandler::Input_ConfirmSelection()
 
     if (GEngine)
     {
-        GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green,
+        DS_SCREEN(-1, 2.0f, FColor::Green,
             FString::Printf(TEXT("[Card] Submit selection %d/%d/%d"),
                 bSelectedCard0 ? 1 : 0,
                 bSelectedCard1 ? 1 : 0,

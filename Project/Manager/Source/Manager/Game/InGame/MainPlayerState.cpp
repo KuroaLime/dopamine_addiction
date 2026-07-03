@@ -1,7 +1,8 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+Ôªø// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Game/InGame/MainPlayerState.h"
+#include "Manager.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/Engine.h"
@@ -12,7 +13,7 @@ AMainPlayerState::AMainPlayerState()
 	CurPlayerData.CurrentHP = 150;
 
 
-	//«œµÂ ƒ⁄µ˘ πŸ≤Ÿ¿⁄
+	//ÌïòÎìú ÏΩîÎî© Î∞îÍæ∏Ïûê
 	CarriedAmmoList.Init(0, 6);
 	CarriedAmmoList[static_cast<uint8>(EWeaponType::AR)] = 90;
 	CarriedAmmoList[static_cast<uint8>(EWeaponType::PISTOL)] = 30;
@@ -211,7 +212,7 @@ void AMainPlayerState::ApplyDamage(float ActualDamage)
 	const int32 OldHP = CurPlayerData.CurrentHP;
 	CurPlayerData.CurrentHP = FMath::Max(0, OldHP - static_cast<int32>(ActualDamage));
 
-	UE_LOG(LogTemp, Warning, TEXT("[DS] TPS DamageApplied Player=%s Damage=%.2f HP=%d->%d"),
+	DS_LOG(TEXT("[DS] TPS DamageApplied Player=%s Damage=%.2f HP=%d->%d"),
 		*GetPlayerName(),
 		ActualDamage,
 		OldHP,
@@ -253,7 +254,7 @@ void AMainPlayerState::OnRep_OwnedCards()
             *CardList
         );
 
-        GEngine->AddOnScreenDebugMessage(
+        DS_SCREEN(
             MyCardsDebugMessageKey,
             9999.0f,
             FColor::Cyan,
@@ -318,7 +319,7 @@ void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 
 void AMainPlayerState::ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledStats)
 {
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("ApplyCardUpgrade")));
+	DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("ApplyCardUpgrade")));
 
 	if (!HasAuthority()) return;
 	for (const auto& Pair : RolledStats)
@@ -330,7 +331,7 @@ void AMainPlayerState::ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledS
 		case EUpgradeType::Player_Health:
 			AccumulatedUpgrades.LvHealth += RolledValue;
 			CurPlayerData.CurrentHP += FMath::RoundToInt(RolledValue);
-			GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Success")));
+			DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Success")));
 
 			break;
 		case EUpgradeType::Player_MoveSpeed:

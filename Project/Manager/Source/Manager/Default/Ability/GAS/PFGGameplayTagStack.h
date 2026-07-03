@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -12,11 +12,11 @@ class UPFGASC;
 /////////////////////////////////////////////////////////////////////////////
 // GameplayTag Stack
 //
-// ½ÇÁ¦ GASÀÇ FGameplayTagCountContainer¿Í µ¿ÀÏÇÑ ÀÇµµ:
-// - µ¿ÀÏ ÅÂ±×°¡ ¿©·¯ ÃâÃ³(Effect, Ability µî)¿¡¼­ Áßº¹ ºÎ¿©µÉ ¼ö ÀÖ´Ù.
-// - ´Ü¼ø FGameplayTagContainer(Set)´Â "ÀÖ´Ù/¾ø´Ù"¸¸ Ç¥Çö °¡´ÉÇØ¼­,
-//   ÇÑ ÃâÃ³°¡ RemoveTags¸¦ È£ÃâÇÏ¸é ´Ù¸¥ ÃâÃ³°¡ ºÎ¿©ÇÑ µ¿ÀÏ ÅÂ±×±îÁö »ç¶óÁø´Ù.
-// - StackCount¸¦ µÎ¾î Add/Remove¸¦ +1/-1·Î Ã³¸®ÇÏ°í, 0ÀÌ µÉ ¶§¸¸ ½ÇÁ¦·Î Á¦°ÅÇÑ´Ù.
+// ì‹¤ì œ GASì˜ FGameplayTagCountContainerì™€ ë™ì¼í•œ ì˜ë„:
+// - ë™ì¼ íƒœê·¸ê°€ ì—¬ëŸ¬ ì¶œì²˜(Effect, Ability ë“±)ì—ì„œ ì¤‘ë³µ ë¶€ì—¬ë  ìˆ˜ ìˆë‹¤.
+// - ë‹¨ìˆœ FGameplayTagContainer(Set)ëŠ” "ìˆë‹¤/ì—†ë‹¤"ë§Œ í‘œí˜„ ê°€ëŠ¥í•´ì„œ,
+//   í•œ ì¶œì²˜ê°€ RemoveTagsë¥¼ í˜¸ì¶œí•˜ë©´ ë‹¤ë¥¸ ì¶œì²˜ê°€ ë¶€ì—¬í•œ ë™ì¼ íƒœê·¸ê¹Œì§€ ì‚¬ë¼ì§„ë‹¤.
+// - StackCountë¥¼ ë‘ì–´ Add/Removeë¥¼ +1/-1ë¡œ ì²˜ë¦¬í•˜ê³ , 0ì´ ë  ë•Œë§Œ ì‹¤ì œë¡œ ì œê±°í•œë‹¤.
 USTRUCT()
 struct FPFGGameplayTagStack : public FFastArraySerializerItem
 {
@@ -43,7 +43,7 @@ struct FPFGGameplayTagStackContainer : public FFastArraySerializer
 	UPROPERTY(NotReplicated)
 	TWeakObjectPtr<UPFGASC> OwnerASC;
 
-	// ºü¸¥ Á¶È¸¿ë Ä³½Ã (¼­¹ö: Ç×»ó ÃÖ½Å, Å¬¶óÀÌ¾ğÆ®: FastArray Äİ¹é¿¡¼­ °»½Å)
+	// ë¹ ë¥¸ ì¡°íšŒìš© ìºì‹œ (ì„œë²„: í•­ìƒ ìµœì‹ , í´ë¼ì´ì–¸íŠ¸: FastArray ì½œë°±ì—ì„œ ê°±ì‹ )
 	UPROPERTY(NotReplicated)
 	TMap<FGameplayTag, int32> TagCountMap;
 
@@ -52,8 +52,8 @@ struct FPFGGameplayTagStackContainer : public FFastArraySerializer
 		return FFastArraySerializer::FastArrayDeltaSerialize<FPFGGameplayTagStack>(Items, DeltaParms, *this);
 	}
 
-	// ¼­¹ö Àü¿ë: Delta Àû¿ë. Count<=0ÀÌ µÇ¸é Items¿¡¼­ Á¦°Å.
-	// ¹İÈ¯°ª: ÀÌ È£Ãâ·Î ÀÎÇØ "0->¾ç¼ö" ¶Ç´Â "¾ç¼ö->0" ÀüÈ¯ÀÌ ¹ß»ıÇß´ÂÁö (= ÅÂ±× Á¸Àç ¿©ºÎ°¡ ¹Ù²î¾ú´ÂÁö)
+	// ì„œë²„ ì „ìš©: Delta ì ìš©. Count<=0ì´ ë˜ë©´ Itemsì—ì„œ ì œê±°.
+	// ë°˜í™˜ê°’: ì´ í˜¸ì¶œë¡œ ì¸í•´ "0->ì–‘ìˆ˜" ë˜ëŠ” "ì–‘ìˆ˜->0" ì „í™˜ì´ ë°œìƒí–ˆëŠ”ì§€ (= íƒœê·¸ ì¡´ì¬ ì—¬ë¶€ê°€ ë°”ë€Œì—ˆëŠ”ì§€)
 	bool ApplyTagCountDelta(FGameplayTag Tag, int32 Delta);
 
 	int32 GetTagCount(FGameplayTag Tag) const
@@ -79,7 +79,7 @@ struct FPFGGameplayTagStackContainer : public FFastArraySerializer
 		return false;
 	}
 
-	// Å¬¶óÀÌ¾ğÆ®: FastArray Äİ¹é¿¡¼­ TagCountMapÀ» Items¿Í µ¿±âÈ­
+	// í´ë¼ì´ì–¸íŠ¸: FastArray ì½œë°±ì—ì„œ TagCountMapì„ Itemsì™€ ë™ê¸°í™”
 	void RebuildTagCountMap();
 
 	void PreReplicatedRemove(const TArrayView<int32>& RemovedIndices, int32 FinalSize);

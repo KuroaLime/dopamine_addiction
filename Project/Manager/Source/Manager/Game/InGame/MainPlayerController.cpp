@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/MainPlayerController.h"
+#include "Manager.h"
 #include "Engine/Engine.h"
 #include "EnhancedInputComponent.h"
 #include "Game/InGame/Handler/UIHandler.h"
@@ -11,6 +12,7 @@
 #include "Default/System/UManagerGameInstance.h"
 #include "Game/InGame/MainPlayerState.h"
 #include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/Card/CardGameService.h"
 #include "Game/InGame/Card/Actor/CardDropActor.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
@@ -156,11 +158,6 @@ void AMainPlayerController::SetupHandlerInput()
 			Pair.Value->SetupInput(EnhancedInputComponent);
 		}
 	}
-}
-
-void AMainPlayerController::PickupNearestCard()
-{
-	Server_RequestPickupNearestCard();
 }
 
 //////////////////////////////////////////////////////////////////////////////////////////////////////////
@@ -401,7 +398,7 @@ void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
 		}
 		CurrentUpgradeOptions.Add(NewOption);
 	}
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Rand Status UP")));
+	DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Rand Status UP")));
 
 	Client_ReceiveRandomUpgradeOptions(CurrentUpgradeOptions);
 }
@@ -456,19 +453,19 @@ EUpgradeType AMainPlayerController::GetStaticUpgradeTypeFromIndex(int32 Index)
 	switch (Index)
 	{
 	case 0:
-		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_Health")));
+		DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_Health")));
 
 		return EUpgradeType::Player_Health;
 	case 1:
-		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_MoveSpeed")));
+		DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_MoveSpeed")));
 
 		return EUpgradeType::Player_MoveSpeed;
 	case 2:
-		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_HealthRegeneration")));
+		DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("Player_HealthRegeneration")));
 
 		return EUpgradeType::Player_HealthRegeneration;
 	default:
-		GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("None")));
+		DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("None")));
 
 		return EUpgradeType::None;
 	}
@@ -520,7 +517,7 @@ void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int3
 
 	PS->AddGold(-Cost);
 	PS->Server_ApplyUpgrad_Implementation(UpgradeType);
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("static Status UP")));
+	DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("static Status UP")));
 
 }
 void AMainPlayerController::Server_SetUITimer_Implementation(int32 time)
@@ -549,25 +546,10 @@ void AMainPlayerController::Server_RequestPickupCard_Implementation(ACardDropAct
         return;
     }
 
-    GM->TryPickupCard(this, TargetCard);
+    GM->GetCardGameService()->TryPickupCard(this, TargetCard);
 }
 
 
-bool AMainPlayerController::Server_RequestPickupNearestCard_Validate()
-{
-    return true;
-}
-
-void AMainPlayerController::Server_RequestPickupNearestCard_Implementation()
-{
-    AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
-    if (!GM)
-    {
-        return;
-    }
-
-    GM->TryPickupNearestCard(this);
-}
 
 
 bool AMainPlayerController::Server_SubmitSeotdaSelection_Validate(bool bCard0, bool bCard1, bool bCard2)
@@ -583,7 +565,7 @@ void AMainPlayerController::Server_SubmitSeotdaSelection_Implementation(bool bCa
         return;
     }
 
-    GM->SubmitSeotdaSelection(this, bCard0, bCard1, bCard2);
+    GM->GetCardGameService()->SubmitSeotdaSelection(this, bCard0, bCard1, bCard2);
 }
 
 
@@ -600,7 +582,7 @@ void AMainPlayerController::Server_RequestSeotdaBetAction_Implementation(EBettin
         return;
     }
 
-    GM->SubmitSeotdaBetAction(this, Action);
+    GM->GetCardGameService()->SubmitSeotdaBetAction(this, Action);
 }
 void AMainPlayerController::Client_ShowSeotdaResult_Implementation(const FString& ResultText)
 {
@@ -611,7 +593,7 @@ UE_LOG(LogTemp, Warning, TEXT("[CL] Seotda Result: %s"), *ResultText);
 
 if (GEngine)
 {
-GEngine->AddOnScreenDebugMessage(
+DS_SCREEN(
 2026062501,
 8.0f,
 FColor::Green,

@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -29,18 +29,18 @@ protected:
 	void UpdateCRoundandTimer_UI();
 private:
 
-	//º¸À¯ °ñµå UI ¹è°æ
+	//ë³´ìœ  ê³¨ë“œ UI ë°°ê²½
 	UPROPERTY()
 	class UImage* GoldBackgroundImage;
-	//º¸À¯ °ñµå ÅØ½ºÆ®
+	//ë³´ìœ  ê³¨ë“œ í…ìŠ¤íŠ¸
 	UPROPERTY()
 	class UTextBlock* HoldingGoldText;
 
-	//ÇÃ·¹ÀÌ¾î »ıÁ¸ »óÅÂ Ç¥½Ã UI Image
+	//í”Œë ˆì´ì–´ ìƒì¡´ ìƒíƒœ í‘œì‹œ UI Image
 	UPROPERTY()
 	class UUserWidget* CPlayersStateUI;
 
-	//Round Å¸ÀÌ¸Ó ¹× ¶ó¿îµå Ç¥½Ã UI
+	//Round íƒ€ì´ë¨¸ ë° ë¼ìš´ë“œ í‘œì‹œ UI
 	UPROPERTY()
 	class UUserWidget* CRoundandTimerUI;
 	

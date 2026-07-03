@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/Card/UI/BetWidget.h"
+#include "Manager.h"
 #include "Components/Button.h"
 
 void UBetWidget::NativeConstruct()
@@ -15,21 +16,18 @@ void UBetWidget::NativeConstruct()
 
 void UBetWidget::OnCallBtnClick() 
 {
-    if (GEngine)
-        GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Yellow,
+    DS_SCREEN(1, 1.1f, FColor::Yellow,
             TEXT("[Button] Call"));
 }
 
 void UBetWidget::OnRaiseBtnClick() 
 {
-    if (GEngine)
-        GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Yellow,
+    DS_SCREEN(1, 1.1f, FColor::Yellow,
             TEXT("[Button] Raise"));
 }
 
 void UBetWidget::OnDieBtnClick() 
 {
-    if (GEngine)
-        GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Yellow,
+    DS_SCREEN(1, 1.1f, FColor::Yellow,
             TEXT("[Button] Die"));
 }

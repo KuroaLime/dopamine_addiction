@@ -1,4 +1,4 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 #pragma once
 
@@ -18,8 +18,8 @@ class MANAGER_API ALoginPlayerController : public APlayerController
 
 protected:
 	virtual void BeginPlay() override;
-	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // °ÔÀÓ Á¾·á½Ã 
-	virtual void OnUnPossess() override; // Æù°úÀÇ ¿¬°á ÇØÁ¦ ½Ã
+	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override; // ê²Œì„ ì¢…ë£Œì‹œ 
+	virtual void OnUnPossess() override; // í°ê³¼ì˜ ì—°ê²° í•´ì œ ì‹œ
 
 	UPROPERTY(EditAnywhere, Category = "UI")
 	TSubclassOf<class UUserWidget> LoginWidgetClass;

@@ -1,6 +1,7 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Default/System/UManagerGameInstance.h"
+#include "Manager.h"
 
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
@@ -52,14 +53,14 @@ void UUManagerGameInstance::Init() {
     {
         if (GEngine)
         {
-            GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Green, TEXT("Connected to login server"));
+            DS_SCREEN(-1, 5.f, FColor::Green, TEXT("Connected to login server"));
         }
     }
     else
     {
         if (GEngine)
         {
-            GEngine->AddOnScreenDebugMessage(-1, 5.f, FColor::Red, TEXT("Failed to connect to login server"));
+            DS_SCREEN(-1, 5.f, FColor::Red, TEXT("Failed to connect to login server"));
         }
     }
     Super::Init();
@@ -334,10 +335,10 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
 
                         if (GEngine)
                         {
-                            GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, TEXT("================ [IOCP] Successfully Joined the Room! ================"));
-                            GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Green, FString::Printf(TEXT("[Room Info] Title: %s (ID: %d)"), *info.title, info.roomId));
-                            GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Orange, FString::Printf(TEXT("[Room Players] %d / %d (Host UID: %d)"), info.curPlayers, info.maxPlayers, info.hostId));
-                            GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, TEXT("====================================================================="));
+                            DS_SCREEN(-1, 8.f, FColor::Cyan, TEXT("================ [IOCP] Successfully Joined the Room! ================"));
+                            DS_SCREEN(-1, 8.f, FColor::Green, FString::Printf(TEXT("[Room Info] Title: %s (ID: %d)"), *info.title, info.roomId));
+                            DS_SCREEN(-1, 8.f, FColor::Orange, FString::Printf(TEXT("[Room Players] %d / %d (Host UID: %d)"), info.curPlayers, info.maxPlayers, info.hostId));
+                            DS_SCREEN(-1, 8.f, FColor::Cyan, TEXT("====================================================================="));
                         }
                     });
             }
@@ -415,7 +416,7 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
                     if (GEngine)
                     {
                         const FColor MsgColor = result == RoomResult::OK ? FColor::Green : FColor::Red;
-                        GEngine->AddOnScreenDebugMessage(-1, 5.f, MsgColor,
+                        DS_SCREEN(-1, 5.f, MsgColor,
                             FString::Printf(TEXT("[IOCP] RoomStartRes=%s"), UTF8_TO_TCHAR(RoomResultToString(result))));
                     }
                 });
@@ -467,7 +468,7 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
 
                 if (GEngine)
                 {
-                    GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Yellow,
+                    DS_SCREEN(-1, 8.f, FColor::Yellow,
                         FString::Printf(TEXT("[IOCP] GAME_START travel %s"), *TravelURL));
                 }
 

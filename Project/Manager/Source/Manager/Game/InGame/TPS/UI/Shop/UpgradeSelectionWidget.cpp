@@ -1,7 +1,8 @@
-// Fill out your copyright notice in the Description page of Project Settings.
+ï»¿// Fill out your copyright notice in the Description page of Project Settings.
 
 
 #include "Game/InGame/TPS/UI/Shop/UpgradeSelectionWidget.h"
+#include "Manager.h"
 #include "Game/InGame/TPS/UI/Shop/CardWidget.h"
 void UUpgradeSelectionWidget::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
 
@@ -26,7 +27,7 @@ void UUpgradeSelectionWidget::HandleCardSelected(int32 CardID) {
 	}
 }
 
-//¿©±â »ı¼ºÇÑ Ä«µå ¹øÈ£¸¦ ¹Ş¾Æ¿Í¼­ set ÇØÁÖ±â
+//ì—¬ê¸° ìƒì„±í•œ ì¹´ë“œ ë²ˆí˜¸ë¥¼ ë°›ì•„ì™€ì„œ set í•´ì£¼ê¸°
 void UUpgradeSelectionWidget::SetCardID(const TArray<FRandomCardOption>& Options) {
 	if (SelectionCard00) SelectionCard00->SetUpgradeType(Options[0], 0);
 	if (SelectionCard01) SelectionCard01->SetUpgradeType(Options[1], 1);
@@ -36,9 +37,9 @@ void UUpgradeSelectionWidget::SetCardID(const TArray<FRandomCardOption>& Options
 	FString EnumString = Options[0].CardRowName.ToString();
 	FString EnumString1 = Options[1].CardRowName.ToString();
 	FString EnumString2 = Options[2].CardRowName.ToString();
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, EnumString);
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, EnumString1);
-	GEngine->AddOnScreenDebugMessage(-1, 8.f, FColor::Cyan, EnumString2);
+	DS_SCREEN(-1, 8.f, FColor::Cyan, EnumString);
+	DS_SCREEN(-1, 8.f, FColor::Cyan, EnumString1);
+	DS_SCREEN(-1, 8.f, FColor::Cyan, EnumString2);
 
 
 }

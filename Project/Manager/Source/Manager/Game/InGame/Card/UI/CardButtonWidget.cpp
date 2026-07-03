@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/Card/UI/CardButtonWidget.h"
+#include "Manager.h"
 #include "Components/Button.h"
 
 void UCardButtonWidget::NativeConstruct()
@@ -16,7 +17,6 @@ void UCardButtonWidget::NativeConstruct()
 
 void UCardButtonWidget::OnCardBtnClicked()
 {
-    if (GEngine)
-        GEngine->AddOnScreenDebugMessage(1, 1.1f, FColor::Yellow,
+    DS_SCREEN(1, 1.1f, FColor::Yellow,
             TEXT("[Button] Card Select"));
 }

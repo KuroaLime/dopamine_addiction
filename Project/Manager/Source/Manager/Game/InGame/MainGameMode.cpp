@@ -1,4 +1,5 @@
 #include "Game/InGame/MainGameMode.h"
+#include "Manager.h"
 #include "Sockets.h"
 #include "SocketSubsystem.h"
 #include "IPAddress.h"
@@ -10,6 +11,7 @@
 #include "Game/InGame/MainGameState.h"
 #include "Game/InGame/MainCharacter.h"
 #include "Game/InGame/Card/Actor/CardDropActor.h"
+#include "Game/InGame/Card/CardGameService.h"
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "GameFramework/PlayerController.h"
@@ -80,7 +82,7 @@ void AMainGameMode::InitGame(const FString& MapName, const FString& Options, FSt
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitGame Map=%s Options=%s RoomId=%d RequiredPlayers=%d"),
+    DS_LOG(TEXT("[DS] Main InitGame Map=%s Options=%s RoomId=%d RequiredPlayers=%d"),
         *MapName,
         *Options,
         DediRoomId,
@@ -95,7 +97,7 @@ void AMainGameMode::PreLogin(
 {
     const FString Ticket = UGameplayStatics::ParseOption(Options, TEXT("ticket"));
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main PreLogin Address=%s Ticket=%s Options=%s"),
+    DS_LOG(TEXT("[DS] Main PreLogin Address=%s Ticket=%s Options=%s"),
         *Address,
         Ticket.IsEmpty() ? TEXT("<EMPTY>") : *Ticket,
         *Options);
@@ -104,14 +106,14 @@ void AMainGameMode::PreLogin(
 
     if (!ErrorMessage.IsEmpty())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main PreLogin rejected by Super. Error=%s"), *ErrorMessage);
+        DS_LOG(TEXT("[DS] Main PreLogin rejected by Super. Error=%s"), *ErrorMessage);
         return;
     }
 
     //if (Ticket.IsEmpty())
     //{
     //    ErrorMessage = TEXT("MissingTicket");
-    //    UE_LOG(LogTemp, Warning, TEXT("[DS] Main PreLogin rejected. Error=%s"), *ErrorMessage);
+    //    DS_LOG(TEXT("[DS] Main PreLogin rejected. Error=%s"), *ErrorMessage);
     //    return;
     //}
 }
@@ -129,14 +131,14 @@ FString AMainGameMode::InitNewPlayer(
     if (PS && !PlayerName.IsEmpty())
     {
         PS->SetPlayerName(PlayerName);
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitNewPlayer PlayerName=%s Controller=%s Options=%s"),
+        DS_LOG(TEXT("[DS] Main InitNewPlayer PlayerName=%s Controller=%s Options=%s"),
             *PlayerName,
             NewPlayerController ? *NewPlayerController->GetName() : TEXT("<NULL>"),
             *Options);
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitNewPlayer PlayerNameFallback CurrentName=%s Controller=%s Options=%s"),
+        DS_LOG(TEXT("[DS] Main InitNewPlayer PlayerNameFallback CurrentName=%s Controller=%s Options=%s"),
             PS ? *PS->GetPlayerName() : TEXT("<NO_PLAYER_STATE>"),
             NewPlayerController ? *NewPlayerController->GetName() : TEXT("<NULL>"),
             *Options);
@@ -151,7 +153,11 @@ void AMainGameMode::BeginPlay()
 
     InitStrategy();
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main BeginPlay RoomId=%d RequiredPlayers=%d InitialPhase=%d Strategies=%d DebugPhase=%d RealReady=%d RealBattle=%d RealTransition=%d RealCard=%d RealResult=%d DebugReady=%d DebugBattle=%d DebugTransition=%d DebugCard=%d DebugResult=%d"),
+    // 카드게임 도메인 서비스 생성/주입(상태+로직 소유). 서버 전용.
+    CardGameService = NewObject<UCardGameService>(this);
+    CardGameService->Init(this);
+
+    DS_LOG(TEXT("[DS] Main BeginPlay RoomId=%d RequiredPlayers=%d InitialPhase=%d Strategies=%d DebugPhase=%d RealReady=%d RealBattle=%d RealTransition=%d RealCard=%d RealResult=%d DebugReady=%d DebugBattle=%d DebugTransition=%d DebugCard=%d DebugResult=%d"),
         DediRoomId,
         RequiredPlayerCount,
         static_cast<int32>(InitialPhase),
@@ -173,7 +179,7 @@ void AMainGameMode::PostLogin(APlayerController* NewPlayer)
 {
     Super::PostLogin(NewPlayer);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main PostLogin Controller=%s RoomId=%d HumanPlayers=%d/%d"),
+    DS_LOG(TEXT("[DS] Main PostLogin Controller=%s RoomId=%d HumanPlayers=%d/%d"),
         NewPlayer ? *NewPlayer->GetName() : TEXT("<NULL>"),
         DediRoomId,
         CountConnectedHumanPlayers(),
@@ -184,7 +190,7 @@ void AMainGameMode::PostLogin(APlayerController* NewPlayer)
 
 void AMainGameMode::Logout(AController* Exiting)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main Logout Controller=%s RoomId=%d HumanPlayersBeforeSuper=%d/%d"),
+    DS_LOG(TEXT("[DS] Main Logout Controller=%s RoomId=%d HumanPlayersBeforeSuper=%d/%d"),
         Exiting ? *Exiting->GetName() : TEXT("<NULL>"),
         DediRoomId,
         CountConnectedHumanPlayers(),
@@ -192,7 +198,7 @@ void AMainGameMode::Logout(AController* Exiting)
 
     Super::Logout(Exiting);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main Logout Complete HumanPlayers=%d/%d GameStarted=%d Phase=%s Round=%d"),
+    DS_LOG(TEXT("[DS] Main Logout Complete HumanPlayers=%d/%d GameStarted=%d Phase=%s Round=%d"),
         CountConnectedHumanPlayers(),
         RequiredPlayerCount,
         bGameStarted ? 1 : 0,
@@ -209,14 +215,14 @@ void AMainGameMode::BeginPhase(EGamePhase CurrPhase)
     else
     {
         CurrentStrategy = nullptr;
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main BeginPhase failed. Missing strategy phase=%d Round=%d ServerPhase=%s"),
+        DS_LOG(TEXT("[DS] Main BeginPhase failed. Missing strategy phase=%d Round=%d ServerPhase=%s"),
             static_cast<int32>(CurrPhase),
             CurrentRound,
             GetServerPhaseName(CurrentServerPhase));
         return;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main BeginPhase phase=%d strategy=%s Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Main BeginPhase phase=%d strategy=%s Round=%d ServerPhase=%s"),
         static_cast<int32>(CurrPhase),
         CurrentStrategy ? *CurrentStrategy->GetName() : TEXT("<NULL>"),
         CurrentRound,
@@ -232,7 +238,7 @@ void AMainGameMode::EndPhase()
 {
     if (CurrentStrategy)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main EndPhase strategy=%s Round=%d ServerPhase=%s"),
+        DS_LOG(TEXT("[DS] Main EndPhase strategy=%s Round=%d ServerPhase=%s"),
             *CurrentStrategy->GetName(),
             CurrentRound,
             GetServerPhaseName(CurrentServerPhase));
@@ -243,7 +249,7 @@ void AMainGameMode::EndPhase()
 
 void AMainGameMode::ChangePhase(EGamePhase NewPhase)
 {
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main ChangePhase ignored newPhase=%d Round=%d CurrentServerPhase=%s GameEnd=%d"),
+    DS_LOG(TEXT("[DS] Main ChangePhase ignored newPhase=%d Round=%d CurrentServerPhase=%s GameEnd=%d"),
         static_cast<int32>(NewPhase),
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase),
@@ -263,7 +269,7 @@ void AMainGameMode::BroadcastSwitchMode(EGamePhase NewPhase)
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main BroadcastSwitchMode phase=%d targets=%d Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Main BroadcastSwitchMode phase=%d targets=%d Round=%d ServerPhase=%s"),
         static_cast<int32>(NewPhase),
         TargetCount,
         CurrentRound,
@@ -285,7 +291,7 @@ void AMainGameMode::BroadcastSwitchLevel(FName LevelToUnload, FName LevelToLoad)
         }
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main BroadcastSwitchLevel unload=%s load=%s targets=%d Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Main BroadcastSwitchLevel unload=%s load=%s targets=%d Round=%d ServerPhase=%s"),
         *LevelToUnload.ToString(),
         *LevelToLoad.ToString(),
         TargetCount,
@@ -312,7 +318,7 @@ void AMainGameMode::LoadServerStreamLevelForPhase(FName LevelToLoad, const TCHAR
 
     UGameplayStatics::LoadStreamLevel(World, LevelToLoad, true, true, LoadInfo);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main ServerLoadStreamLevel load=%s Context=%s Round=%d ServerPhase=%s UUID=%d"),
+    DS_LOG(TEXT("[DS] Main ServerLoadStreamLevel load=%s Context=%s Round=%d ServerPhase=%s UUID=%d"),
         *LevelToLoad.ToString(),
         Context ? Context : TEXT("<NULL>"),
         CurrentRound,
@@ -325,23 +331,6 @@ bool AMainGameMode::IsBattleRoyalePhase() const
     return bGameStarted && CurrentServerPhase == EDediServerPhase::BattleRoyale;
 }
 
-void AMainGameMode::OnPlayerAction(AActor* Executor, FName ActionName)
-{
-    if (!bGameStarted || CurrentServerPhase == EDediServerPhase::Ready || CurrentServerPhase == EDediServerPhase::TransitionToCard || CurrentServerPhase == EDediServerPhase::Result || CurrentServerPhase == EDediServerPhase::TransitionToBattle || CurrentServerPhase == EDediServerPhase::GameEnd)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main Ignore action action=%s Round=%d Phase=%s"),
-            *ActionName.ToString(),
-            CurrentRound,
-            GetServerPhaseName(CurrentServerPhase));
-        return;
-    }
-
-    if (CurrentStrategy)
-    {
-        CurrentStrategy->OnPlayerAction(Executor, ActionName);
-    }
-}
-
 void AMainGameMode::InitStrategy()
 {
     StrategyMap.Empty();
@@ -350,7 +339,7 @@ void AMainGameMode::InitStrategy()
     {
         if (!Pair.Value)
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitStrategy skipped null phase=%d"), static_cast<int32>(Pair.Key));
+            DS_LOG(TEXT("[DS] Main InitStrategy skipped null phase=%d"), static_cast<int32>(Pair.Key));
             continue;
         }
 
@@ -360,7 +349,7 @@ void AMainGameMode::InitStrategy()
             Strategy->Initialize(this);
             StrategyMap.Add(Pair.Key, Strategy);
 
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Main InitStrategy phase=%d strategy=%s"),
+            DS_LOG(TEXT("[DS] Main InitStrategy phase=%d strategy=%s"),
                 static_cast<int32>(Pair.Key),
                 *Strategy->GetName());
         }
@@ -371,7 +360,7 @@ void AMainGameMode::TryStartGameIfReady()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main TryStart ignored. GameEnd reached RoomId=%d Round=%d"), DediRoomId, CurrentRound);
+        DS_LOG(TEXT("[DS] Main TryStart ignored. GameEnd reached RoomId=%d Round=%d"), DediRoomId, CurrentRound);
         return;
     }
 
@@ -383,7 +372,7 @@ void AMainGameMode::TryStartGameIfReady()
     const int32 HumanPlayers = CountConnectedHumanPlayers();
     if (HumanPlayers < RequiredPlayerCount)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main WaitingPlayers HumanPlayers=%d/%d"),
+        DS_LOG(TEXT("[DS] Main WaitingPlayers HumanPlayers=%d/%d"),
             HumanPlayers,
             RequiredPlayerCount);
         return;
@@ -397,7 +386,7 @@ void AMainGameMode::TryStartGameIfReady()
         GS->CurrentRound = CurrentRound;
         GS->OnRep_CurrentRound();
     }
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main RequiredPlayersReady HumanPlayers=%d/%d StartRound=%d MaxRound=%d"),
+    DS_LOG(TEXT("[DS] Main RequiredPlayersReady HumanPlayers=%d/%d StartRound=%d MaxRound=%d"),
         HumanPlayers,
         RequiredPlayerCount,
         CurrentRound,
@@ -432,14 +421,10 @@ void AMainGameMode::StartReadyPhase()
     StartTimedServerPhase(EDediServerPhase::Ready, GetReadyDuration());
 }
 
-void AMainGameMode::StartBattleRoyalePhase()
+void AMainGameMode::EnsureBattleRoyaleStageLoaded()
 {
-    if (bGameEndReached)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartBattleRoyale after GameEnd Round=%d"), CurrentRound);
-        return;
-    }
-
+    // TransitionToBattle 단계에서 이미 TPS 레벨을 로드했다면 중복 로드를 피한다.
+    // (서버 페이즈 머신은 GameMode가 소유하므로, 전략은 이 의미 메서드만 호출한다.)
     const bool bTPSAlreadyLoadedByTransition = CurrentServerPhase == EDediServerPhase::TransitionToBattle;
     if (!bTPSAlreadyLoadedByTransition)
     {
@@ -447,30 +432,37 @@ void AMainGameMode::StartBattleRoyalePhase()
     }
     else
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Main SkipDuplicateTPSLoad Round=%d ServerPhase=%s"),
+        DS_LOG(TEXT("[DS] Main SkipDuplicateTPSLoad Round=%d ServerPhase=%s"),
             CurrentRound,
             GetServerPhaseName(CurrentServerPhase));
     }
+}
 
-    BroadcastSwitchMode(EGamePhase::TPS);
-    SpawnRoundCardBundleForBattleRoyale();
-    SetPlayerPawnGameplayEnabled(true, TEXT("BattleRoyale"));
-    StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
+void AMainGameMode::StartBattleRoyalePhase()
+{
+    if (bGameEndReached)
+    {
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartBattleRoyale after GameEnd Round=%d"), CurrentRound);
+        return;
+    }
+
+    // 배틀로얄 진입 셋업(레벨/모드 전환, 카드 번들 스폰, 폰 활성화, 라운드 무기)은
+    // UTPSPhaseStrategy::OnPhaseStart 로 이전됨. GameMode는 타이머 머신만 구동한다.
     BeginPhase(EGamePhase::TPS);
+    StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
 }
 
 void AMainGameMode::StartTransitionToCardPhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartTransitionToCard after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartTransitionToCard after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
+    // TPS 종료 teardown(폰 비활성/카드 드롭 정리/무브먼트 베이스 정리)은
+    // UTPSPhaseStrategy::OnPhaseEnd(EndPhase 호출 시점)로 이전됨. 여기선 전환 글루만 수행.
     EndPhase();
-    SetPlayerPawnGameplayState(false, false, true, TEXT("TransitionToCard"));
-    ClearCardDrops();
-    ClearPlayerPawnMovementBases(TEXT("TransitionToCard"));
     BroadcastSwitchLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
     RequestMovePlayersToCardIslandSeats(TEXT("TransitionToCard"));
     StartTimedServerPhase(EDediServerPhase::TransitionToCard, GetTransitionDuration());
@@ -480,45 +472,38 @@ void AMainGameMode::StartCardGamePhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartCardGame after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartCardGame after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
-    ClearPlayerPawnMovementBases(TEXT("CardGame"));
-    RequestMovePlayersToCardIslandSeats(TEXT("CardGame"));
-    SetPlayerPawnGameplayState(true, false, true, TEXT("CardGame"));
-    EnsureThreeCardsForCardGame();
-    ResetSeotdaRoundStates();
-    BroadcastSwitchMode(EGamePhase::Card);
+    // 카드게임 진입 셋업(좌석 이동, 폰 상태, 3장 보장, 섯다 리셋, 모드 전환)은
+    // UCardPhaseStrategy::OnPhaseStart 로 이전됨. GameMode는 페이즈 상태/타이머만 관리한다.
+    BeginPhase(EGamePhase::Card);
+
     ClearServerPhaseTimer();
     CurrentServerPhase = EDediServerPhase::CardGame;
     RemainingPhaseSeconds = 0;
     SetServerRemainingTime(0);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseStart Round=%d Phase=%s Duration=0 ManualCardGame=1"),
+    DS_LOG(TEXT("[DS] PhaseStart Round=%d Phase=%s Duration=0 ManualCardGame=1"),
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));
-    BeginPhase(EGamePhase::Card);
 }
 
 void AMainGameMode::StartResultPhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartResult after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartResult after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
+    // 라운드 결과 정산(미정산 시 폴백)은 UCardPhaseStrategy::OnPhaseEnd(EndPhase 호출)로 이전됨.
     EndPhase();
 
-    if (!bSeotdaRoundResolved && SeotdaRoundStates.Num() > 0)
-    {
-        ResolveSeotdaRoundResult(TEXT("ResultPhaseFallback"));
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] RoundResult Round=%d Summary=%s"),
+    DS_LOG(TEXT("[DS] RoundResult Round=%d Summary=%s"),
         CurrentRound,
-        *LastSeotdaRoundResultSummary);
+        *CardGameService->GetLastRoundResultSummary());
 
     StartTimedServerPhase(EDediServerPhase::Result, GetResultDuration());
 }
@@ -527,12 +512,12 @@ void AMainGameMode::StartTransitionToBattlePhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartTransitionToBattle after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartTransitionToBattle after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
-    ClearCardDrops();
-    ClearRoundCardsForAllPlayers();
+    CardGameService->ClearCardDrops();
+    CardGameService->ClearRoundCardsForAllPlayers();
     SetPlayerPawnGameplayState(true, false, true, TEXT("TransitionToBattle"));
     ClearPlayerPawnMovementBases(TEXT("TransitionToBattle"));
     BroadcastSwitchLevel(TEXT("Card_Game_Stage"), TEXT("TPS_Game_Stage"));
@@ -543,7 +528,7 @@ void AMainGameMode::StartGameEndPhase()
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] GameEnd ignored duplicate RoomId=%d Round=%d"), DediRoomId, CurrentRound);
+        DS_LOG(TEXT("[DS] GameEnd ignored duplicate RoomId=%d Round=%d"), DediRoomId, CurrentRound);
         return;
     }
 
@@ -551,8 +536,8 @@ void AMainGameMode::StartGameEndPhase()
     bGameStarted = false;
 
     EndPhase();
-    ClearCardDrops();
-    ClearRoundCardsForAllPlayers();
+    CardGameService->ClearCardDrops();
+    CardGameService->ClearRoundCardsForAllPlayers();
     ClearServerPhaseTimer();
 
     CurrentServerPhase = EDediServerPhase::GameEnd;
@@ -585,7 +570,7 @@ void AMainGameMode::StartGameEndPhase()
                 continue;
             }
 
-            const int32 Money = GetSeotdaPlayerMoney(PS);
+            const int32 Money = CardGameService->GetSeotdaPlayerMoney(PS);
             const FString PlayerName = PS->GetPlayerName();
 
             MoneyParts.Add(FString::Printf(TEXT("%s=%d"), *PlayerName, Money));
@@ -613,7 +598,7 @@ void AMainGameMode::StartGameEndPhase()
         WinnerName = FString::Printf(TEXT("Tie(%d players, Money=%d)"), BestMoneyPlayerCount, BestMoney);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] GameEnd RoomId=%d Round=%d MaxRound=%d Winner=%s MoneySummary=%s"),
+    DS_LOG(TEXT("[DS] GameEnd RoomId=%d Round=%d MaxRound=%d Winner=%s MoneySummary=%s"),
         DediRoomId,
         CurrentRound,
         MaxRoundCount,
@@ -652,2724 +637,47 @@ void AMainGameMode::StartGameEndPhase()
             false
         );
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] MatchEndShutdownScheduled Delay=10.0 RoomId=%d Round=%d"),
+        DS_LOG(TEXT("[DS] MatchEndShutdownScheduled Delay=10.0 RoomId=%d Round=%d"),
             DediRoomId,
             CurrentRound);
     }
 }
 
 
-FString AMainGameMode::GetOwnedCardsDebugString(const AMainPlayerState* PS) const
+FCardPlacementService AMainGameMode::MakeCardPlacementService() const
 {
-    if (!PS)
-    {
-        return TEXT("None");
-    }
-
-    TArray<FString> Parts;
-
-    for (const FOwnedCardInfo& CardInfo : PS->OwnedCards)
-    {
-        Parts.Add(FString::Printf(
-            TEXT("#%d:%s"),
-            CardInfo.CardInstanceId,
-            *CardDebug::ToString(CardInfo.CardID)
-        ));
-    }
-
-    return Parts.Num() > 0 ? FString::Join(Parts, TEXT(", ")) : TEXT("Empty");
-}
-
-bool AMainGameMode::TryPickupCard(AMainPlayerController* RequestingPC, ACardDropActor* TargetCard)
-{
-    if (!HasAuthority())
-    {
-        return false;
-    }
-
-    if (!RequestingPC || !TargetCard)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=InvalidRequest"));
-        return false;
-    }
-
-    if (!IsCardPickupAllowed())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=InvalidPhase Player=%s Phase=%s"),
-            *RequestingPC->GetName(),
-            GetServerPhaseName(CurrentServerPhase));
-        return false;
-    }
-
-    if (TargetCard->IsPickedUp())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=AlreadyPicked Player=%s Instance=%d"),
-            *RequestingPC->GetName(),
-            TargetCard->GetCardInstanceId());
-        return false;
-    }
-
-    APawn* Pawn = RequestingPC->GetPawn();
-    AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
-    if (!Pawn || !PS)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=MissingPawnOrPS Player=%s"), *RequestingPC->GetName());
-        return false;
-    }
-
-    if (PS->OwnedCards.Num() >= MaxCardsPerPlayerPerRound)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=CardLimit Player=%s Owned=%d Max=%d OwnedCards=[%s]"),
-            *RequestingPC->GetName(),
-            PS->OwnedCards.Num(),
-            MaxCardsPerPlayerPerRound,
-            *GetOwnedCardsDebugString(PS));
-
-        return false;
-    }
-
-    const float Distance = FVector::Dist(Pawn->GetActorLocation(), TargetCard->GetActorLocation());
-    if (Distance > CardPickupRange)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=Distance Player=%s Instance=%d Distance=%.2f Range=%.2f"),
-            *RequestingPC->GetName(),
-            TargetCard->GetCardInstanceId(),
-            Distance,
-            CardPickupRange);
-        return false;
-    }
-
-    FServerCardRecord* Record = ServerCardRecords.Find(TargetCard->GetCardInstanceId());
-    if (!Record)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=NoRecord Player=%s Instance=%d"),
-            *RequestingPC->GetName(),
-            TargetCard->GetCardInstanceId());
-        return false;
-    }
-
-    if (Record->State != ECardRuntimeState::WorldDrop || Record->DropActor.Get() != TargetCard)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupReject Reason=StateMismatch Player=%s Instance=%d State=%d"),
-            *RequestingPC->GetName(),
-            Record->CardInstanceId,
-            static_cast<int32>(Record->State));
-        return false;
-    }
-
-    FOwnedCardInfo CardInfo;
-    CardInfo.CardInstanceId = Record->CardInstanceId;
-    CardInfo.CardID = Record->CardID;
-
-    PS->AddOwnedCard(CardInfo);
-
-    Record->State = ECardRuntimeState::Owned;
-    Record->OwnerPlayerState = PS;
-    Record->DropActor = nullptr;
-
-    TargetCard->MarkPickedUp();
-    ActiveCardDrops.RemoveAll([TargetCard](const TObjectPtr<ACardDropActor>& CardActor)
-    {
-        return CardActor.Get() == TargetCard;
-    });
-    TargetCard->Destroy();
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupOK Player=%s Instance=%d Card=%d Name=%s OwnedCount=%d OwnedCards=[%s]"),
-        *PS->GetPlayerName(),
-        CardInfo.CardInstanceId,
-        static_cast<int32>(CardInfo.CardID),
-        *CardDebug::ToString(CardInfo.CardID),
-        PS->PublicCardCount,
-        *GetOwnedCardsDebugString(PS));
-
-
-    return true;
-}
-
-
-
-bool AMainGameMode::SubmitSeotdaSelection(AMainPlayerController* RequestingPC, bool bCard0, bool bCard1, bool bCard2)
-{
-    if (!HasAuthority())
-    {
-        return false;
-    }
-
-    if (!RequestingPC)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidRequest"));
-        return false;
-    }
-
-    if (CurrentServerPhase != EDediServerPhase::CardGame)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidPhase Player=%s Phase=%s"),
-            *RequestingPC->GetName(),
-            GetServerPhaseName(CurrentServerPhase));
-        return false;
-    }
-
-    AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
-    if (!PS)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=MissingPS Player=%s"), *RequestingPC->GetName());
-        return false;
-    }
-
-    if (PS->OwnedCards.Num() != MaxCardsPerPlayerPerRound)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidCardCount Player=%s Count=%d Required=%d"),
-            *PS->GetPlayerName(),
-            PS->OwnedCards.Num(),
-            MaxCardsPerPlayerPerRound);
-        return false;
-    }
-
-    const int32 SelectedCount = (bCard0 ? 1 : 0) + (bCard1 ? 1 : 0) + (bCard2 ? 1 : 0);
-    if (SelectedCount != 2)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=InvalidSelectCount Player=%s Count=%d"),
-            *PS->GetPlayerName(),
-            SelectedCount);
-        return false;
-    }
-
-    FSeotdaPlayerRoundState* ExistingState = SeotdaRoundStates.Find(PS);
-    if (ExistingState && ExistingState->bSubmitted)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitReject Reason=AlreadySubmitted Player=%s"), *PS->GetPlayerName());
-        return false;
-    }
-
-    TArray<FOwnedCardInfo> SelectedCards;
-    if (bCard0)
-    {
-        SelectedCards.Add(PS->OwnedCards[0]);
-    }
-    if (bCard1)
-    {
-        SelectedCards.Add(PS->OwnedCards[1]);
-    }
-    if (bCard2)
-    {
-        SelectedCards.Add(PS->OwnedCards[2]);
-    }
-
-    FSeotdaHandResult HandResult = EvaluateSeotdaHand(SelectedCards[0], SelectedCards[1]);
-
-    FSeotdaPlayerRoundState NewState;
-    NewState.PlayerState = PS;
-    NewState.bSubmitted = true;
-
-    BroadcastSeotdaState();
-
-    NewState.HandResult = HandResult;
-    NewState.SelectedCardInstanceIds = HandResult.UsedCardInstanceIds;
-    SeotdaRoundStates.Add(PS, NewState);
-
-    for (int32 InstanceId : HandResult.UsedCardInstanceIds)
-    {
-        if (FServerCardRecord* Record = ServerCardRecords.Find(InstanceId))
-        {
-            if (Record->OwnerPlayerState.Get() == PS)
-            {
-                Record->State = ECardRuntimeState::Used;
-            }
-        }
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitOK Player=%s Selected=[#%d:%s, #%d:%s] Combo=%s Rank=%d SubRank=%d AllCards=[%s]"),
-        *PS->GetPlayerName(),
-
-        SelectedCards[0].CardInstanceId,
-        *CardDebug::ToString(SelectedCards[0].CardID),
-
-        SelectedCards[1].CardInstanceId,
-        *CardDebug::ToString(SelectedCards[1].CardID),
-
-        *HandResult.Name,
-        HandResult.Rank,
-        HandResult.SubRank,
-
-        *GetOwnedCardsDebugString(PS));
-
-    BroadcastSeotdaState();
-
-    TryResolveSeotdaRoundIfReady();
-    return true;
-}
-
-void AMainGameMode::ResetSeotdaRoundStates()
-{
-    SeotdaRoundStates.Empty();
-    SeotdaTurnOrder.Empty();
-
-    // 湲곕낯 ?먮룉? ?쒕쾭媛 ?ｋ뒗?? ?뚮젅?댁뼱 ?덉뿉?쒕뒗 鍮좎?吏 ?딅뒗??
-    SeotdaPot = FMath::Max(0, SeotdaServerSeedPot);
-
-    // Call???뚮?????媛??뚮젅?댁뼱媛 湲곕낯 2?먯쓣 ?대룄濡??쒖옉 湲곗? 踰좏똿??2濡??붾떎.
-    SeotdaCurrentBet = FMath::Max(0, SeotdaBaseCallBet);
-
-    SeotdaCurrentTurnIndex = 0;
-    bSeotdaBettingActive = false;
-    bSeotdaRoundResolved = false;
-    LastSeotdaRoundResultSummary = TEXT("Pending");
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda Reset Round=%d"), CurrentRound);
-}
-
-void AMainGameMode::TryResolveSeotdaRoundIfReady()
-{
-    if (!HasAuthority() || !GetWorld())
-    {
-        return;
-    }
-
-    int32 TargetCount = 0;
-    int32 SubmittedCount = 0;
-
-    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-    {
-        APlayerController* PC = It->Get();
-        if (!PC)
-        {
-            continue;
-        }
-
-        AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
-        if (!PS)
-        {
-            continue;
-        }
-
-        TargetCount++;
-        FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
-        if (State && State->bSubmitted)
-        {
-            SubmittedCount++;
-        }
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda SubmitProgress submitted=%d targets=%d Round=%d"), SubmittedCount, TargetCount, CurrentRound);
-
-    if (TargetCount <= 0 || SubmittedCount < TargetCount || bSeotdaBettingActive)
-    {
-        return;
-    }
-
-    StartSeotdaBettingRound();
-    BroadcastSeotdaState();
-
-}
-
-void AMainGameMode::StartSeotdaBettingRound()
-{
-    if (!HasAuthority() || !GetWorld())
-    {
-        return;
-    }
-
-    SeotdaTurnOrder.Empty();
-
-    // 湲곕낯 ?먮룉? ?쒕쾭媛 ?ｋ뒗?? ?뚮젅?댁뼱 ?덉뿉?쒕뒗 鍮좎?吏 ?딅뒗??
-    SeotdaPot = FMath::Max(0, SeotdaServerSeedPot);
-
-    // Call???뚮?????媛??뚮젅?댁뼱媛 湲곕낯 2?먯쓣 ?대룄濡??쒖옉 湲곗? 踰좏똿??2濡??붾떎.
-    SeotdaCurrentBet = FMath::Max(0, SeotdaBaseCallBet);
-
-    SeotdaCurrentTurnIndex = 0;
-
-    for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-{
-FSeotdaPlayerRoundState& State = Pair.Value;
-
-if (!State.PlayerState.IsValid())
-{
-continue;
-}
-
-if (!State.bSubmitted)
-{
-continue;
-}
-
-State.bActedThisBetRound = false;
-State.BetMoney = 0;
-}
-
-bSeotdaBettingActive = true;
-
-    ClearServerPhaseTimer();
-    RemainingPhaseSeconds = 0;
-    SetServerRemainingTime(0);
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BettingTimerDisabled Round=%d Pot=%d CurrentBet=%d"),
-        CurrentRound,
-        SeotdaPot,
-        SeotdaCurrentBet);
-
-
-    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-    {
-        APlayerController* PC = It->Get();
-        if (!PC)
-        {
-            continue;
-        }
-
-        AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
-        if (!PS)
-        {
-            continue;
-        }
-
-        FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
-        if (!State || !State->bSubmitted)
-        {
-            continue;
-        }
-
-        State->bFolded = false;
-        State->bActedThisBetRound = false;
-        State->BetMoney = 0;
-        SeotdaTurnOrder.Add(PS);
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BettingStart players=%d pot=%d currentBet=%d round=%d"),
-        SeotdaTurnOrder.Num(),
-        SeotdaPot,
-        SeotdaCurrentBet,
-        CurrentRound);
-
-    if (SeotdaTurnOrder.Num() <= 1)
-    {
-        ResolveSeotdaRoundResult(TEXT("SinglePlayer"));
-        return;
-    }
-
-    AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetTurn Player=%s Index=%d Pot=%d CurrentBet=%d"),
-        TurnPS ? *TurnPS->GetPlayerName() : TEXT("<NULL>"),
-        SeotdaCurrentTurnIndex,
-        SeotdaPot,
-        SeotdaCurrentBet);
-
-    BroadcastSeotdaState();
-
-}
-
-bool AMainGameMode::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, EBettingAction Action)
-{
-    if (!HasAuthority())
-    {
-        return false;
-    }
-
-    if (!RequestingPC)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidRequest Action=%d"), static_cast<int32>(Action));
-        return false;
-    }
-
-    if (CurrentServerPhase != EDediServerPhase::CardGame)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidPhase Player=%s Phase=%s Action=%d"),
-            *RequestingPC->GetName(),
-            GetServerPhaseName(CurrentServerPhase),
-            static_cast<int32>(Action));
-        return false;
-    }
-
-    if (!bSeotdaBettingActive)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=BettingNotActive Player=%s Action=%d"),
-            *RequestingPC->GetName(),
-            static_cast<int32>(Action));
-        return false;
-    }
-
-    AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
-    if (!PS)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=MissingPS Player=%s Action=%d"),
-            *RequestingPC->GetName(),
-            static_cast<int32>(Action));
-        return false;
-    }
-
-    AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
-    if (TurnPS != PS)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=NotYourTurn Player=%s Turn=%s Action=%d"),
-            *PS->GetPlayerName(),
-            TurnPS ? *TurnPS->GetPlayerName() : TEXT("<NULL>"),
-            static_cast<int32>(Action));
-        return false;
-    }
-
-    FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
-    if (!State || !State->bSubmitted || State->bFolded)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidState Player=%s Action=%d"),
-            *PS->GetPlayerName(),
-            static_cast<int32>(Action));
-        return false;
-    }
-
-    const int32 OldCurrentBet = SeotdaCurrentBet;
-    const int32 CallAmount = FMath::Max(0, SeotdaCurrentBet - State->BetMoney);
-    int32 RequestedPay = 0;
-    bool bFoldAction = false;
-
-    switch (Action)
-    {
-    case EBettingAction::Check:
-        if (CallAmount > 0)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=CheckNeedsCall Player=%s Call=%d"), *PS->GetPlayerName(), CallAmount);
-            return false;
-        }
-        RequestedPay = 0;
-        break;
-    case EBettingAction::Call:
-        RequestedPay = CallAmount;
-        break;
-    case EBettingAction::Quarter:
-        RequestedPay = CallAmount + FMath::Max(1, (SeotdaPot + CallAmount) / 4);
-        break;
-    case EBettingAction::Half:
-        RequestedPay = CallAmount + FMath::Max(1, (SeotdaPot + CallAmount) / 2);
-        break;
-    case EBettingAction::Ddadang:
-        RequestedPay = CallAmount + FMath::Max(SeotdaBaseCallBet, SeotdaCurrentBet);
-        break;
-    case EBettingAction::Pping:
-        RequestedPay = (CallAmount > 0) ? CallAmount : SeotdaBaseCallBet;
-        break;
-    case EBettingAction::AllIn:
-        RequestedPay = GetSeotdaPlayerMoney(PS);
-        break;
-    case EBettingAction::Die:
-        bFoldAction = true;
-        break;
-    default:
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetReject Reason=InvalidAction Player=%s Action=%d"),
-            *PS->GetPlayerName(),
-            static_cast<int32>(Action));
-        return false;
-    }
-
-    int32 Paid = 0;
-    if (bFoldAction)
-    {
-        State->bFolded = true;
-        State->bActedThisBetRound = true;
-    }
-    else
-    {
-        Paid = PaySeotdaBet(PS, RequestedPay);
-        State->BetMoney += Paid;
-        if (State->BetMoney > SeotdaCurrentBet)
-        {
-            SeotdaCurrentBet = State->BetMoney;
-        }
-
-        const bool bRaised = SeotdaCurrentBet > OldCurrentBet;
-        if (bRaised)
-        {
-            for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-            {
-                if (Pair.Key != PS && Pair.Value.bSubmitted && !Pair.Value.bFolded)
-                {
-                    Pair.Value.bActedThisBetRound = false;
-                }
-            }
-        }
-
-        State->bActedThisBetRound = true;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetOK Player=%s Action=%d Paid=%d BetMoney=%d Pot=%d CurrentBet=%d Money=%d Folded=%d"),
-        *PS->GetPlayerName(),
-        static_cast<int32>(Action),
-        Paid,
-        State->BetMoney,
-        SeotdaPot,
-        SeotdaCurrentBet,
-        GetSeotdaPlayerMoney(PS),
-        State->bFolded ? 1 : 0);
-
-    if (GetActiveSeotdaPlayerCount() <= 1 || AreSeotdaBetsSettled())
-    {
-        ResolveSeotdaRoundResult(TEXT("BetSettled"));
-        BroadcastSeotdaState();
-
-        if (CurrentServerPhase == EDediServerPhase::CardGame)
-        {
-            FinishCurrentServerPhase(TEXT("SeotdaBetSettled"));
-        }
-
-        return true;
-    }
-
-    AdvanceSeotdaBettingTurn();
-    return true;
-}
-
-void AMainGameMode::AdvanceSeotdaBettingTurn()
-{
-    if (SeotdaTurnOrder.Num() <= 0)
-    {
-        ResolveSeotdaRoundResult(TEXT("NoTurnOrder"));
-        return;
-    }
-
-    for (int32 Step = 0; Step < SeotdaTurnOrder.Num(); ++Step)
-    {
-        SeotdaCurrentTurnIndex = (SeotdaCurrentTurnIndex + 1) % SeotdaTurnOrder.Num();
-        AMainPlayerState* CandidatePS = SeotdaTurnOrder[SeotdaCurrentTurnIndex].Get();
-        FSeotdaPlayerRoundState* State = CandidatePS ? SeotdaRoundStates.Find(CandidatePS) : nullptr;
-        if (CandidatePS && State && State->bSubmitted && !State->bFolded)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda BetTurn Player=%s Index=%d Pot=%d CurrentBet=%d NeedCall=%d"),
-                *CandidatePS->GetPlayerName(),
-                SeotdaCurrentTurnIndex,
-                SeotdaPot,
-                SeotdaCurrentBet,
-                FMath::Max(0, SeotdaCurrentBet - State->BetMoney));
-
-    BroadcastSeotdaState();
-
-            return;
-        }
-    }
-
-    ResolveSeotdaRoundResult(TEXT("NoActiveTurn"));
-}
-
-void AMainGameMode::ResolveSeotdaRoundResult(const TCHAR* Reason)
-{
-    if (!HasAuthority())
-    {
-        return;
-    }
-
-    if (bSeotdaRoundResolved)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda ResultSkip AlreadyResolved Summary=%s"),
-            *LastSeotdaRoundResultSummary);
-        return;
-    }
-
-    for (int32 RedealAttempt = 0; RedealAttempt < 8 && ShouldForceSeotdaRedeal(); ++RedealAttempt)
-    {
-        if (!TryApplySeotdaRedealFromRemainingCards(Reason))
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealStop Reason=NotEnoughRemainingCards Attempt=%d"), RedealAttempt);
-            break;
-        }
-    }
-
-    FSeotdaPlayerRoundState* BestState = nullptr;
-    bool bTie = false;
-
-    for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-    {
-        FSeotdaPlayerRoundState& State = Pair.Value;
-
-        if (!State.bSubmitted || State.bFolded)
-        {
-            continue;
-        }
-
-        if (!BestState)
-        {
-            BestState = &State;
-            bTie = false;
-            continue;
-        }
-
-        const int32 CompareResult = CompareSeotdaHands(State.HandResult, BestState->HandResult);
-
-        if (CompareResult > 0)
-        {
-            BestState = &State;
-            bTie = false;
-        }
-        else if (CompareResult == 0)
-        {
-            bTie = true;
-        }
-    }
-
-    if (!BestState || !BestState->PlayerState.IsValid())
-    {
-        LastSeotdaRoundResultSummary = FString::Printf(
-            TEXT("Winner=None Combo=None Pot=%d Reason=%s"),
-            SeotdaPot,
-            Reason ? Reason : TEXT("<NULL>")
-        );
-
-        bSeotdaBettingActive = false;
-        bSeotdaRoundResolved = true;
-        BroadcastSeotdaState();
-
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda ResultFailed %s"), *LastSeotdaRoundResultSummary);
-        return;
-    }
-
-    AMainPlayerState* WinnerPS = BestState->PlayerState.Get();
-
-    if (WinnerPS && SeotdaPot > 0)
-    {
-        WinnerPS->AddGold(SeotdaPot);
-    }
-
-    LastSeotdaRoundResultSummary = FString::Printf(
-        TEXT("Winner=%s Combo=%s Rank=%d SubRank=%d Pot=%d Tie=%d Reason=%s Money=%d"),
-
-        WinnerPS ? *WinnerPS->GetPlayerName() : TEXT("<NULL>"),
-        *BestState->HandResult.Name,
-        BestState->HandResult.Rank,
-        BestState->HandResult.SubRank,
-        SeotdaPot,
-        bTie ? 1 : 0,
-        Reason ? Reason : TEXT("<NULL>"),
-        WinnerPS ? GetSeotdaPlayerMoney(WinnerPS) : 0
-    );
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda Winner %s"), *LastSeotdaRoundResultSummary);
-
-    bSeotdaBettingActive = false;
-    bSeotdaRoundResolved = true;
-    BroadcastSeotdaState();
-
-    const FString ClientResultText = FString::Printf(
-        TEXT("[ROUND %d RESULT] %s"),
-        CurrentRound,
-        *LastSeotdaRoundResultSummary
-    );
-
-    if (GetWorld())
-    {
-        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-        {
-            AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
-            if (MPC)
-            {
-                MPC->Client_ShowSeotdaResult(ClientResultText);
-            }
-        }
-    }
-}
-void AMainGameMode::BroadcastSeotdaState() const
-{
-if (!HasAuthority() || !GetWorld())
-{
-return;
-}
-
-AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
-const FString TurnName = TurnPS ? TurnPS->GetPlayerName() : TEXT("None");
-
-for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-{
-AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
-if (!MPC)
-{
-continue;
-}
-
-AMainPlayerState* PS = MPC->GetPlayerState<AMainPlayerState>();
-
-bool bMySubmitted = false;
-bool bMyFolded = false;
-int32 MyBetMoney = 0;
-int32 NeedCall = 0;
-bool bMyTurn = false;
-
-if (PS)
-{
-bMyTurn = (TurnPS == PS);
-
-if (const FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS))
-{
-bMySubmitted = State->bSubmitted;
-bMyFolded = State->bFolded;
-MyBetMoney = State->BetMoney;
-NeedCall = FMath::Max(0, SeotdaCurrentBet - MyBetMoney);
-}
-}
-
-MPC->Client_UpdateSeotdaState(
-CurrentRound,
-bSeotdaBettingActive,
-TurnName,
-SeotdaPot,
-SeotdaCurrentBet,
-MyBetMoney,
-NeedCall,
-bMyTurn,
-bMySubmitted,
-bMyFolded,
-bSeotdaRoundResolved
-);
-}
-}
-AMainPlayerState* AMainGameMode::GetCurrentSeotdaTurnPlayer() const
-{
-    if (SeotdaTurnOrder.Num() <= 0 || !SeotdaTurnOrder.IsValidIndex(SeotdaCurrentTurnIndex))
-    {
-        return nullptr;
-    }
-
-    return SeotdaTurnOrder[SeotdaCurrentTurnIndex].Get();
-}
-
-int32 AMainGameMode::GetSeotdaPlayerMoney(const AMainPlayerState* TargetPS) const
-{
-    return TargetPS ? TargetPS->CurPlayerData.HoldingGold : 0;
-}
-
-int32 AMainGameMode::PaySeotdaBet(AMainPlayerState* TargetPS, int32 Amount)
-{
-    if (!TargetPS || Amount <= 0)
-    {
-        return 0;
-    }
-
-    const int32 ActualPay = FMath::Min(Amount, FMath::Max(0, TargetPS->CurPlayerData.HoldingGold));
-    if (ActualPay > 0)
-    {
-        TargetPS->AddGold(-ActualPay);
-        SeotdaPot += ActualPay;
-    }
-
-    return ActualPay;
-}
-
-int32 AMainGameMode::GetActiveSeotdaPlayerCount() const
-{
-    int32 Count = 0;
-    for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-    {
-        if (Pair.Value.bSubmitted && !Pair.Value.bFolded)
-        {
-            Count++;
-        }
-    }
-    return Count;
-}
-
-bool AMainGameMode::AreSeotdaBetsSettled() const
-{
-int32 ActiveSubmittedCount = 0;
-int32 ActedCount = 0;
-
-for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-{
-const FSeotdaPlayerRoundState& State = Pair.Value;
-
-if (!State.PlayerState.IsValid())
-{
-continue;
-}
-
-if (!State.bSubmitted)
-{
-continue;
-}
-
-if (State.bFolded)
-{
-continue;
-}
-
-ActiveSubmittedCount++;
-
-if (!State.bActedThisBetRound)
-{
-UE_LOG(LogTemp, Warning,
-TEXT("[DS] Seotda SettleCheck Result=0 Reason=NotActed Player=%s Active=%d Acted=%d CurrentBet=%d PlayerBet=%d"),
-*State.PlayerState->GetPlayerName(),
-ActiveSubmittedCount,
-ActedCount,
-SeotdaCurrentBet,
-State.BetMoney
-);
-
-return false;
-}
-
-if (State.BetMoney < SeotdaCurrentBet)
-{
-UE_LOG(LogTemp, Warning,
-TEXT("[DS] Seotda SettleCheck Result=0 Reason=NeedCall Player=%s Active=%d Acted=%d CurrentBet=%d PlayerBet=%d"),
-*State.PlayerState->GetPlayerName(),
-ActiveSubmittedCount,
-ActedCount,
-SeotdaCurrentBet,
-State.BetMoney
-);
-
-return false;
-}
-
-ActedCount++;
-}
-
-const bool bSettled = ActiveSubmittedCount >= 2 && ActedCount == ActiveSubmittedCount;
-
-UE_LOG(LogTemp, Warning,
-TEXT("[DS] Seotda SettleCheck Result=%d Active=%d Acted=%d CurrentBet=%d"),
-bSettled ? 1 : 0,
-ActiveSubmittedCount,
-ActedCount,
-SeotdaCurrentBet
-);
-
-return bSettled;
-}
-
-AMainGameMode::FSeotdaHandResult AMainGameMode::EvaluateSeotdaHand(const FOwnedCardInfo& FirstCard, const FOwnedCardInfo& SecondCard) const
-{
-    FSeotdaHandResult Result;
-    Result.UsedCardInstanceIds.Add(FirstCard.CardInstanceId);
-    Result.UsedCardInstanceIds.Add(SecondCard.CardInstanceId);
-
-    const ECardID FirstCardID = FirstCard.CardID;
-    const ECardID SecondCardID = SecondCard.CardID;
-
-    const int32 FirstMonth = GetSeotdaCardMonth(FirstCardID);
-    const int32 SecondMonth = GetSeotdaCardMonth(SecondCardID);
-
-    if (FirstMonth <= 0 || SecondMonth <= 0)
-    {
-        Result.Rank = -1;
-        Result.SubRank = 0;
-        Result.Name = TEXT("Invalid");
-        return Result;
-    }
-
-    const bool bFirstGwang = IsSeotdaGwang(FirstCardID);
-    const bool bSecondGwang = IsSeotdaGwang(SecondCardID);
-    const bool bBothGwang = bFirstGwang && bSecondGwang;
-
-    auto IsYulCard = [](ECardID CardID) -> bool
-    {
-        switch (CardID)
-        {
-        case ECardID::Feb_Yul:
-        case ECardID::Apr_Yul:
-        case ECardID::May_Yul:
-        case ECardID::Jun_Yul:
-        case ECardID::Jul_Yul:
-        case ECardID::Aug_Yul:
-        case ECardID::Sep_Yul:
-        case ECardID::Oct_Yul:
-            return true;
-        default:
-            return false;
-        }
-    };
-
-    const bool bBothYul = IsYulCard(FirstCardID) && IsYulCard(SecondCardID);
-
-    if (bBothGwang && HasSeotdaMonths(FirstMonth, SecondMonth, 3, 8))
-    {
-        Result.Rank = 12000;
-        Result.SubRank = 38;
-        Result.Name = TEXT("SamPalGwangDdang");
-        return Result;
-    }
-
-    if (bBothGwang)
-    {
-        Result.Rank = 11000;
-        Result.SubRank = FirstMonth + SecondMonth;
-        Result.Name = TEXT("GwangDdang");
-        return Result;
-    }
-
-    if (FirstMonth == SecondMonth)
-    {
-        Result.Rank = 10000 + FirstMonth;
-        Result.SubRank = FirstMonth;
-        Result.Name = FString::Printf(TEXT("%dDdang"), FirstMonth);
-        return Result;
-    }
-
-    if (HasSeotdaMonths(FirstMonth, SecondMonth, 3, 7))
-    {
-        Result.Rank = 500;
-        Result.SubRank = 37;
-        Result.Name = TEXT("TtaengJabi");
-        Result.SpecialRule = ESeotdaSpecialRule::TtaengJabi;
-        return Result;
-    }
-
-    if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 7))
-    {
-        Result.Rank = 500;
-        Result.SubRank = 47;
-        Result.Name = TEXT("AmhaengEosa");
-        Result.SpecialRule = ESeotdaSpecialRule::AmhaengEosa;
-        return Result;
-    }
-
-    if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 9))
-    {
-        Result.Rank = 400;
-        Result.SubRank = 49;
-        Result.Name = bBothYul ? TEXT("MeongteongguriGusa") : TEXT("Gusa");
-        Result.SpecialRule = bBothYul ? ESeotdaSpecialRule::MeongteongguriGusa : ESeotdaSpecialRule::Gusa;
-        Result.bForcesRedeal = true;
-        return Result;
-    }
-
-    if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 2))
-    {
-        Result.Rank = 9000;
-        Result.SubRank = 12;
-        Result.Name = TEXT("Ali");
-        return Result;
-    }
-
-    if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 4))
-    {
-        Result.Rank = 8000;
-        Result.SubRank = 14;
-        Result.Name = TEXT("Doksa");
-        return Result;
-    }
-
-    if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 9))
-    {
-        Result.Rank = 7000;
-        Result.SubRank = 19;
-        Result.Name = TEXT("Guping");
-        return Result;
-    }
-
-    if (HasSeotdaMonths(FirstMonth, SecondMonth, 1, 10))
-    {
-        Result.Rank = 6000;
-        Result.SubRank = 110;
-        Result.Name = TEXT("Jangping");
-        return Result;
-    }
-
-    if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 10))
-    {
-        Result.Rank = 5000;
-        Result.SubRank = 410;
-        Result.Name = TEXT("Jangsa");
-        return Result;
-    }
-
-    if (HasSeotdaMonths(FirstMonth, SecondMonth, 4, 6))
-    {
-        Result.Rank = 4000;
-        Result.SubRank = 46;
-        Result.Name = TEXT("Seryuk");
-        return Result;
-    }
-
-    const int32 Gut = (FirstMonth + SecondMonth) % 10;
-
-    if (Gut == 9)
-    {
-        Result.Rank = 3000;
-        Result.SubRank = 9;
-        Result.Name = TEXT("GapOh");
-        return Result;
-    }
-
-    if (Gut == 0)
-    {
-        Result.Rank = 0;
-        Result.SubRank = 0;
-        Result.Name = TEXT("Mangtong");
-        return Result;
-    }
-
-    Result.Rank = 1000 + Gut;
-    Result.SubRank = Gut;
-    Result.Name = FString::Printf(TEXT("%dGut"), Gut);
-    return Result;
-}
-
-int32 AMainGameMode::GetSeotdaCardMonth(ECardID CardID) const
-{
-    switch (CardID)
-    {
-    case ECardID::Jan_Gwang:
-    case ECardID::Jan_HongDdi:
-        return 1;
-
-    case ECardID::Feb_Yul:
-    case ECardID::Feb_HongDdi:
-        return 2;
-
-    case ECardID::Mar_Gwang:
-    case ECardID::Mar_HongDdi:
-        return 3;
-
-    case ECardID::Apr_Yul:
-    case ECardID::Apr_ChoDdi:
-        return 4;
-
-    case ECardID::May_Yul:
-    case ECardID::May_ChoDdi:
-        return 5;
-
-    case ECardID::Jun_Yul:
-    case ECardID::Jun_CheongDdi:
-        return 6;
-
-    case ECardID::Jul_Yul:
-    case ECardID::Jul_ChoDdi:
-        return 7;
-
-    case ECardID::Aug_Gwang:
-    case ECardID::Aug_Yul:
-        return 8;
-
-    case ECardID::Sep_Yul:
-    case ECardID::Sep_CheongDdi:
-        return 9;
-
-    case ECardID::Oct_Yul:
-    case ECardID::Oct_CheongDdi:
-        return 10;
-
-    default:
-        return 0;
-    }
-}
-
-bool AMainGameMode::IsSeotdaGwang(ECardID CardID) const
-{
-    return CardID == ECardID::Jan_Gwang ||
-        CardID == ECardID::Mar_Gwang ||
-        CardID == ECardID::Aug_Gwang;
-}
-
-bool AMainGameMode::HasSeotdaMonths(int32 FirstMonth, int32 SecondMonth, int32 A, int32 B) const
-{
-    return (FirstMonth == A && SecondMonth == B) || (FirstMonth == B && SecondMonth == A);
-}
-
-bool AMainGameMode::TryPickupNearestCard(AMainPlayerController* RequestingPC)
-{
-    if (!HasAuthority())
-    {
-        return false;
-    }
-
-    if (!RequestingPC)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=InvalidRequest"));
-        return false;
-    }
-
-    if (!IsCardPickupAllowed())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=InvalidPhase Player=%s Phase=%s"),
-            *RequestingPC->GetName(),
-            GetServerPhaseName(CurrentServerPhase));
-        return false;
-    }
-
-    APawn* Pawn = RequestingPC->GetPawn();
-    if (!Pawn)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=MissingPawn Player=%s"), *RequestingPC->GetName());
-        return false;
-    }
-
-    const FVector PawnLocation = Pawn->GetActorLocation();
-    const float MaxDistanceSq = FMath::Square(CardPickupRange);
-    float BestDistanceSq = MaxDistanceSq;
-    ACardDropActor* BestCard = nullptr;
-
-    for (TObjectPtr<ACardDropActor> CardActorPtr : ActiveCardDrops)
-    {
-        ACardDropActor* CardActor = CardActorPtr.Get();
-        if (!IsValid(CardActor) || CardActor->IsPickedUp())
-        {
-            continue;
-        }
-
-        FServerCardRecord* Record = ServerCardRecords.Find(CardActor->GetCardInstanceId());
-        if (!Record || Record->State != ECardRuntimeState::WorldDrop || Record->DropActor.Get() != CardActor)
-        {
-            continue;
-        }
-
-        const float DistanceSq = FVector::DistSquared(PawnLocation, CardActor->GetActorLocation());
-        if (DistanceSq <= BestDistanceSq)
-        {
-            BestDistanceSq = DistanceSq;
-            BestCard = CardActor;
-        }
-    }
-
-    if (!BestCard)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearestReject Reason=NoNearbyCard Player=%s Range=%.2f"),
-            *RequestingPC->GetName(),
-            CardPickupRange);
-        return false;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card PickupNearest Player=%s Instance=%d Card=%d Name=%s Distance=%.2f"),
-        *RequestingPC->GetName(),
-        BestCard->GetCardInstanceId(),
-        static_cast<int32>(BestCard->GetCardID()),
-        *CardDebug::ToString(BestCard->GetCardID()),
-        FMath::Sqrt(BestDistanceSq));
-
-    return TryPickupCard(RequestingPC, BestCard);
-}
-
-TArray<ECardID> AMainGameMode::BuildCardBundleIDs() const
-{
-    TArray<ECardID> CardIDs;
-    CardIDs.Reserve(20);
-
-    // 20-card Seotda deck.
-    // 1?? 愿? ?띾씈
-    CardIDs.Add(ECardID::Jan_Gwang);
-    CardIDs.Add(ECardID::Jan_HongDdi);
-
-    // 2?? 10?? ?띾씈
-    CardIDs.Add(ECardID::Feb_Yul);
-    CardIDs.Add(ECardID::Feb_HongDdi);
-
-    // 3?? 愿? ?띾씈
-    CardIDs.Add(ECardID::Mar_Gwang);
-    CardIDs.Add(ECardID::Mar_HongDdi);
-
-    // 4?? 10?? 珥덈씈
-    CardIDs.Add(ECardID::Apr_Yul);
-    CardIDs.Add(ECardID::Apr_ChoDdi);
-
-    // 5?? 10?? 珥덈씈
-    CardIDs.Add(ECardID::May_Yul);
-    CardIDs.Add(ECardID::May_ChoDdi);
-
-    // 6?? 10?? 泥?씈
-    CardIDs.Add(ECardID::Jun_Yul);
-    CardIDs.Add(ECardID::Jun_CheongDdi);
-
-    // 7?? 10?? 珥덈씈
-    CardIDs.Add(ECardID::Jul_Yul);
-    CardIDs.Add(ECardID::Jul_ChoDdi);
-
-    // 8?? 愿? 10??
-    CardIDs.Add(ECardID::Aug_Gwang);
-    CardIDs.Add(ECardID::Aug_Yul);
-
-    // 9?? 10?? 泥?씈
-    CardIDs.Add(ECardID::Sep_Yul);
-    CardIDs.Add(ECardID::Sep_CheongDdi);
-
-    // 10?? 10?? 泥?씈
-    CardIDs.Add(ECardID::Oct_Yul);
-    CardIDs.Add(ECardID::Oct_CheongDdi);
-
-    return CardIDs;
-}
-
-void AMainGameMode::ShuffleCardIDs(TArray<ECardID>& CardIDs) const
-{
-    for (int32 Index = CardIDs.Num() - 1; Index > 0; --Index)
-    {
-        const int32 SwapIndex = FMath::RandRange(0, Index);
-        if (Index != SwapIndex)
-        {
-            CardIDs.Swap(Index, SwapIndex);
-        }
-    }
-}
-
-FVector AMainGameMode::GetDistributedCardDropLocation(int32 Index, int32 TotalCount) const
-{
-    if (TotalCount <= 0)
-    {
-        return CardBundleDropCenter;
-    }
-
-    const float SafeExtentX = FMath::Max(1.0f, CardBundleDropExtent.X);
-    const float SafeExtentY = FMath::Max(1.0f, CardBundleDropExtent.Y);
-    const float Aspect = SafeExtentX / SafeExtentY;
-
-    // 湲곗〈 諛⑹떇? 20?μ씪 ??6x4=24移몄씠 ?섏뼱 留덉?留?以꾩씠 移섏슦移????덉뿀??
-    // ??諛⑹떇? 20??湲곗? 5x4??媛源앷쾶 留뚮뱾???꾩껜 ?곸뿭????怨좊Ⅴ寃?諛곗튂?쒕떎.
-    const int32 RowCount = FMath::Max(1, FMath::CeilToInt(FMath::Sqrt(static_cast<float>(TotalCount) / FMath::Max(0.25f, Aspect))));
-    const int32 ColumnCount = FMath::Max(1, FMath::CeilToInt(static_cast<float>(TotalCount) / static_cast<float>(RowCount)));
-
-    const int32 Row = Index / ColumnCount;
-    const int32 Column = Index % ColumnCount;
-
-    const int32 ItemsInThisRow = FMath::Min(ColumnCount, TotalCount - Row * ColumnCount);
-
-    const float FullWidth = CardBundleDropExtent.X * 2.0f;
-    const float FullHeight = CardBundleDropExtent.Y * 2.0f;
-
-    const float CellWidth = FullWidth / static_cast<float>(ColumnCount);
-    const float CellHeight = FullHeight / static_cast<float>(RowCount);
-
-    const float MinX = CardBundleDropCenter.X - CardBundleDropExtent.X;
-    const float MinY = CardBundleDropCenter.Y - CardBundleDropExtent.Y;
-
-    // 留덉?留?以꾩씠 苑?李⑥? ?딆븘??以묒븰 ?뺣젹?섍쾶 蹂댁젙
-    const float RowWidth = CellWidth * static_cast<float>(ItemsInThisRow);
-    const float RowStartX = CardBundleDropCenter.X - RowWidth * 0.5f;
-
-    const float JitterRatio = FMath::Clamp(CardBundleDropJitterRatio, 0.0f, 0.20f);
-    const float JitterX = CellWidth * JitterRatio;
-    const float JitterY = CellHeight * JitterRatio;
-
-    const float X = RowStartX + (static_cast<float>(Column) + 0.5f) * CellWidth + FMath::FRandRange(-JitterX, JitterX);
-    const float Y = MinY + (static_cast<float>(Row) + 0.5f) * CellHeight + FMath::FRandRange(-JitterY, JitterY);
-    const float Z = CardBundleDropCenter.Z;
-
-    return FVector(X, Y, Z);
-}
-
-int32 AMainGameMode::GetCardIslandBalanceValue(ECardID CardID) const
-{
-    switch (CardID)
-    {
-    case ECardID::Jan_Gwang:
-    case ECardID::Mar_Gwang:
-    case ECardID::Aug_Gwang:
-        return 9;
-
-    case ECardID::Feb_Yul:
-    case ECardID::Apr_Yul:
-    case ECardID::May_Yul:
-    case ECardID::Jun_Yul:
-    case ECardID::Jul_Yul:
-    case ECardID::Aug_Yul:
-    case ECardID::Sep_Yul:
-    case ECardID::Oct_Yul:
-        return 6;
-
-    case ECardID::Jan_HongDdi:
-    case ECardID::Feb_HongDdi:
-    case ECardID::Mar_HongDdi:
-    case ECardID::Apr_ChoDdi:
-    case ECardID::May_ChoDdi:
-    case ECardID::Jun_CheongDdi:
-    case ECardID::Jul_ChoDdi:
-    case ECardID::Sep_CheongDdi:
-    case ECardID::Oct_CheongDdi:
-        return 5;
-
-    default:
-        return 0;
-    }
-}
-
-int32 AMainGameMode::GetCardIslandGroupBalanceValue(const TArray<ECardID>& CardIDs) const
-{
-    int32 TotalValue = 0;
-
-    for (ECardID CardID : CardIDs)
-    {
-        TotalValue += GetCardIslandBalanceValue(CardID);
-    }
-
-    return TotalValue;
-}
-
-TArray<TArray<ECardID>> AMainGameMode::BuildBalancedIslandCardGroups() const
-{
-    TArray<TArray<ECardID>> Groups;
-    Groups.SetNum(4);
-
-    // 愿?= 9, 10??= 6, ??= 5 湲곗?.
-    // 紐⑤뱺 ??洹몃９??珥앺빀??30?먯씠 ?섎룄濡?怨좎젙 援ъ꽦?쒕떎.
-    Groups[0].Add(ECardID::Jan_Gwang);
-    Groups[0].Add(ECardID::Aug_Yul);
-    Groups[0].Add(ECardID::Feb_HongDdi);
-    Groups[0].Add(ECardID::May_ChoDdi);
-    Groups[0].Add(ECardID::Jul_ChoDdi);
-
-    Groups[1].Add(ECardID::Mar_Gwang);
-    Groups[1].Add(ECardID::May_Yul);
-    Groups[1].Add(ECardID::Jan_HongDdi);
-    Groups[1].Add(ECardID::Jun_CheongDdi);
-    Groups[1].Add(ECardID::Oct_CheongDdi);
-
-    Groups[2].Add(ECardID::Aug_Gwang);
-    Groups[2].Add(ECardID::Feb_Yul);
-    Groups[2].Add(ECardID::Mar_HongDdi);
-    Groups[2].Add(ECardID::Apr_ChoDdi);
-    Groups[2].Add(ECardID::Sep_CheongDdi);
-
-    // 愿묒씠 ?녿뒗 洹몃９? 10??5?μ쑝濡?媛移?蹂댁젙?쒕떎.
-    Groups[3].Add(ECardID::Apr_Yul);
-    Groups[3].Add(ECardID::Jun_Yul);
-    Groups[3].Add(ECardID::Jul_Yul);
-    Groups[3].Add(ECardID::Sep_Yul);
-    Groups[3].Add(ECardID::Oct_Yul);
-
-    // ?쇱슫?쒕쭏???대뼡 ?ъ씠 ?대뼡 媛移?洹몃９??諛쏅뒗吏 ?욌뒗??
-    for (int32 Index = Groups.Num() - 1; Index > 0; --Index)
-    {
-        const int32 SwapIndex = FMath::RandRange(0, Index);
-        if (Index != SwapIndex)
-        {
-            Groups.Swap(Index, SwapIndex);
-        }
-    }
-
-    // 媛숈? ???덉쓽 移대뱶 ?꾩튂 ?쒖꽌???욌뒗??
-    for (TArray<ECardID>& Group : Groups)
-    {
-        ShuffleCardIDs(Group);
-    }
-
-    return Groups;
-}
-
-bool AMainGameMode::IsSeasonIslandActorName(const FString& ActorName) const
-{
-    return ActorName.Contains(TEXT("BPP_MAP_Summer"), ESearchCase::IgnoreCase)
-        || ActorName.Contains(TEXT("BPP_MAP_Spring"), ESearchCase::IgnoreCase)
-        || ActorName.Contains(TEXT("BPP_MAP_Autumn"), ESearchCase::IgnoreCase)
-        || ActorName.Contains(TEXT("BPP_MAP_Winter"), ESearchCase::IgnoreCase);
-}
-
-
-TArray<AMainGameMode::FCardIslandDropZone> AMainGameMode::FindCardIslandDropZones() const
-{
-    TArray<FCardIslandDropZone> DropZones;
-
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        return DropZones;
-    }
-
-    auto GetActorSearchText = [](const AActor* Actor) -> FString
-    {
-        if (!IsValid(Actor))
-        {
-            return FString();
-        }
-
-        const FString ActorName = GetNameSafe(Actor);
-        FString LabelName;
-#if WITH_EDITOR
-        LabelName = Actor->GetActorLabel();
-#endif
-        const FString ClassName = Actor->GetClass() ? Actor->GetClass()->GetName() : FString();
-        return ActorName + TEXT(" ") + LabelName + TEXT(" ") + ClassName;
-    };
-
-    auto GetSeasonIslandKey = [](const FString& SearchText, int32& OutSortOrder) -> FName
-    {
-        if (SearchText.Contains(TEXT("BPP_MAP_Winter"), ESearchCase::IgnoreCase))
-        {
-            OutSortOrder = 0;
-            return FName(TEXT("Winter"));
-        }
-        if (SearchText.Contains(TEXT("BPP_MAP_Spring"), ESearchCase::IgnoreCase))
-        {
-            OutSortOrder = 1;
-            return FName(TEXT("Spring"));
-        }
-        if (SearchText.Contains(TEXT("BPP_MAP_Summer"), ESearchCase::IgnoreCase))
-        {
-            OutSortOrder = 2;
-            return FName(TEXT("Summer"));
-        }
-        if (SearchText.Contains(TEXT("BPP_MAP_Autumn"), ESearchCase::IgnoreCase))
-        {
-            OutSortOrder = 3;
-            return FName(TEXT("Autumn"));
-        }
-
-        OutSortOrder = 1000;
-        return NAME_None;
-    };
-
-    auto MakeZone = [](AActor* Actor, const FVector& Origin, const FVector& Extent, FName IslandKey, const FString& Source, int32 SortOrder) -> FCardIslandDropZone
-    {
-        FCardIslandDropZone Zone;
-        Zone.ZoneActor = Actor;
-        Zone.Bounds = FBox(Origin - Extent, Origin + Extent);
-        Zone.Center = Origin;
-        Zone.IslandKey = IslandKey;
-        Zone.Source = Source;
-        Zone.SortOrder = SortOrder;
-        return Zone;
-    };
-
-    TArray<FCardIslandDropZone> TaggedNavAreaZones;
-    TMap<FName, FCardIslandDropZone> SeasonZonesByKey;
-
-    for (TActorIterator<AActor> It(World); It; ++It)
-    {
-        AActor* Actor = *It;
-        if (!IsValid(Actor))
-        {
-            continue;
-        }
-
-        FVector Origin;
-        FVector Extent;
-        Actor->GetActorBounds(false, Origin, Extent);
-
-        if (Extent.X < 500.0f || Extent.Y < 500.0f)
-        {
-            continue;
-        }
-
-        const FString SearchText = GetActorSearchText(Actor);
-        const bool bTaggedNavArea = Actor->ActorHasTag(FName(TEXT("CardIslandNavArea")));
-
-        int32 SeasonSortOrder = 1000;
-        const FName SeasonKey = GetSeasonIslandKey(SearchText, SeasonSortOrder);
-
-        if (bTaggedNavArea)
-        {
-            FCardIslandDropZone Zone = MakeZone(Actor, Origin, Extent, Actor->GetFName(), TEXT("CardIslandNavArea"), TaggedNavAreaZones.Num());
-            TaggedNavAreaZones.Add(Zone);
-
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandArea Candidate Source=CardIslandNavArea Actor=%s Key=%s Center=%s Extent=%s"),
-                *GetNameSafe(Actor), *Zone.IslandKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString());
-        }
-
-        if (bAutoDetectSeasonIslandActorsAsDropZones && !SeasonKey.IsNone())
-        {
-            FCardIslandDropZone Zone = MakeZone(Actor, Origin, Extent, SeasonKey, TEXT("SeasonIslandActor"), SeasonSortOrder);
-            FCardIslandDropZone* ExistingZone = SeasonZonesByKey.Find(SeasonKey);
-            const float NewArea = Extent.X * Extent.Y;
-            const float ExistingArea = ExistingZone ? ExistingZone->Bounds.GetExtent().X * ExistingZone->Bounds.GetExtent().Y : -1.0f;
-
-            if (!ExistingZone || NewArea > ExistingArea)
-            {
-                SeasonZonesByKey.Add(SeasonKey, Zone);
-
-                UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandArea Candidate Source=SeasonIslandActor Actor=%s Key=%s Center=%s Extent=%s Selected=%d"),
-                    *GetNameSafe(Actor), *SeasonKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString(), 1);
-            }
-            else
-            {
-                UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandArea Candidate Source=SeasonIslandActor Actor=%s Key=%s Center=%s Extent=%s Selected=%d Reason=SmallerDuplicate"),
-                    *GetNameSafe(Actor), *SeasonKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString(), 0);
-            }
-        }
-    }
-
-    if (TaggedNavAreaZones.Num() >= CardIslandDropExpectedZoneCount)
-    {
-        DropZones = TaggedNavAreaZones;
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandAreas Mode=CardIslandNavArea Count=%d"), DropZones.Num());
-    }
-    else if (SeasonZonesByKey.Num() > 0)
-    {
-        SeasonZonesByKey.GenerateValueArray(DropZones);
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandAreas Mode=SeasonIslandActor Count=%d TaggedNavAreas=%d"),
-            DropZones.Num(), TaggedNavAreaZones.Num());
-    }
-    else if (TaggedNavAreaZones.Num() > 0)
-    {
-        DropZones = TaggedNavAreaZones;
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandAreas Mode=PartialCardIslandNavArea Count=%d"), DropZones.Num());
-    }
-
-    // 혹시 섬 액터/NavArea를 못 찾으면 기존 TriggerBox 방식으로만 fallback
-    if (DropZones.Num() == 0)
-    {
-        for (TActorIterator<AActor> It(World); It; ++It)
-        {
-            AActor* Actor = *It;
-            if (!IsValid(Actor))
-            {
-                continue;
-            }
-
-            if (!Actor->ActorHasTag(CardIslandDropZoneTag))
-            {
-                continue;
-            }
-
-            FVector Origin;
-            FVector Extent;
-            Actor->GetActorBounds(false, Origin, Extent);
-
-            FCardIslandDropZone Zone = MakeZone(Actor, Origin, Extent, Actor->GetFName(), TEXT("TriggerBoxFallback"), DropZones.Num());
-
-            DropZones.Add(Zone);
-
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandArea Candidate Source=TriggerBoxFallback Actor=%s Key=%s Center=%s Extent=%s"),
-                *GetNameSafe(Actor), *Zone.IslandKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString());
-        }
-
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandAreas FallbackToTriggerBoxes Count=%d"), DropZones.Num());
-    }
-
-    DropZones.Sort([](const FCardIslandDropZone& A, const FCardIslandDropZone& B)
-    {
-        if (A.SortOrder != B.SortOrder)
-        {
-            return A.SortOrder < B.SortOrder;
-        }
-
-        if (!FMath::IsNearlyEqual(A.Center.Y, B.Center.Y))
-        {
-            return A.Center.Y < B.Center.Y;
-        }
-
-        return A.Center.X < B.Center.X;
-    });
-
-    for (int32 Index = 0; Index < DropZones.Num(); ++Index)
-    {
-        const FCardIslandDropZone& Zone = DropZones[Index];
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandArea Selected Index=%d Source=%s Key=%s Actor=%s Center=%s Extent=%s"),
-            Index, *Zone.Source, *Zone.IslandKey.ToString(), *GetNameSafe(Zone.ZoneActor.Get()),
-            *Zone.Center.ToCompactString(), *Zone.Bounds.GetExtent().ToCompactString());
-    }
-
-    return DropZones;
-}
-
-bool AMainGameMode::IsCardIslandSurfaceWalkable(const FHitResult& Hit) const
-{
-    if (!Hit.bBlockingHit)
-    {
-        return false;
-    }
-
-    const float ClampedSlopeDegrees = FMath::Clamp(CardIslandMaxGroundSlopeDegrees, 0.0f, 89.0f);
-    const float MinNormalZ = FMath::Cos(FMath::DegreesToRadians(ClampedSlopeDegrees));
-
-    return Hit.ImpactNormal.Z >= MinNormalZ;
-}
-
-bool AMainGameMode::IsCardDropLocationClear(const FVector& CandidateLocation) const
-{
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        return false;
-    }
-
-    const FVector SafeExtent(
-        FMath::Max(1.0f, CardIslandOverlapBoxExtent.X),
-        FMath::Max(1.0f, CardIslandOverlapBoxExtent.Y),
-        FMath::Max(1.0f, CardIslandOverlapBoxExtent.Z));
-
-    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CardIslandDropClear), false);
-    QueryParams.bTraceComplex = false;
-
-    const FCollisionShape CheckShape = FCollisionShape::MakeBox(SafeExtent);
-
-    const bool bOverlapsBlockingObject = World->OverlapBlockingTestByChannel(
-        CandidateLocation,
-        FQuat::Identity,
-        ECC_WorldDynamic,
-        CheckShape,
-        QueryParams);
-
-    return !bOverlapsBlockingObject;
-}
-
-bool AMainGameMode::IsFarEnoughFromIslandCards(const FVector& CandidateLocation, const TArray<FVector>& ExistingIslandLocations) const
-{
-    if (CardIslandMinCardDistance <= 0.0f)
-    {
-        return true;
-    }
-
-    const float MinDistanceSq = FMath::Square(CardIslandMinCardDistance);
-
-    for (const FVector& ExistingLocation : ExistingIslandLocations)
-    {
-        if (FVector::DistSquared2D(CandidateLocation, ExistingLocation) < MinDistanceSq)
-        {
-            return false;
-        }
-    }
-
-    return true;
-}
-
-bool AMainGameMode::IsCardDropZSane(const FCardIslandDropZone& DropZone, float ReferenceNavZ, const FVector& Candidate) const
-{
-    const float CandidateNavZ = Candidate.Z - CardIslandGroundOffsetZ;
-    const float MaxDelta = FMath::Max(120.0f, CardIslandMaxGroundZDelta);
-
-    if (FMath::Abs(CandidateNavZ - ReferenceNavZ) > MaxDelta)
-    {
-        return false;
-    }
-
-    const float BoundsPadding = FMath::Max(120.0f, CardIslandGroundOffsetZ + 40.0f);
-    if (Candidate.Z < DropZone.Bounds.Min.Z - BoundsPadding)
-    {
-        return false;
-    }
-
-    if (Candidate.Z > DropZone.Bounds.Max.Z + BoundsPadding)
-    {
-        return false;
-    }
-
-    return true;
-}
-
-bool AMainGameMode::IsInsideNoDropZone(const FVector& Candidate) const
-{
-    UWorld* World = GetWorld();
-    if (!World || CardNoDropZoneTag.IsNone())
-    {
-        return false;
-    }
-
-    for (TActorIterator<AActor> It(World); It; ++It)
-    {
-        AActor* Actor = *It;
-        if (!IsValid(Actor) || !Actor->ActorHasTag(CardNoDropZoneTag))
-        {
-            continue;
-        }
-
-        FVector Origin;
-        FVector Extent;
-        Actor->GetActorBounds(false, Origin, Extent);
-
-        const FBox NoBox(Origin - Extent, Origin + Extent);
-        if (NoBox.IsInsideXY(Candidate))
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-
-bool AMainGameMode::HasOverheadClearance(const FVector& Candidate) const
-{
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        return true;
-    }
-
-    // 보조 검증용 LineTrace: 카드 바로 위로 짧게 쏘아 머리 위가 막혀 있으면(캐노피/바위 밑) 제외한다.
-    // Spawn Z 자체는 NavMesh 지면 Z 기준이므로 이 트레이스는 Z를 바꾸지 않는다.
-    const float ClearHeight = FMath::Max(1.0f, CardIslandOverheadClearance);
-    const FVector Start = Candidate;
-    const FVector End = Candidate + FVector(0.0f, 0.0f, ClearHeight);
-
-    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CardIslandDropOverhead), false);
-    QueryParams.bTraceComplex = false;
-
-    FHitResult Hit;
-    const bool bBlocked = World->LineTraceSingleByChannel(Hit, Start, End, ECC_WorldDynamic, QueryParams);
-    return !bBlocked;
-}
-
-bool AMainGameMode::PickIslandCardDropLocation(const FCardIslandDropZone& DropZone, const TArray<FVector>& ExistingIslandLocations, int32 IslandIndex, int32 SlotIndex, FVector& OutLocation) const
-{
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Reason=NoWorld"), IslandIndex, SlotIndex);
-        return false;
-    }
-
-    UNavigationSystemV1* NavSystem = UNavigationSystemV1::GetCurrent(World);
-    if (!NavSystem)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Zone=%s Reason=NoNavSystem"),
-            IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()));
-        return false;
-    }
-
-    const FVector Extent = DropZone.Bounds.GetExtent();
-    const FVector Center = DropZone.Center;
-
-    const FVector AnchorProjectExtent(
-        FMath::Max(400.0f, CardIslandNavProjectExtent.X),
-        FMath::Max(400.0f, CardIslandNavProjectExtent.Y),
-        FMath::Max(1200.0f, FMath::Max(CardIslandNavProjectExtent.Z, Extent.Z + 400.0f)));
-
-    const FVector CandidateProjectExtent(
-        FMath::Max(200.0f, CardIslandNavProjectExtent.X),
-        FMath::Max(200.0f, CardIslandNavProjectExtent.Y),
-        FMath::Max(500.0f, CardIslandNavProjectExtent.Z));
-
-    const float MinDistance = FMath::Max(1.0f, CardIslandMinCardDistance);
-    const int32 MaxAttempts = FMath::Max(160, CardIslandDropMaxAttemptsPerCard);
-    const float VisibleRadius = FMath::Clamp(FMath::Min(Extent.X, Extent.Y) * 0.36f, 650.0f, 950.0f);
-    const float PatternRadius = FMath::Clamp(MinDistance * 2.4f, 560.0f, 700.0f);
-    const float RandomRadius = FMath::Clamp(VisibleRadius * 0.55f, 420.0f, 650.0f);
-
-    TArray<FVector> NavAnchors;
-    int32 AnchorNavFail = 0;
-    int32 AnchorBoundsFail = 0;
-
-    auto TryAddNavAnchor = [&](const FVector& QueryPoint, const TCHAR* Source) -> void
-    {
-        FNavLocation NavLocation;
-        if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, AnchorProjectExtent))
-        {
-            ++AnchorNavFail;
-            return;
-        }
-
-        if (!DropZone.Bounds.IsInsideXY(NavLocation.Location))
-        {
-            ++AnchorBoundsFail;
-            return;
-        }
-
-        for (const FVector& ExistingAnchor : NavAnchors)
-        {
-            if (FVector::DistSquared2D(ExistingAnchor, NavLocation.Location) < FMath::Square(100.0f))
-            {
-                return;
-            }
-        }
-
-        NavAnchors.Add(NavLocation.Location);
-
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card NavIsland Anchor Island=%d Slot=%d Zone=%s Key=%s Source=%s Location=%s NavZ=%.1f"),
-            IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), Source,
-            *NavLocation.Location.ToCompactString(), NavLocation.Location.Z);
-    };
-
-    TryAddNavAnchor(Center, TEXT("Center"));
-
-    const FVector2D AnchorOffsets[] =
-    {
-        FVector2D(Extent.X * 0.10f, 0.0f),
-        FVector2D(-Extent.X * 0.10f, 0.0f),
-        FVector2D(0.0f, Extent.Y * 0.10f),
-        FVector2D(0.0f, -Extent.Y * 0.10f)
-    };
-
-    for (const FVector2D& Offset : AnchorOffsets)
-    {
-        TryAddNavAnchor(FVector(Center.X + Offset.X, Center.Y + Offset.Y, Center.Z), TEXT("Offset"));
-    }
-
-    if (NavAnchors.Num() == 0)
-    {
-        UE_LOG(LogTemp, Error,
-            TEXT("[DS] Card DropFail Island=%d Slot=%d Zone=%s Key=%s Source=%s Reason=NoNavAnchor AnchorNavFail=%d AnchorBoundsFail=%d Center=%s Extent=%s"),
-            IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
-            AnchorNavFail, AnchorBoundsFail, *Center.ToCompactString(), *Extent.ToCompactString());
-        return false;
-    }
-
-    float ReferenceNavZ = 0.0f;
-    for (const FVector& Anchor : NavAnchors)
-    {
-        ReferenceNavZ += Anchor.Z;
-    }
-    ReferenceNavZ /= static_cast<float>(NavAnchors.Num());
-
-    int32 NavFail = 0;
-    int32 BoundsFail = 0;
-    int32 ZFail = 0;
-    int32 NoDropFail = 0;
-    int32 DistFail = 0;
-    int32 OverlapFail = 0;
-    int32 OverheadFail = 0;
-    int32 TotalCandidates = 0;
-
-    auto TryAcceptNavLocation = [&](const FNavLocation& NavLocation, const TCHAR* Source, int32 Attempt) -> bool
-    {
-        ++TotalCandidates;
-
-        if (!DropZone.Bounds.IsInsideXY(NavLocation.Location))
-        {
-            ++BoundsFail;
-            return false;
-        }
-
-        if (FVector::DistSquared2D(NavLocation.Location, Center) > FMath::Square(VisibleRadius))
-        {
-            ++BoundsFail;
-            return false;
-        }
-
-        const FVector Candidate = NavLocation.Location + FVector(0.0f, 0.0f, CardIslandGroundOffsetZ);
-
-        if (!IsCardDropZSane(DropZone, ReferenceNavZ, Candidate))
-        {
-            ++ZFail;
-            return false;
-        }
-
-        if (IsInsideNoDropZone(Candidate))
-        {
-            ++NoDropFail;
-            return false;
-        }
-
-        if (!IsFarEnoughFromIslandCards(Candidate, ExistingIslandLocations))
-        {
-            ++DistFail;
-            return false;
-        }
-
-        if (!IsCardDropLocationClear(Candidate))
-        {
-            ++OverlapFail;
-            return false;
-        }
-
-        if (!HasOverheadClearance(Candidate))
-        {
-            ++OverheadFail;
-            return false;
-        }
-
-        OutLocation = Candidate;
-        UE_LOG(LogTemp, Warning,
-            TEXT("[DS] Card DropInstance Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s PickSource=%s Attempts=%d TotalCandidates=%d ExistingCards=%d Location=%s SpawnZ=%.1f NavZ=%.1f RefNavZ=%.1f"),
-            IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
-            Source, Attempt, TotalCandidates, ExistingIslandLocations.Num(), *Candidate.ToCompactString(),
-            Candidate.Z, NavLocation.Location.Z, ReferenceNavZ);
-        return true;
-    };
-
-    const float BaseAngleDegrees = 90.0f + static_cast<float>(IslandIndex) * 18.0f;
-    const float CandidateRadii[] = { PatternRadius, PatternRadius * 0.72f, PatternRadius * 1.18f };
-    int32 PatternAttempt = 0;
-
-    for (float CandidateRadius : CandidateRadii)
-    {
-        for (int32 Step = 0; Step < 5; ++Step)
-        {
-            ++PatternAttempt;
-
-            const int32 PatternIndex = (SlotIndex + Step) % 5;
-            const float AngleDegrees = BaseAngleDegrees + static_cast<float>(PatternIndex) * 72.0f;
-            const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
-            const FVector QueryPoint(
-                Center.X + FMath::Cos(AngleRadians) * CandidateRadius,
-                Center.Y + FMath::Sin(AngleRadians) * CandidateRadius,
-                Center.Z);
-
-            FNavLocation NavLocation;
-            if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, AnchorProjectExtent))
-            {
-                ++NavFail;
-                continue;
-            }
-
-            if (TryAcceptNavLocation(NavLocation, TEXT("NavPattern"), PatternAttempt))
-            {
-                return true;
-            }
-        }
-    }
-
-    for (int32 Attempt = 1; Attempt <= MaxAttempts; ++Attempt)
-    {
-        const FVector& Anchor = NavAnchors[(Attempt + SlotIndex + IslandIndex) % NavAnchors.Num()];
-
-        FNavLocation NavLocation;
-        if (!NavSystem->GetRandomReachablePointInRadius(Anchor, RandomRadius, NavLocation))
-        {
-            ++NavFail;
-            continue;
-        }
-
-        if (TryAcceptNavLocation(NavLocation, TEXT("NavRandom"), Attempt))
-        {
-            return true;
-        }
-    }
-
-    const int32 SpiralRings = 10;
-    const int32 PointsPerRing = 16;
-    const float GoldenAngleDegrees = 137.50777f;
-    int32 SpiralAttempt = 0;
-
-    for (int32 Ring = 1; Ring <= SpiralRings; ++Ring)
-    {
-        const float RingAlpha = static_cast<float>(Ring) / static_cast<float>(SpiralRings);
-        const float RingRadius = FMath::Lerp(MinDistance, RandomRadius, RingAlpha);
-
-        for (int32 PointIndex = 0; PointIndex < PointsPerRing; ++PointIndex)
-        {
-            ++SpiralAttempt;
-
-            const FVector& Anchor = NavAnchors[(PointIndex + SlotIndex + IslandIndex) % NavAnchors.Num()];
-            const float AngleDegrees = GoldenAngleDegrees * static_cast<float>(PointIndex + SlotIndex * 3 + IslandIndex * 7)
-                + 360.0f * RingAlpha;
-            const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
-
-            const FVector QueryPoint(
-                Anchor.X + FMath::Cos(AngleRadians) * RingRadius,
-                Anchor.Y + FMath::Sin(AngleRadians) * RingRadius,
-                Anchor.Z);
-
-            FNavLocation NavLocation;
-            if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, CandidateProjectExtent))
-            {
-                ++NavFail;
-                continue;
-            }
-
-            if (TryAcceptNavLocation(NavLocation, TEXT("NavSpiral"), SpiralAttempt))
-            {
-                return true;
-            }
-        }
-    }
-
-    UE_LOG(LogTemp, Error,
-        TEXT("[DS] Card DropFail Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Reason=AllNavCandidatesRejected Anchors=%d MaxAttempts=%d SpiralCandidates=%d VisibleRadius=%.0f RandomRadius=%.0f RefNavZ=%.1f NavFail=%d BoundsFail=%d ZFail=%d DistFail=%d OverlapFail=%d OverheadFail=%d NoDrop=%d ExistingCards=%d TotalCandidates=%d"),
-        IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
-        NavAnchors.Num(), MaxAttempts, SpiralRings * PointsPerRing, VisibleRadius, RandomRadius, ReferenceNavZ,
-        NavFail, BoundsFail, ZFail, DistFail, OverlapFail, OverheadFail, NoDropFail, ExistingIslandLocations.Num(), TotalCandidates);
-    return false;
-}
-
-bool AMainGameMode::PickDeathCardDropLocation(const FVector& DeathLocation, const TArray<FVector>& ExistingDropLocations, int32 CardIndex, FVector& OutLocation) const
-{
-    UWorld* World = GetWorld();
-    if (!World)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DeathDropLocationFail CardIndex=%d Reason=NoWorld Death=%s"),
-            CardIndex,
-            *DeathLocation.ToCompactString());
-        return false;
-    }
-
-    UNavigationSystemV1* NavSystem = UNavigationSystemV1::GetCurrent(World);
-    if (!NavSystem)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DeathDropLocationFail CardIndex=%d Reason=NoNavSystem Death=%s"),
-            CardIndex,
-            *DeathLocation.ToCompactString());
-        return false;
-    }
-
-    const int32 MaxAttempts = FMath::Max(8, CardDeathDropMaxAttemptsPerCard);
-    const float StartRadius = FMath::Max(0.0f, CardDeathDropStartRadius);
-    const float RadiusStep = FMath::Max(25.0f, CardDeathDropRadiusStep);
-    const float MaxRadius = FMath::Max(StartRadius, CardDeathDropMaxRadius);
-    const float MaxProjectDistance = FMath::Max(50.0f, CardDeathDropMaxNavProjectDistance);
-    const float MinDistance = FMath::Max(0.0f, CardDeathDropMinCardDistance);
-    const float GroundOffsetZ = FMath::Max(0.0f, CardDeathDropGroundOffsetZ);
-    const FVector ProjectExtent(
-        FMath::Max(80.0f, CardDeathDropNavProjectExtent.X),
-        FMath::Max(80.0f, CardDeathDropNavProjectExtent.Y),
-        FMath::Max(700.0f, CardDeathDropNavProjectExtent.Z));
-
-    int32 NavFail = 0;
-    int32 ProjectDistanceFail = 0;
-    int32 DeathDistanceFail = 0;
-    int32 NoDropFail = 0;
-    int32 DistFail = 0;
-    int32 OverlapFail = 0;
-    int32 OverheadFail = 0;
-    int32 TotalCandidates = 0;
-
-    auto IsFarEnoughFromDeathCards = [&](const FVector& Candidate) -> bool
-    {
-        if (MinDistance <= 0.0f)
-        {
-            return true;
-        }
-
-        const float MinDistanceSq = FMath::Square(MinDistance);
-        for (const FVector& ExistingLocation : ExistingDropLocations)
-        {
-            if (FVector::DistSquared2D(Candidate, ExistingLocation) < MinDistanceSq)
-            {
-                return false;
-            }
-        }
-
-        return true;
-    };
-
-    auto TryAcceptQueryPoint = [&](const FVector& QueryPoint, const TCHAR* Source, int32 Attempt) -> bool
-    {
-        ++TotalCandidates;
-
-        FNavLocation NavLocation;
-        if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, ProjectExtent))
-        {
-            ++NavFail;
-            return false;
-        }
-
-        if (FVector::Dist2D(QueryPoint, NavLocation.Location) > MaxProjectDistance)
-        {
-            ++ProjectDistanceFail;
-            return false;
-        }
-
-        if (FVector::Dist2D(DeathLocation, NavLocation.Location) > MaxRadius)
-        {
-            ++DeathDistanceFail;
-            return false;
-        }
-
-        const FVector Candidate = NavLocation.Location + FVector(0.0f, 0.0f, GroundOffsetZ);
-
-        if (IsInsideNoDropZone(Candidate))
-        {
-            ++NoDropFail;
-            return false;
-        }
-
-        if (!IsFarEnoughFromDeathCards(Candidate))
-        {
-            ++DistFail;
-            return false;
-        }
-
-        if (!IsCardDropLocationClear(Candidate))
-        {
-            ++OverlapFail;
-            return false;
-        }
-
-        if (!HasOverheadClearance(Candidate))
-        {
-            ++OverheadFail;
-            return false;
-        }
-
-        OutLocation = Candidate;
-
-        UE_LOG(LogTemp, Warning,
-            TEXT("[DS] Card DeathDropLocation CardIndex=%d Source=%s Attempt=%d TotalCandidates=%d ExistingCards=%d Death=%s Query=%s Nav=%s Spawn=%s ProjectDist=%.1f DeathDist=%.1f"),
-            CardIndex,
-            Source,
-            Attempt,
-            TotalCandidates,
-            ExistingDropLocations.Num(),
-            *DeathLocation.ToCompactString(),
-            *QueryPoint.ToCompactString(),
-            *NavLocation.Location.ToCompactString(),
-            *Candidate.ToCompactString(),
-            FVector::Dist2D(QueryPoint, NavLocation.Location),
-            FVector::Dist2D(DeathLocation, NavLocation.Location));
-
-        return true;
-    };
-
-    const int32 PointsPerRing = 8;
-    const float BaseAngleDegrees = 90.0f + static_cast<float>(CardIndex) * 72.0f;
-
-    for (int32 Attempt = 1; Attempt <= MaxAttempts; ++Attempt)
-    {
-        const int32 ZeroBasedAttempt = Attempt - 1;
-        const int32 RingIndex = ZeroBasedAttempt / PointsPerRing;
-        const int32 PointIndex = ZeroBasedAttempt % PointsPerRing;
-        const float Radius = FMath::Min(MaxRadius, StartRadius + static_cast<float>(RingIndex) * RadiusStep);
-        const float AngleDegrees = BaseAngleDegrees + static_cast<float>(PointIndex) * (360.0f / static_cast<float>(PointsPerRing)) + static_cast<float>(RingIndex) * 22.5f;
-        const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
-
-        const FVector QueryPoint(
-            DeathLocation.X + FMath::Cos(AngleRadians) * Radius,
-            DeathLocation.Y + FMath::Sin(AngleRadians) * Radius,
-            DeathLocation.Z);
-
-        if (TryAcceptQueryPoint(QueryPoint, TEXT("DeathNavSpiral"), Attempt))
-        {
-            return true;
-        }
-    }
-
-    UE_LOG(LogTemp, Error,
-        TEXT("[DS] Card DeathDropLocationFail CardIndex=%d Reason=AllCandidatesRejected Death=%s MaxAttempts=%d MaxRadius=%.1f ExistingCards=%d NavFail=%d ProjectDistFail=%d DeathDistFail=%d DistFail=%d OverlapFail=%d OverheadFail=%d NoDrop=%d TotalCandidates=%d"),
-        CardIndex,
-        *DeathLocation.ToCompactString(),
-        MaxAttempts,
-        MaxRadius,
-        ExistingDropLocations.Num(),
-        NavFail,
-        ProjectDistanceFail,
-        DeathDistanceFail,
-        DistFail,
-        OverlapFail,
-        OverheadFail,
-        NoDropFail,
-        TotalCandidates);
-
-    return false;
-}
-
-int32 AMainGameMode::CreateCardInstance(ECardID CardID)
-{
-    if (CardID == ECardID::None)
-    {
-        return 0;
-    }
-
-    const int32 NewInstanceId = NextCardInstanceId++;
-
-    FServerCardRecord Record;
-    Record.CardInstanceId = NewInstanceId;
-    Record.CardID = CardID;
-    Record.State = ECardRuntimeState::Removed;
-    Record.CreatedRound = CurrentRound;
-
-    ServerCardRecords.Add(NewInstanceId, Record);
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Create Instance=%d Card=%d Name=%s Round=%d"),
-        NewInstanceId,
-        static_cast<int32>(CardID),
-        *CardDebug::ToString(CardID),
-        CurrentRound);
-
-    return NewInstanceId;
-}
-
-ACardDropActor* AMainGameMode::SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation)
-{
-    if (!HasAuthority() || !GetWorld() || CardID == ECardID::None)
-    {
-        return nullptr;
-    }
-
-    TSubclassOf<ACardDropActor> SpawnClass = CardDropActorClass;
-    if (!SpawnClass)
-    {
-        SpawnClass = ACardDropActor::StaticClass();
-    }
-
-    FActorSpawnParameters Params;
-    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::DontSpawnIfColliding;
-
-    ACardDropActor* CardActor = GetWorld()->SpawnActor<ACardDropActor>(SpawnClass, SpawnLocation, FRotator::ZeroRotator, Params);
-    if (!CardActor)
-    {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Card=%d Name=%s Reason=SpawnCollisionOrNull Location=%s"),
-            static_cast<int32>(CardID),
-            *CardDebug::ToString(CardID),
-            *SpawnLocation.ToCompactString());
-        return nullptr;
-    }
-
-    const int32 InstanceId = CreateCardInstance(CardID);
-    if (InstanceId <= 0)
-    {
-        CardActor->Destroy();
-        return nullptr;
-    }
-
-    CardActor->InitCardDrop(InstanceId, CardID);
-    ActiveCardDrops.Add(CardActor);
-
-    FServerCardRecord* Record = ServerCardRecords.Find(InstanceId);
-    if (Record)
-    {
-        Record->State = ECardRuntimeState::WorldDrop;
-        Record->DropActor = CardActor;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Drop Instance=%d Card=%d Name=%s Actor=%s Location=%s Round=%d"),
-        InstanceId,
-        static_cast<int32>(CardID),
-        *CardDebug::ToString(CardID),
-        *CardActor->GetName(),
-        *SpawnLocation.ToString(),
-        CurrentRound);
-
-    return CardActor;
-}
-
-int32 AMainGameMode::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const FVector& BaseDropLocation)
-{
-    if (!HasAuthority() || !GetWorld() || !TargetPS)
-    {
-        return 0;
-    }
-
-    const TArray<FOwnedCardInfo> CardsToDrop = TargetPS->GetOwnedCards();
-    if (CardsToDrop.Num() == 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropSkip Player=%s Reason=NoOwnedCards"),
-            *TargetPS->GetPlayerName());
-        return 0;
-    }
-
-    TSubclassOf<ACardDropActor> SpawnClass = CardDropActorClass;
-    if (!SpawnClass)
-    {
-        SpawnClass = ACardDropActor::StaticClass();
-    }
-
-    int32 SpawnedCount = 0;
-    TArray<FVector> ExistingDropLocations;
-    ExistingDropLocations.Reserve(CardsToDrop.Num());
-
-    for (int32 CardIndex = 0; CardIndex < CardsToDrop.Num(); ++CardIndex)
-    {
-        const FOwnedCardInfo& CardInfo = CardsToDrop[CardIndex];
-        if (CardInfo.CardID == ECardID::None)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Reason=NoneCardID"),
-                *TargetPS->GetPlayerName(),
-                CardInfo.CardInstanceId);
-            continue;
-        }
-
-        FVector DropLocation;
-        if (!PickDeathCardDropLocation(BaseDropLocation, ExistingDropLocations, CardIndex, DropLocation))
-        {
-            DropLocation = BaseDropLocation;
-            const float Angle = (CardIndex / static_cast<float>(CardsToDrop.Num())) * 2.0f * PI;
-            const float DropRadius = FMath::Max(120.0f, CardDeathDropStartRadius);
-            DropLocation.X += FMath::Cos(Angle) * DropRadius;
-            DropLocation.Y += FMath::Sin(Angle) * DropRadius;
-            DropLocation.Z += FMath::Max(80.0f, CardDeathDropGroundOffsetZ);
-
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropLocationFallback Player=%s Index=%d Instance=%d Card=%d Location=%s"),
-                *TargetPS->GetPlayerName(),
-                CardIndex,
-                CardInfo.CardInstanceId,
-                static_cast<int32>(CardInfo.CardID),
-                *DropLocation.ToCompactString());
-        }
-
-        FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId);
-        if (!Record)
-        {
-            ACardDropActor* FallbackActor = SpawnCardDrop(CardInfo.CardID, DropLocation);
-            if (!FallbackActor)
-            {
-                UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Card=%d Name=%s Reason=MissingRecordFallbackSpawnFail Location=%s"),
-                    *TargetPS->GetPlayerName(),
-                    CardInfo.CardInstanceId,
-                    static_cast<int32>(CardInfo.CardID),
-                    *CardDebug::ToString(CardInfo.CardID),
-                    *DropLocation.ToCompactString());
-                continue;
-            }
-
-            FOwnedCardInfo RemovedCard;
-            TargetPS->RemoveOwnedCardByInstanceId(CardInfo.CardInstanceId, RemovedCard);
-            SpawnedCount++;
-            ExistingDropLocations.Add(DropLocation);
-
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFallback Player=%s OldInstance=%d NewInstance=%d Card=%d Name=%s Location=%s"),
-                *TargetPS->GetPlayerName(),
-                CardInfo.CardInstanceId,
-                FallbackActor->GetCardInstanceId(),
-                static_cast<int32>(CardInfo.CardID),
-                *CardDebug::ToString(CardInfo.CardID),
-                *DropLocation.ToCompactString());
-            continue;
-        }
-
-        if (Record->DropActor.IsValid())
-        {
-            Record->DropActor->Destroy();
-            Record->DropActor.Reset();
-        }
-
-        FActorSpawnParameters Params;
-        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-        ACardDropActor* CardActor = GetWorld()->SpawnActor<ACardDropActor>(SpawnClass, DropLocation, FRotator::ZeroRotator, Params);
-        if (!CardActor)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Card=%d Name=%s Reason=SpawnNull Location=%s"),
-                *TargetPS->GetPlayerName(),
-                CardInfo.CardInstanceId,
-                static_cast<int32>(CardInfo.CardID),
-                *CardDebug::ToString(CardInfo.CardID),
-                *DropLocation.ToCompactString());
-            continue;
-        }
-
-        CardActor->InitCardDrop(Record->CardInstanceId, Record->CardID);
-        ActiveCardDrops.Add(CardActor);
-
-        Record->State = ECardRuntimeState::WorldDrop;
-        Record->OwnerPlayerState = nullptr;
-        Record->DropActor = CardActor;
-
-        FOwnedCardInfo RemovedCard;
-        TargetPS->RemoveOwnedCardByInstanceId(CardInfo.CardInstanceId, RemovedCard);
-        SpawnedCount++;
-        ExistingDropLocations.Add(DropLocation);
-
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDrop Player=%s Instance=%d Card=%d Name=%s Actor=%s Location=%s RemainingOwned=%d"),
-            *TargetPS->GetPlayerName(),
-            Record->CardInstanceId,
-            static_cast<int32>(Record->CardID),
-            *CardDebug::ToString(Record->CardID),
-            *CardActor->GetName(),
-            *DropLocation.ToCompactString(),
-            TargetPS->PublicCardCount);
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card DeathDropComplete Player=%s Requested=%d Spawned=%d RemainingOwned=%d"),
-        *TargetPS->GetPlayerName(),
-        CardsToDrop.Num(),
-        SpawnedCount,
-        TargetPS->PublicCardCount);
-
-    return SpawnedCount;
-}
-
-void AMainGameMode::SpawnRoundCardBundleForBattleRoyale()
-{
-    if (!HasAuthority())
-    {
-        return;
-    }
-
-    ClearCardDrops();
-
-    TArray<FCardIslandDropZone> IslandDropZones = FindCardIslandDropZones();
-    TArray<TArray<ECardID>> IslandCardGroups = BuildBalancedIslandCardGroups();
-
-    if (IslandDropZones.Num() < IslandCardGroups.Num())
-    {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Reason=NotEnoughDropZones Found=%d Required=%d Result=AbortIslandCardSpawn"),
-            IslandDropZones.Num(),
-            IslandCardGroups.Num());
-        return;
-    }
-
-    if (IslandDropZones.Num() != CardIslandDropExpectedZoneCount)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandDropZoneCountWarning Found=%d Expected=%d"),
-            IslandDropZones.Num(),
-            CardIslandDropExpectedZoneCount);
-    }
-
-    if (IslandDropZones.Num() > IslandCardGroups.Num())
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandDropExtraZonesIgnored Found=%d Used=%d"),
-            IslandDropZones.Num(),
-            IslandCardGroups.Num());
-    }
-
-    int32 PlannedCount = 0;
-
-    for (int32 IslandIndex = 0; IslandIndex < IslandCardGroups.Num(); ++IslandIndex)
-    {
-        const FCardIslandDropZone& DropZone = IslandDropZones[IslandIndex];
-        const TArray<ECardID>& CardsInIsland = IslandCardGroups[IslandIndex];
-        const int32 BalanceValue = GetCardIslandGroupBalanceValue(CardsInIsland);
-
-        AActor* ZoneActor = DropZone.ZoneActor.Get();
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandGroup Island=%d Zone=%s Key=%s Source=%s Cards=%d BalanceValue=%d BoundsCenter=%s BoundsExtent=%s"),
-            IslandIndex,
-            ZoneActor ? *ZoneActor->GetName() : TEXT("None"),
-            *DropZone.IslandKey.ToString(),
-            *DropZone.Source,
-            CardsInIsland.Num(),
-            BalanceValue,
-            *DropZone.Center.ToString(),
-            *DropZone.Bounds.GetExtent().ToString());
-
-        TArray<FVector> ExistingIslandLocations;
-        int32 IslandPlaced = 0;
-
-        for (int32 SlotIndex = 0; SlotIndex < CardsInIsland.Num(); ++SlotIndex)
-        {
-            const ECardID CardID = CardsInIsland[SlotIndex];
-            ++PlannedCount;
-
-            FVector SpawnLocation = FVector::ZeroVector;
-            const bool bPicked = PickIslandCardDropLocation(DropZone, ExistingIslandLocations, IslandIndex, SlotIndex, SpawnLocation);
-
-            if (!bPicked)
-            {
-                // 자리를 못 잡으면 겹쳐 놓지 않고 이 카드는 건너뛴다. 실패 사유는 PickIslandCardDropLocation 로그에 남는다.
-                UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Card=%d Name=%s Reason=NoValidLocation Result=Skipped"),
-                    IslandIndex, SlotIndex, static_cast<int32>(CardID), *CardDebug::ToString(CardID));
-                continue;
-            }
-
-            ExistingIslandLocations.Add(SpawnLocation);
-            ACardDropActor* SpawnedCard = SpawnCardDrop(CardID, SpawnLocation);
-            if (SpawnedCard) { ++IslandPlaced; }
-
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DropInstanceFinal Island=%d Slot=%d Card=%d Name=%s Result=%s Location=%s SpawnZ=%.1f"),
-                IslandIndex, SlotIndex, static_cast<int32>(CardID), *CardDebug::ToString(CardID),
-                SpawnedCard ? TEXT("OK") : TEXT("SpawnNull"), *SpawnLocation.ToCompactString(), SpawnLocation.Z);
-        }
-
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandDropSummary Island=%d Zone=%s Key=%s Source=%s Placed=%d Requested=%d Center=%s Extent=%s"),
-            IslandIndex, ZoneActor ? *ZoneActor->GetName() : TEXT("None"), *DropZone.IslandKey.ToString(), *DropZone.Source,
-            IslandPlaced, CardsInIsland.Num(), *DropZone.Center.ToCompactString(), *DropZone.Bounds.GetExtent().ToCompactString());
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card IslandDropComplete Spawned=%d Planned=%d Islands=%d Round=%d Phase=%s"),
-        ActiveCardDrops.Num(),
-        PlannedCount,
-        IslandCardGroups.Num(),
-        CurrentRound,
-        GetServerPhaseName(CurrentServerPhase));
-}
-
-void AMainGameMode::ClearCardDrops()
-{
-    int32 ClearCount = 0;
-
-    for (TObjectPtr<ACardDropActor> CardActorPtr : ActiveCardDrops)
-    {
-        ACardDropActor* CardActor = CardActorPtr.Get();
-        if (!IsValid(CardActor))
-        {
-            continue;
-        }
-
-        if (FServerCardRecord* Record = ServerCardRecords.Find(CardActor->GetCardInstanceId()))
-        {
-            if (Record->State == ECardRuntimeState::WorldDrop)
-            {
-                Record->State = ECardRuntimeState::Removed;
-                Record->DropActor = nullptr;
-            }
-        }
-
-        CardActor->Destroy();
-        ClearCount++;
-    }
-
-    ActiveCardDrops.Empty();
-
-    if (ClearCount > 0)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card ClearDrops Count=%d Round=%d"), ClearCount, CurrentRound);
-    }
-}
-
-
-void AMainGameMode::EnsureThreeCardsForCardGame()
-{
-    if (!HasAuthority() || !GetWorld())
-    {
-        return;
-    }
-
-    TArray<int32> SupplementRecordIds;
-    for (const TPair<int32, FServerCardRecord>& Pair : ServerCardRecords)
-    {
-        const FServerCardRecord& Record = Pair.Value;
-        if (Record.CreatedRound == CurrentRound && Record.State == ECardRuntimeState::Removed && Record.CardID != ECardID::None)
-        {
-            SupplementRecordIds.Add(Pair.Key);
-        }
-    }
-
-    for (int32 Index = SupplementRecordIds.Num() - 1; Index > 0; --Index)
-    {
-        const int32 SwapIndex = FMath::RandRange(0, Index);
-        if (Index != SwapIndex)
-        {
-            SupplementRecordIds.Swap(Index, SwapIndex);
-        }
-    }
-
-    int32 TargetCount = 0;
-    int32 SupplementIndex = 0;
-    const int32 TargetCardCount = FMath::Max(0, MaxCardsPerPlayerPerRound);
-
-    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-    {
-        APlayerController* PC = It->Get();
-        if (!PC)
-        {
-            continue;
-        }
-
-        AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
-        if (!PS)
-        {
-            continue;
-        }
-
-        while (PS->OwnedCards.Num() < TargetCardCount)
-        {
-            bool bGranted = false;
-
-            while (SupplementIndex < SupplementRecordIds.Num())
-            {
-                const int32 InstanceId = SupplementRecordIds[SupplementIndex++];
-                if (GrantCardRecordToPlayer(InstanceId, PS, TEXT("AutoFill")))
-                {
-                    bGranted = true;
-                    break;
-                }
-            }
-
-            if (!bGranted)
-            {
-                bGranted = GrantNewCardToPlayer(PS, PickSupplementCardIDForPlayer(PS), TEXT("AutoFillFallback"));
-            }
-
-            if (!bGranted)
-            {
-                break;
-            }
-        }
-
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card EnsureThree Player=%s Count=%d Max=%d Round=%d Cards=[%s]"),
-            *PS->GetPlayerName(),
-            PS->OwnedCards.Num(),
-            TargetCardCount,
-            CurrentRound,
-            *GetOwnedCardsDebugString(PS));
-
-        TargetCount++;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card EnsureThreeComplete targets=%d round=%d"), TargetCount, CurrentRound);
-}
-
-void AMainGameMode::ClearRoundCardsForAllPlayers()
-{
-    if (!HasAuthority() || !GetWorld())
-    {
-        return;
-    }
-
-    int32 TargetCount = 0;
-    int32 CardCount = 0;
-
-    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-    {
-        APlayerController* PC = It->Get();
-        if (!PC)
-        {
-            continue;
-        }
-
-        AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
-        if (!PS)
-        {
-            continue;
-        }
-
-        for (const FOwnedCardInfo& CardInfo : PS->OwnedCards)
-        {
-            if (FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId))
-            {
-                Record->State = ECardRuntimeState::Removed;
-                Record->OwnerPlayerState = nullptr;
-                Record->DropActor = nullptr;
-            }
-        }
-
-        CardCount += PS->OwnedCards.Num();
-        PS->ClearOwnedCards();
-        TargetCount++;
-    }
-
-    SeotdaRoundStates.Empty();
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card ClearRoundCards targets=%d cards=%d round=%d"), TargetCount, CardCount, CurrentRound);
-}
-
-bool AMainGameMode::GrantCardRecordToPlayer(int32 CardInstanceId, AMainPlayerState* TargetPS, const TCHAR* Context)
-{
-    if (!HasAuthority() || !TargetPS || CardInstanceId <= 0)
-    {
-        return false;
-    }
-
-    if (TargetPS->OwnedCards.Num() >= MaxCardsPerPlayerPerRound)
-    {
-        return false;
-    }
-
-    FServerCardRecord* Record = ServerCardRecords.Find(CardInstanceId);
-    if (!Record || Record->CardID == ECardID::None || Record->State == ECardRuntimeState::Owned || Record->State == ECardRuntimeState::Used)
-    {
-        return false;
-    }
-
-    FOwnedCardInfo CardInfo;
-    CardInfo.CardInstanceId = Record->CardInstanceId;
-    CardInfo.CardID = Record->CardID;
-
-    TargetPS->AddOwnedCard(CardInfo);
-
-    Record->State = ECardRuntimeState::Owned;
-    Record->OwnerPlayerState = TargetPS;
-    Record->DropActor = nullptr;
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card Grant Player=%s Instance=%d Card=%d Context=%s Count=%d"),
-        *TargetPS->GetPlayerName(),
-        CardInfo.CardInstanceId,
-        static_cast<int32>(CardInfo.CardID),
-        Context ? Context : TEXT("<NULL>"),
-        TargetPS->PublicCardCount);
-
-    return true;
-}
-
-bool AMainGameMode::GrantNewCardToPlayer(AMainPlayerState* TargetPS, ECardID CardID, const TCHAR* Context)
-{
-    if (!HasAuthority() || !TargetPS || CardID == ECardID::None)
-    {
-        return false;
-    }
-
-    const int32 InstanceId = CreateCardInstance(CardID);
-    if (InstanceId <= 0)
-    {
-        return false;
-    }
-
-    return GrantCardRecordToPlayer(InstanceId, TargetPS, Context);
-}
-
-ECardID AMainGameMode::PickSupplementCardIDForPlayer(const AMainPlayerState* TargetPS) const
-{
-    TArray<ECardID> CardIDs = BuildCardBundleIDs();
-    if (CardIDs.Num() == 0)
-    {
-        return ECardID::None;
-    }
-
-    if (TargetPS)
-    {
-        CardIDs.RemoveAll([TargetPS](ECardID Candidate)
-        {
-            return TargetPS->OwnedCards.ContainsByPredicate([Candidate](const FOwnedCardInfo& CardInfo)
-            {
-                return CardInfo.CardID == Candidate;
-            });
-        });
-    }
-
-    if (CardIDs.Num() == 0)
-    {
-        CardIDs = BuildCardBundleIDs();
-    }
-
-    if (CardIDs.Num() == 0)
-    {
-        return ECardID::None;
-    }
-
-    return CardIDs[FMath::RandRange(0, CardIDs.Num() - 1)];
-}
-
-bool AMainGameMode::IsCardPickupAllowed() const
-{
-    return CurrentServerPhase == EDediServerPhase::BattleRoyale;
+    FCardPlacementService Service;
+    Service.World = GetWorld();
+
+    Service.CardBundleDropCenter = CardBundleDropCenter;
+    Service.CardBundleDropExtent = CardBundleDropExtent;
+    Service.CardBundleDropJitterRatio = CardBundleDropJitterRatio;
+
+    Service.CardIslandDropZoneTag = CardIslandDropZoneTag;
+    Service.bAutoDetectSeasonIslandActorsAsDropZones = bAutoDetectSeasonIslandActorsAsDropZones;
+    Service.CardIslandDropExpectedZoneCount = CardIslandDropExpectedZoneCount;
+    Service.CardIslandDropMaxAttemptsPerCard = CardIslandDropMaxAttemptsPerCard;
+    Service.CardIslandGroundTraceHalfHeight = CardIslandGroundTraceHalfHeight;
+    Service.CardIslandGroundOffsetZ = CardIslandGroundOffsetZ;
+    Service.CardIslandMinCardDistance = CardIslandMinCardDistance;
+    Service.bProjectCardDropsToNavigation = bProjectCardDropsToNavigation;
+    Service.CardIslandNavProjectExtent = CardIslandNavProjectExtent;
+    Service.CardIslandMaxGroundSlopeDegrees = CardIslandMaxGroundSlopeDegrees;
+    Service.CardIslandOverlapBoxExtent = CardIslandOverlapBoxExtent;
+    Service.CardNoDropZoneTag = CardNoDropZoneTag;
+    Service.CardIslandMaxGroundZDelta = CardIslandMaxGroundZDelta;
+    Service.CardIslandOverheadClearance = CardIslandOverheadClearance;
+
+    Service.CardDeathDropMaxAttemptsPerCard = CardDeathDropMaxAttemptsPerCard;
+    Service.CardDeathDropStartRadius = CardDeathDropStartRadius;
+    Service.CardDeathDropRadiusStep = CardDeathDropRadiusStep;
+    Service.CardDeathDropMaxRadius = CardDeathDropMaxRadius;
+    Service.CardDeathDropMinCardDistance = CardDeathDropMinCardDistance;
+    Service.CardDeathDropGroundOffsetZ = CardDeathDropGroundOffsetZ;
+    Service.CardDeathDropNavProjectExtent = CardDeathDropNavProjectExtent;
+    Service.CardDeathDropMaxNavProjectDistance = CardDeathDropMaxNavProjectDistance;
+
+    return Service;
 }
 
 void AMainGameMode::SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context)
@@ -3441,7 +749,7 @@ void AMainGameMode::SetPlayerPawnGameplayState(bool bVisible, bool bMovementEnab
         TargetCount++;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main SetPlayerPawnGameplayState visible=%d movement=%d collision=%d controllers=%d pawns=%d weapons=%d Context=%s Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Main SetPlayerPawnGameplayState visible=%d movement=%d collision=%d controllers=%d pawns=%d weapons=%d Context=%s Round=%d ServerPhase=%s"),
         bVisible ? 1 : 0,
         bMovementEnabled ? 1 : 0,
         bCollisionEnabled ? 1 : 0,
@@ -3484,7 +792,7 @@ void AMainGameMode::ClearPlayerPawnMovementBases(const TCHAR* Context)
         TargetCount++;
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Main ClearPlayerPawnMovementBases targets=%d Context=%s Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Main ClearPlayerPawnMovementBases targets=%d Context=%s Round=%d ServerPhase=%s"),
         TargetCount,
         Context ? Context : TEXT("<NULL>"),
         CurrentRound,
@@ -3493,6 +801,7 @@ void AMainGameMode::ClearPlayerPawnMovementBases(const TCHAR* Context)
 
 TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCount) const
 {
+    const FCardPlacementService CardPlacement = MakeCardPlacementService();
     TArray<FTransform> SeatTransforms;
     RequiredCount = FMath::Max(0, RequiredCount);
     TArray<AActor*> SeatActors;
@@ -3607,7 +916,7 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
             SeatTransforms.Add(FTransform(SeatRotation, SeatLocation));
         }
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=1 Center=%s Radius=%.1f Source=%s Tag=%s Spacing=%.1f ZOffset=%.1f"),
+        DS_LOG(TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=1 Center=%s Radius=%.1f Source=%s Tag=%s Spacing=%.1f ZOffset=%.1f"),
             RequiredCount,
             TaggedSeatCount,
             ComponentTaggedSeatCount,
@@ -3621,7 +930,7 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
 
     if (RequiredCount <= 0 || TaggedSeatCount >= RequiredCount)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=0 Fallback=0 FallbackEnabled=%d Tag=%s Spacing=%.1f ZOffset=%.1f"),
+        DS_LOG(TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=0 Fallback=0 FallbackEnabled=%d Tag=%s Spacing=%.1f ZOffset=%.1f"),
             RequiredCount,
             TaggedSeatCount,
             ComponentTaggedSeatCount,
@@ -3723,7 +1032,7 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
 
         if (!bHasFallbackCenter)
         {
-            const TArray<FCardIslandDropZone> IslandDropZones = FindCardIslandDropZones();
+            const TArray<FCardIslandDropZone> IslandDropZones = CardPlacement.FindCardIslandDropZones();
             FVector IslandCenterSum = FVector::ZeroVector;
             int32 IslandCenterCount = 0;
 
@@ -3782,7 +1091,7 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
             return SeatTransforms;
         }
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuildAutoFallback Required=%d Tagged=0 ComponentTagged=%d Source=%s Center=%s FallbackEnabled=%d Tag=%s"),
+        DS_LOG(TEXT("[DS] Card SeatBuildAutoFallback Required=%d Tagged=0 ComponentTagged=%d Source=%s Center=%s FallbackEnabled=%d Tag=%s"),
             RequiredCount,
             ComponentTaggedSeatCount,
             FallbackSource,
@@ -3832,7 +1141,7 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
         SeatTransforms.Add(FTransform(SeatRotation, SeatLocation));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatBuild Required=%d Tagged=%d GeneratedFromCenter=0 Fallback=%d FallbackEnabled=%d Tag=%s FallbackCenter=%s Spacing=%.1f ZOffset=%.1f"),
+    DS_LOG(TEXT("[DS] Card SeatBuild Required=%d Tagged=%d GeneratedFromCenter=0 Fallback=%d FallbackEnabled=%d Tag=%s FallbackCenter=%s Spacing=%.1f ZOffset=%.1f"),
         RequiredCount,
         TaggedSeatCount,
         SeatTransforms.Num() - TaggedSeatCount,
@@ -3889,7 +1198,7 @@ void AMainGameMode::ScheduleCardSeatMoveRetry(const TCHAR* Context)
         RetryInterval,
         false);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMoveRetryScheduled Retry=%d MaxRetries=%d Interval=%.2f Context=%s Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Card SeatMoveRetryScheduled Retry=%d MaxRetries=%d Interval=%.2f Context=%s Round=%d ServerPhase=%s"),
         CardSeatMoveRetryCount,
         CardPlayerSeatMoveMaxRetries,
         RetryInterval,
@@ -3930,7 +1239,7 @@ bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
         APawn* Pawn = MainPC ? MainPC->GetPawn() : nullptr;
         if (!Pawn || !SeatTransforms.IsValidIndex(Index))
         {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMoveSkip Index=%d HasPC=%d HasPawn=%d HasSeat=%d Context=%s"),
+            DS_LOG(TEXT("[DS] Card SeatMoveSkip Index=%d HasPC=%d HasPawn=%d HasSeat=%d Context=%s"),
                 Index,
                 MainPC ? 1 : 0,
                 Pawn ? 1 : 0,
@@ -3960,7 +1269,7 @@ bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
         Pawn->ForceNetUpdate();
         MovedCount++;
 
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMove Player=%s Index=%d Teleport=%d Location=%s Rotation=%s Context=%s"),
+        DS_LOG(TEXT("[DS] Card SeatMove Player=%s Index=%d Teleport=%d Location=%s Rotation=%s Context=%s"),
             *GetNameSafe(MainPC->PlayerState),
             Index,
             bTeleported ? 1 : 0,
@@ -3969,7 +1278,7 @@ bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
             Context ? Context : TEXT("<NULL>"));
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Card SeatMoveComplete Moved=%d Planned=%d Context=%s Round=%d ServerPhase=%s"),
+    DS_LOG(TEXT("[DS] Card SeatMoveComplete Moved=%d Planned=%d Context=%s Round=%d ServerPhase=%s"),
         MovedCount,
         Controllers.Num(),
         Context ? Context : TEXT("<NULL>"),
@@ -3983,7 +1292,7 @@ void AMainGameMode::StartTimedServerPhase(EDediServerPhase NewPhase, int32 Durat
 {
     if (bGameEndReached)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore StartTimedServerPhase phase=%s after GameEnd Round=%d"),
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore StartTimedServerPhase phase=%s after GameEnd Round=%d"),
             GetServerPhaseName(NewPhase),
             CurrentRound);
         return;
@@ -3995,7 +1304,7 @@ void AMainGameMode::StartTimedServerPhase(EDediServerPhase NewPhase, int32 Durat
     RemainingPhaseSeconds = FMath::Max(0, DurationSeconds);
     SetServerRemainingTime(RemainingPhaseSeconds);
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseStart Round=%d Phase=%s Duration=%d Debug=%d"),
+    DS_LOG(TEXT("[DS] PhaseStart Round=%d Phase=%s Duration=%d Debug=%d"),
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase),
         RemainingPhaseSeconds,
@@ -4023,7 +1332,7 @@ void AMainGameMode::OnServerPhaseTick()
     if (bGameEndReached || CurrentServerPhase == EDediServerPhase::GameEnd)
     {
         ClearServerPhaseTimer();
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard ClearTick after GameEnd Round=%d"), CurrentRound);
+        DS_LOG(TEXT("[DS] PhaseGuard ClearTick after GameEnd Round=%d"), CurrentRound);
         return;
     }
 
@@ -4032,7 +1341,7 @@ void AMainGameMode::OnServerPhaseTick()
 
     if (RemainingPhaseSeconds <= 5 || RemainingPhaseSeconds % 10 == 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseTick Round=%d Phase=%s Remaining=%d"),
+        DS_LOG(TEXT("[DS] PhaseTick Round=%d Phase=%s Remaining=%d"),
             CurrentRound,
             GetServerPhaseName(CurrentServerPhase),
             RemainingPhaseSeconds);
@@ -4049,7 +1358,7 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
     if (bGameEndReached || CurrentServerPhase == EDediServerPhase::GameEnd)
     {
         ClearServerPhaseTimer();
-        UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseGuard Ignore FinishCurrentServerPhase after GameEnd Round=%d Reason=%s"),
+        DS_LOG(TEXT("[DS] PhaseGuard Ignore FinishCurrentServerPhase after GameEnd Round=%d Reason=%s"),
             CurrentRound,
             Reason ? Reason : TEXT("<NULL>"));
         return;
@@ -4059,7 +1368,7 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
 
     ClearServerPhaseTimer();
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] PhaseEnd Round=%d Phase=%s Reason=%s"),
+    DS_LOG(TEXT("[DS] PhaseEnd Round=%d Phase=%s Reason=%s"),
         CurrentRound,
         GetServerPhaseName(FinishedPhase),
         Reason);
@@ -4092,7 +1401,7 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
                 GS->CurrentRound = CurrentRound;
                 GS->OnRep_CurrentRound();
             }
-            UE_LOG(LogTemp, Warning, TEXT("[DS] NextRound Round=%d/%d"), CurrentRound, MaxRoundCount);
+            DS_LOG(TEXT("[DS] NextRound Round=%d/%d"), CurrentRound, MaxRoundCount);
             StartTransitionToBattlePhase();
         }
         break;
@@ -4215,7 +1524,7 @@ void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString&
 
     if (DediRoomId <= 0)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] IOCP MatchEndNotify skipped. Invalid RoomId=%d Winner=%s"),
+        DS_LOG(TEXT("[DS] IOCP MatchEndNotify skipped. Invalid RoomId=%d Winner=%s"),
             DediRoomId,
             *WinnerName);
         return;
@@ -4270,7 +1579,7 @@ void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString&
         bSent = Socket->Send(Packet.GetData(), Packet.Num(), BytesSent);
     }
 
-    UE_LOG(LogTemp, Warning, TEXT("[DS] IOCP MatchEndNotify RoomId=%d Winner=%s Money=%s Connected=%d Sent=%d Bytes=%d/%d"),
+    DS_LOG(TEXT("[DS] IOCP MatchEndNotify RoomId=%d Winner=%s Money=%s Connected=%d Sent=%d Bytes=%d/%d"),
         DediRoomId,
         *WinnerName,
         *MoneySummary,
@@ -4283,300 +1592,9 @@ void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString&
     SocketSubsystem->DestroySocket(Socket);
 }
 
-int32 AMainGameMode::CompareSeotdaHands(const FSeotdaHandResult& A, const FSeotdaHandResult& B) const
-{
-    auto IsSamPalGwangDdang = [](const FSeotdaHandResult& H) -> bool
-    {
-        return H.Rank == 12000;
-    };
-
-    auto IsGwangDdang = [](const FSeotdaHandResult& H) -> bool
-    {
-        return H.Rank == 11000;
-    };
-
-    auto IsNormalDdang = [](const FSeotdaHandResult& H) -> bool
-    {
-        return H.Rank >= 10001 && H.Rank <= 10010;
-    };
-
-    if (IsSamPalGwangDdang(A) || IsSamPalGwangDdang(B))
-    {
-        if (IsSamPalGwangDdang(A) && !IsSamPalGwangDdang(B)) return 1;
-        if (!IsSamPalGwangDdang(A) && IsSamPalGwangDdang(B)) return -1;
-    }
-
-    if (A.SpecialRule == ESeotdaSpecialRule::AmhaengEosa && IsGwangDdang(B))
-    {
-        return 1;
-    }
-
-    if (B.SpecialRule == ESeotdaSpecialRule::AmhaengEosa && IsGwangDdang(A))
-    {
-        return -1;
-    }
-
-    if (A.SpecialRule == ESeotdaSpecialRule::TtaengJabi && IsNormalDdang(B))
-    {
-        return 1;
-    }
-
-    if (B.SpecialRule == ESeotdaSpecialRule::TtaengJabi && IsNormalDdang(A))
-    {
-        return -1;
-    }
-
-    if (A.Rank != B.Rank)
-    {
-        return A.Rank > B.Rank ? 1 : -1;
-    }
-
-    if (A.SubRank != B.SubRank)
-    {
-        return A.SubRank > B.SubRank ? 1 : -1;
-    }
-
-    return 0;
-}
-
-bool AMainGameMode::ShouldForceSeotdaRedeal() const
-{
-    for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-    {
-        const AMainPlayerState* RedealPS = Pair.Key;
-        const FSeotdaPlayerRoundState& RedealState = Pair.Value;
-
-        if (!RedealPS || !RedealState.bSubmitted || RedealState.bFolded)
-        {
-            continue;
-        }
-
-        const bool bIsGusa = RedealState.HandResult.SpecialRule == ESeotdaSpecialRule::Gusa;
-        const bool bIsMeongGusa = RedealState.HandResult.SpecialRule == ESeotdaSpecialRule::MeongteongguriGusa;
-
-        if (!bIsGusa && !bIsMeongGusa)
-        {
-            continue;
-        }
-
-        bool bHasOpponent = false;
-        FSeotdaHandResult BestOpponentResult;
-        FString BestOpponentName = TEXT("None");
-
-        for (const TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& OtherPair : SeotdaRoundStates)
-        {
-            const AMainPlayerState* OtherPS = OtherPair.Key;
-            const FSeotdaPlayerRoundState& OtherState = OtherPair.Value;
-
-            if (!OtherPS || OtherPS == RedealPS || !OtherState.bSubmitted || OtherState.bFolded)
-            {
-                continue;
-            }
-
-            if (!bHasOpponent || CompareSeotdaHands(OtherState.HandResult, BestOpponentResult) > 0)
-            {
-                bHasOpponent = true;
-                BestOpponentResult = OtherState.HandResult;
-                BestOpponentName = OtherPS->GetPlayerName();
-            }
-        }
-
-        if (!bHasOpponent)
-        {
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealRule Skip Player=%s Rule=%s Reason=NoActiveOpponent"),
-                *RedealPS->GetPlayerName(),
-                *RedealState.HandResult.Name);
-            continue;
-        }
-
-        // ?쇰컲 援ъ궗: ?곷? 理쒓퀬 議깅낫媛 ?뚮━ ?댄븯?대㈃ ?ш꼍湲?
-        // 硫띻뎄?? ?곷? 理쒓퀬 議깅낫媛 9???댄븯?대㈃ ?ш꼍湲?
-        const int32 AllowedMaxRank = bIsMeongGusa ? 10009 : 9000;
-        const bool bAllowRedeal = BestOpponentResult.Rank <= AllowedMaxRank;
-
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealRule Check Player=%s Rule=%s Opponent=%s OpponentCombo=%s OpponentRank=%d AllowedMaxRank=%d Redeal=%d"),
-            *RedealPS->GetPlayerName(),
-            *RedealState.HandResult.Name,
-            *BestOpponentName,
-            *BestOpponentResult.Name,
-            BestOpponentResult.Rank,
-            AllowedMaxRank,
-            bAllowRedeal ? 1 : 0);
-
-        if (bAllowRedeal)
-        {
-            return true;
-        }
-    }
-
-    return false;
-}
-bool AMainGameMode::TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reason)
-{
-    if (!HasAuthority() || !GetWorld())
-    {
-        return false;
-    }
-
-    TArray<AMainPlayerState*> ActivePlayers;
-
-    for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-    {
-        AMainPlayerState* PS = Pair.Key;
-        FSeotdaPlayerRoundState& State = Pair.Value;
-
-        if (!PS || !State.bSubmitted || State.bFolded)
-        {
-            continue;
-        }
-
-        ActivePlayers.Add(PS);
-    }
-
-    const int32 NeedCardCount = ActivePlayers.Num() * 2;
-    if (NeedCardCount <= 0)
-    {
-        return false;
-    }
-
-    TArray<int32> RemainingRecordIds;
-
-    for (const TPair<int32, FServerCardRecord>& Pair : ServerCardRecords)
-    {
-        const FServerCardRecord& Record = Pair.Value;
-
-        if (Record.CreatedRound == CurrentRound &&
-            Record.State == ECardRuntimeState::WorldDrop &&
-            Record.CardID != ECardID::None)
-        {
-            RemainingRecordIds.Add(Pair.Key);
-        }
-    }
-
-    for (int32 Index = RemainingRecordIds.Num() - 1; Index > 0; --Index)
-    {
-        const int32 SwapIndex = FMath::RandRange(0, Index);
-        RemainingRecordIds.Swap(Index, SwapIndex);
-    }
-
-    if (RemainingRecordIds.Num() < NeedCardCount)
-    {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealReject Reason=NotEnoughCards Need=%d Remain=%d Round=%d"),
-            NeedCardCount,
-            RemainingRecordIds.Num(),
-            CurrentRound);
-        return false;
-    }
-
-    UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealStart Reason=%s ActivePlayers=%d NeedCards=%d RemainCards=%d Round=%d Pot=%d"),
-        Reason ? Reason : TEXT("<NULL>"),
-        ActivePlayers.Num(),
-        NeedCardCount,
-        RemainingRecordIds.Num(),
-        CurrentRound,
-        SeotdaPot);
-
-    int32 DrawIndex = 0;
-
-    for (AMainPlayerState* PS : ActivePlayers)
-    {
-        if (!PS)
-        {
-            continue;
-        }
-
-        const int32 FirstRecordId = RemainingRecordIds[DrawIndex++];
-        const int32 SecondRecordId = RemainingRecordIds[DrawIndex++];
-
-        FServerCardRecord* FirstRecord = ServerCardRecords.Find(FirstRecordId);
-        FServerCardRecord* SecondRecord = ServerCardRecords.Find(SecondRecordId);
-
-        if (!FirstRecord || !SecondRecord)
-        {
-            continue;
-        }
-
-        FOwnedCardInfo FirstInfo;
-        FirstInfo.CardInstanceId = FirstRecordId;
-        FirstInfo.CardID = FirstRecord->CardID;
-
-        FOwnedCardInfo SecondInfo;
-        SecondInfo.CardInstanceId = SecondRecordId;
-        SecondInfo.CardID = SecondRecord->CardID;
-
-        FirstRecord->State = ECardRuntimeState::Used;
-        FirstRecord->OwnerPlayerState = PS;
-
-        SecondRecord->State = ECardRuntimeState::Used;
-        SecondRecord->OwnerPlayerState = PS;
-
-        if (FirstRecord->DropActor.IsValid())
-        {
-            FirstRecord->DropActor->Destroy();
-            FirstRecord->DropActor.Reset();
-        }
-
-        if (SecondRecord->DropActor.IsValid())
-        {
-            SecondRecord->DropActor->Destroy();
-            SecondRecord->DropActor.Reset();
-        }
-
-        FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
-        if (!State)
-        {
-            continue;
-        }
-
-        State->SelectedCardInstanceIds.Empty();
-        State->SelectedCardInstanceIds.Add(FirstRecordId);
-        State->SelectedCardInstanceIds.Add(SecondRecordId);
-        State->HandResult = EvaluateSeotdaHand(FirstInfo, SecondInfo);
-        State->bSubmitted = true;
-        State->bActedThisBetRound = true;
-
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealCard Player=%s Cards=%d:%s,%d:%s Combo=%s Rank=%d SubRank=%d"),
-            *PS->GetPlayerName(),
-            FirstRecordId,
-            *CardDebug::ToString(FirstInfo.CardID),
-            SecondRecordId,
-            *CardDebug::ToString(SecondInfo.CardID),
-            *State->HandResult.Name,
-            State->HandResult.Rank,
-            State->HandResult.SubRank);
-
-        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-        {
-            AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
-            if (!MPC || MPC->GetPlayerState<AMainPlayerState>() != PS)
-            {
-                continue;
-            }
-
-            const FString RedealNotice = FString::Printf(
-                TEXT("[REDEAL] New Cards: #%d:%s, #%d:%s | Combo=%s"),
-                FirstRecordId,
-                *CardDebug::ToString(FirstInfo.CardID),
-                SecondRecordId,
-                *CardDebug::ToString(SecondInfo.CardID),
-                *State->HandResult.Name
-            );
-
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Seotda RedealNotice Player=%s Text=%s"),
-                *PS->GetPlayerName(),
-                *RedealNotice);
-
-            MPC->Client_ShowSeotdaResult(RedealNotice);
-            break;
-        }
-    }
-
-    return true;
-}
-
 void AMainGameMode::ShutdownDedicatedServerAfterMatchEnd()
 {
-    UE_LOG(LogTemp, Warning, TEXT("[DS] ShutdownDedicatedServerAfterMatchEnd RoomId=%d Round=%d Phase=%s"),
+    DS_LOG(TEXT("[DS] ShutdownDedicatedServerAfterMatchEnd RoomId=%d Round=%d Phase=%s"),
         DediRoomId,
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));

@@ -6,7 +6,6 @@
 #include "Subsystems/WorldSubsystem.h"
 #include "Tickable.h"
 #include "GameFramework/Character.h"
-#include "Containers/Queue.h"
 #include "PlayerManager.generated.h"
 
 /**
@@ -15,21 +14,6 @@
 
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerRegistered, ACharacter*, Player);
 DECLARE_DYNAMIC_MULTICAST_DELEGATE_OneParam(FOnPlayerUnregistered, ACharacter*, Player);
-
-DECLARE_MULTICAST_DELEGATE_TwoParams(FOnPlayerActionEvent, AActor*, FName);
-
-USTRUCT()
-struct FPlayerCommand {
-	GENERATED_BODY()
-
-	UPROPERTY()
-	TWeakObjectPtr<AActor> Executor;
-	UPROPERTY()
-	FName ActionName;
-
-	FPlayerCommand() : Executor(nullptr), ActionName(NAME_None){}
-	FPlayerCommand(AActor* InExec, FName InAction) : Executor(InExec), ActionName(InAction) {}
-};
 
 UCLASS()
 class MANAGER_API UPlayerManager : public UWorldSubsystem, public FTickableGameObject
@@ -50,9 +34,6 @@ public:
 
 	TArray<ACharacter*> GetAllPlayers() const;
 
-	void AddCommand(AActor* InExecutor, FName InAction);
-	FOnPlayerActionEvent OnPlayerActionEvent;
-
 	UPROPERTY(BlueprintAssignable)
 	FOnPlayerRegistered OnPlayerRegistered;
 	UPROPERTY(BlueprintAssignable)
@@ -66,8 +47,6 @@ private:
 	TArray<TWeakObjectPtr<ACharacter>> PendingAdd;
 	UPROPERTY()
 	TArray<TWeakObjectPtr<ACharacter>> PendingRemove;
-
-	TQueue<FPlayerCommand> CommandInbox;
 
 private:
 	void ApplyPending();
