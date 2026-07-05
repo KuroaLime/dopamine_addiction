@@ -11,6 +11,7 @@
 #include "Game/InGame/MainPlayerState.h"      
 #include "Game/InGame/MainCharacter.h"
 #include "Game/InGame/TPS/UI/CRoundandTimerWidget.h"
+#include "Game/InGame/MainPlayerController.h"
 
 const FName UTpsPlayerMainHUD::HPRadialWipeParamName(TEXT("Radial_wipe"));
 const FName UTpsPlayerMainHUD::LvLinearWipeParamName(TEXT("Linear_wipe"));
@@ -31,6 +32,8 @@ void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacte
         CRoundandTimer_UI->BindCharacterState(NewCharacterState);
     }
     UpdateCRoundandTimer_UI();
+
+    DiscradSelectionIndex = -1;
 }
 
 void UTpsPlayerMainHUD::NativeConstruct()
@@ -300,4 +303,35 @@ void UTpsPlayerMainHUD::UpdateCompass()
 }
 void UTpsPlayerMainHUD::UpdateCRoundandTimer_UI() {
    // CRoundandTimer_UI->UpdateTimer_TextImage(1);
+}
+
+void UTpsPlayerMainHUD::CycleDiscardSelection()
+{
+    APlayerController* PC = GetOwningPlayer();
+    if (!PC) return;
+
+    AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+    if (!PS) return;
+
+    if (PS->OwnedCards.Num() > 0 )
+    {
+        if (PS->OwnedCards.Num() > DiscradSelectionIndex+1) DiscradSelectionIndex++;
+        else DiscradSelectionIndex = 0;
+    }
+    else DiscradSelectionIndex = -1;
+
+
+}
+
+void UTpsPlayerMainHUD::ConfirmDiscardSelectedCard()
+{
+    AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
+    if (PC && DiscradSelectionIndex != -1)
+    {
+        AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+        if (!PS) return;
+        if (PS->OwnedCards.IsValidIndex(DiscradSelectionIndex))
+            PC->Server_RequestDiscardCard(PS->OwnedCards[DiscradSelectionIndex].CardInstanceId);
+    }
+    DiscradSelectionIndex = -1;
 }

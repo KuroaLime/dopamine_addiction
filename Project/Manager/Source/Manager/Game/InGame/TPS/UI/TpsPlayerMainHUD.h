@@ -125,4 +125,9 @@ protected:
 	class UMaterialInstanceDynamic* LvLinearMID[LvTotalNumber];
 
 	static const FName LvLinearWipeParamName;
+public:
+	void CycleDiscardSelection();
+	void ConfirmDiscardSelectedCard();
+private:
+	int32 DiscradSelectionIndex = -1;
 };
