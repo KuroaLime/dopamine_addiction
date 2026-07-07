@@ -23,6 +23,7 @@
 #include "EngineUtils.h"
 #include "NavigationSystem.h"
 #include "TimerManager.h"
+#include "Engine/World.h"
 #include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
@@ -82,11 +83,40 @@ void AMainGameMode::InitGame(const FString& MapName, const FString& Options, FSt
         }
     }
 
-    DS_LOG(TEXT("[DS] Main InitGame Map=%s Options=%s RoomId=%d RequiredPlayers=%d"),
+    AllowedDediTickets.Empty();
+    UsedDediTickets.Empty();
+
+    const FString TicketsStr = UGameplayStatics::ParseOption(Options, TEXT("Tickets"));
+    if (!TicketsStr.IsEmpty())
+    {
+        TArray<FString> TicketParts;
+        TicketsStr.ParseIntoArray(TicketParts, TEXT(","), true);
+
+        for (FString TicketPart : TicketParts)
+        {
+            TicketPart.TrimStartAndEndInline();
+            if (!TicketPart.IsNumeric())
+            {
+                DS_LOG(TEXT("[DS] Main InitGame ignored invalid ticket option. Value=%s RoomId=%d"),
+                    *TicketPart,
+                    DediRoomId);
+                continue;
+            }
+
+            const int64 TicketValue = FCString::Atoi64(*TicketPart);
+            if (TicketValue > 0)
+            {
+                AllowedDediTickets.Add(TicketValue);
+            }
+        }
+    }
+
+    DS_LOG(TEXT("[DS] Main InitGame Map=%s Options=%s RoomId=%d RequiredPlayers=%d AllowedTickets=%d"),
         *MapName,
         *Options,
         DediRoomId,
-        RequiredPlayerCount);
+        RequiredPlayerCount,
+        AllowedDediTickets.Num());
 }
 
 void AMainGameMode::PreLogin(
@@ -95,7 +125,8 @@ void AMainGameMode::PreLogin(
     const FUniqueNetIdRepl& UniqueId,
     FString& ErrorMessage)
 {
-    const FString Ticket = UGameplayStatics::ParseOption(Options, TEXT("ticket"));
+    FString Ticket = UGameplayStatics::ParseOption(Options, TEXT("ticket"));
+    Ticket.TrimStartAndEndInline();
 
     DS_LOG(TEXT("[DS] Main PreLogin Address=%s Ticket=%s Options=%s"),
         *Address,
@@ -110,12 +141,71 @@ void AMainGameMode::PreLogin(
         return;
     }
 
-    //if (Ticket.IsEmpty())
-    //{
-    //    ErrorMessage = TEXT("MissingTicket");
-    //    DS_LOG(TEXT("[DS] Main PreLogin rejected. Error=%s"), *ErrorMessage);
-    //    return;
-    //}
+    const bool bRequireTicket = DediRoomId > 0;
+    if (bRequireTicket && Ticket.IsEmpty())
+    {
+        ErrorMessage = TEXT("MissingTicket");
+        DS_LOG(TEXT("[DS] Main PreLogin rejected. Error=%s Address=%s RoomId=%d"),
+            *ErrorMessage,
+            *Address,
+            DediRoomId);
+        return;
+    }
+
+    int64 TicketValue = 0;
+    if (!Ticket.IsEmpty() && Ticket.IsNumeric())
+    {
+        TicketValue = FCString::Atoi64(*Ticket);
+    }
+
+    if (bRequireTicket && (!Ticket.IsNumeric() || TicketValue <= 0))
+    {
+        ErrorMessage = TEXT("InvalidTicket");
+        DS_LOG(TEXT("[DS] Main PreLogin rejected. Error=%s Address=%s RoomId=%d Ticket=%s"),
+            *ErrorMessage,
+            *Address,
+            DediRoomId,
+            *Ticket);
+        return;
+    }
+
+    if (bRequireTicket && AllowedDediTickets.Num() == 0)
+    {
+        ErrorMessage = TEXT("MissingTicketList");
+        DS_LOG(TEXT("[DS] Main PreLogin rejected. Error=%s Address=%s RoomId=%d Ticket=%s"),
+            *ErrorMessage,
+            *Address,
+            DediRoomId,
+            *Ticket);
+        return;
+    }
+
+    if (bRequireTicket && !AllowedDediTickets.Contains(TicketValue))
+    {
+        ErrorMessage = TEXT("UnknownTicket");
+        DS_LOG(TEXT("[DS] Main PreLogin rejected. Error=%s Address=%s RoomId=%d Ticket=%s"),
+            *ErrorMessage,
+            *Address,
+            DediRoomId,
+            *Ticket);
+        return;
+    }
+
+    if (bRequireTicket && UsedDediTickets.Contains(TicketValue))
+    {
+        ErrorMessage = TEXT("ReusedTicket");
+        DS_LOG(TEXT("[DS] Main PreLogin rejected. Error=%s Address=%s RoomId=%d Ticket=%s"),
+            *ErrorMessage,
+            *Address,
+            DediRoomId,
+            *Ticket);
+        return;
+    }
+
+    if (bRequireTicket)
+    {
+        UsedDediTickets.Add(TicketValue);
+    }
 }
 
 FString AMainGameMode::InitNewPlayer(
@@ -173,6 +263,8 @@ void AMainGameMode::BeginPlay()
         DebugTransitionDuration,
         DebugCardGameDuration,
         DebugResultDuration);
+
+    NotifyIocpServerReady();
 }
 
 void AMainGameMode::PostLogin(APlayerController* NewPlayer)
@@ -197,6 +289,13 @@ void AMainGameMode::Logout(AController* Exiting)
         RequiredPlayerCount);
 
     Super::Logout(Exiting);
+
+    if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(Exiting))
+    {
+        const TWeakObjectPtr<AMainPlayerController> PlayerKey(MainPC);
+        ClientLoadedStreamLevels.Remove(PlayerKey);
+        ClientLoadedStreamPhases.Remove(PlayerKey);
+    }
 
     DS_LOG(TEXT("[DS] Main Logout Complete HumanPlayers=%d/%d GameStarted=%d Phase=%s Round=%d"),
         CountConnectedHumanPlayers(),
@@ -278,6 +377,7 @@ void AMainGameMode::BroadcastSwitchMode(EGamePhase NewPhase)
 
 void AMainGameMode::BroadcastSwitchLevel(FName LevelToUnload, FName LevelToLoad)
 {
+    ResetClientStreamLevelAcks(TEXT("BroadcastSwitchLevel"));
     LoadServerStreamLevelForPhase(LevelToLoad, TEXT("BroadcastSwitchLevel"));
 
     int32 TargetCount = 0;
@@ -317,6 +417,7 @@ void AMainGameMode::LoadServerStreamLevelForPhase(FName LevelToLoad, const TCHAR
     LoadInfo.UUID = ++ServerStreamingLatentActionId;
 
     UGameplayStatics::LoadStreamLevel(World, LevelToLoad, true, true, LoadInfo);
+    World->FlushLevelStreaming(EFlushLevelStreamingType::Full);
 
     DS_LOG(TEXT("[DS] Main ServerLoadStreamLevel load=%s Context=%s Round=%d ServerPhase=%s UUID=%d"),
         *LevelToLoad.ToString(),
@@ -438,6 +539,236 @@ void AMainGameMode::EnsureBattleRoyaleStageLoaded()
     }
 }
 
+void AMainGameMode::HandleClientStreamLevelLoaded(AMainPlayerController* PlayerController, FName LoadedLevel, EGamePhase ClientPhase)
+{
+    if (!PlayerController)
+    {
+        return;
+    }
+
+    const TWeakObjectPtr<AMainPlayerController> PlayerKey(PlayerController);
+    ClientLoadedStreamLevels.FindOrAdd(PlayerKey) = LoadedLevel;
+    ClientLoadedStreamPhases.FindOrAdd(PlayerKey) = ClientPhase;
+
+    DS_LOG(TEXT("[DS] Main ClientStreamLevelLoaded Player=%s Level=%s ClientPhase=%d Round=%d ServerPhase=%s LoadedClients=%d/%d"),
+        *GetNameSafe(PlayerController->PlayerState),
+        *LoadedLevel.ToString(),
+        static_cast<int32>(ClientPhase),
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase),
+        ClientLoadedStreamLevels.Num(),
+        RequiredPlayerCount);
+
+    TrySpawnBattleRoyaleCardsWhenStreamReady();
+}
+
+void AMainGameMode::RequestBattleRoyaleCardSpawnAfterStreamReady(const TCHAR* Context)
+{
+    if (!CardGameService)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] Card SpawnGate request failed. Reason=NoCardGameService Context=%s"),
+            Context ? Context : TEXT("<NULL>"));
+        return;
+    }
+
+    if (bBattleRoyaleCardsSpawnedThisPhase)
+    {
+        DS_LOG(TEXT("[DS] Card SpawnGate request ignored. Reason=AlreadySpawned Context=%s Round=%d Phase=%s"),
+            Context ? Context : TEXT("<NULL>"),
+            CurrentRound,
+            GetServerPhaseName(CurrentServerPhase));
+        return;
+    }
+
+    bPendingBattleRoyaleCardSpawn = true;
+    PendingBattleRoyaleCardSpawnLevel = TEXT("TPS_Game_Stage");
+    PendingBattleRoyaleCardSpawnRound = CurrentRound;
+    PendingBattleRoyaleCardSpawnContext = Context ? Context : TEXT("<NULL>");
+    BattleRoyaleCardSpawnGateRetryCount = 0;
+
+    DS_LOG(TEXT("[DS] Card SpawnGate requested Level=%s Context=%s Round=%d Phase=%s"),
+        *PendingBattleRoyaleCardSpawnLevel.ToString(),
+        *PendingBattleRoyaleCardSpawnContext,
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+
+    TrySpawnBattleRoyaleCardsWhenStreamReady();
+}
+
+void AMainGameMode::ResetClientStreamLevelAcks(const TCHAR* Context)
+{
+    const int32 OldLevelCount = ClientLoadedStreamLevels.Num();
+    const int32 OldPhaseCount = ClientLoadedStreamPhases.Num();
+    ClientLoadedStreamLevels.Empty();
+    ClientLoadedStreamPhases.Empty();
+
+    DS_LOG(TEXT("[DS] Main ClientStreamAckReset Context=%s OldLevels=%d OldPhases=%d Round=%d Phase=%s"),
+        Context ? Context : TEXT("<NULL>"),
+        OldLevelCount,
+        OldPhaseCount,
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+}
+
+bool AMainGameMode::HaveRequiredClientsLoadedStreamLevel(FName TargetLevel, int32& OutLoadedClients, int32& OutTargetClients) const
+{
+    OutLoadedClients = 0;
+    OutTargetClients = 0;
+
+    if (TargetLevel.IsNone() || !GetWorld())
+    {
+        return false;
+    }
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        AMainPlayerController* MainPC = Cast<AMainPlayerController>(It->Get());
+        if (!MainPC)
+        {
+            continue;
+        }
+
+        ++OutTargetClients;
+
+        const TWeakObjectPtr<AMainPlayerController> PlayerKey(MainPC);
+        const FName* LoadedLevel = ClientLoadedStreamLevels.Find(PlayerKey);
+        if (LoadedLevel && *LoadedLevel == TargetLevel)
+        {
+            ++OutLoadedClients;
+        }
+    }
+
+    const int32 RequiredTargets = FMath::Max(1, FMath::Min(RequiredPlayerCount, OutTargetClients));
+    return OutTargetClients > 0 && OutLoadedClients >= RequiredTargets;
+}
+
+void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
+{
+    if (!bPendingBattleRoyaleCardSpawn || bBattleRoyaleCardsSpawnedThisPhase)
+    {
+        return;
+    }
+
+    if (bGameEndReached || CurrentRound != PendingBattleRoyaleCardSpawnRound)
+    {
+        ClearBattleRoyaleCardSpawnGate(TEXT("RoundChangedOrGameEnd"));
+        return;
+    }
+
+    if (CurrentServerPhase != EDediServerPhase::BattleRoyale)
+    {
+        ScheduleBattleRoyaleCardSpawnGateRetry(TEXT("WaitingBattleRoyalePhase"));
+        return;
+    }
+
+    int32 LoadedClients = 0;
+    int32 TargetClients = 0;
+    if (!HaveRequiredClientsLoadedStreamLevel(PendingBattleRoyaleCardSpawnLevel, LoadedClients, TargetClients))
+    {
+        DS_LOG(TEXT("[DS] Card SpawnGate waiting Level=%s Loaded=%d Targets=%d Required=%d Retry=%d Context=%s Round=%d Phase=%s"),
+            *PendingBattleRoyaleCardSpawnLevel.ToString(),
+            LoadedClients,
+            TargetClients,
+            RequiredPlayerCount,
+            BattleRoyaleCardSpawnGateRetryCount,
+            *PendingBattleRoyaleCardSpawnContext,
+            CurrentRound,
+            GetServerPhaseName(CurrentServerPhase));
+
+        ScheduleBattleRoyaleCardSpawnGateRetry(TEXT("WaitingClientStreamAck"));
+        return;
+    }
+
+    if (!CardGameService)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] Card SpawnGate failed. Reason=NoCardGameService"));
+        ClearBattleRoyaleCardSpawnGate(TEXT("NoCardGameService"));
+        return;
+    }
+
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(BattleRoyaleCardSpawnGateTimerHandle);
+    }
+
+    bPendingBattleRoyaleCardSpawn = false;
+    bBattleRoyaleCardsSpawnedThisPhase = true;
+
+    DS_LOG(TEXT("[DS] Card SpawnGate ready. Spawning Level=%s Loaded=%d Targets=%d Context=%s Round=%d Phase=%s"),
+        *PendingBattleRoyaleCardSpawnLevel.ToString(),
+        LoadedClients,
+        TargetClients,
+        *PendingBattleRoyaleCardSpawnContext,
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+
+    CardGameService->SpawnRoundCardBundleForBattleRoyale();
+    StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
+}
+
+void AMainGameMode::ScheduleBattleRoyaleCardSpawnGateRetry(const TCHAR* Context)
+{
+    UWorld* World = GetWorld();
+    if (!World || !bPendingBattleRoyaleCardSpawn || bBattleRoyaleCardsSpawnedThisPhase)
+    {
+        return;
+    }
+
+    if (BattleRoyaleCardSpawnGateMaxRetries > 0 &&
+        BattleRoyaleCardSpawnGateRetryCount >= BattleRoyaleCardSpawnGateMaxRetries)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] Card SpawnGate give up. Retry=%d Max=%d Context=%s PendingContext=%s Level=%s Round=%d Phase=%s"),
+            BattleRoyaleCardSpawnGateRetryCount,
+            BattleRoyaleCardSpawnGateMaxRetries,
+            Context ? Context : TEXT("<NULL>"),
+            *PendingBattleRoyaleCardSpawnContext,
+            *PendingBattleRoyaleCardSpawnLevel.ToString(),
+            CurrentRound,
+            GetServerPhaseName(CurrentServerPhase));
+        return;
+    }
+
+    if (World->GetTimerManager().IsTimerActive(BattleRoyaleCardSpawnGateTimerHandle))
+    {
+        return;
+    }
+
+    ++BattleRoyaleCardSpawnGateRetryCount;
+    World->GetTimerManager().SetTimer(
+        BattleRoyaleCardSpawnGateTimerHandle,
+        this,
+        &AMainGameMode::RetryBattleRoyaleCardSpawnGate,
+        FMath::Max(0.05f, BattleRoyaleCardSpawnGateRetryInterval),
+        false);
+}
+
+void AMainGameMode::RetryBattleRoyaleCardSpawnGate()
+{
+    TrySpawnBattleRoyaleCardsWhenStreamReady();
+}
+
+void AMainGameMode::ClearBattleRoyaleCardSpawnGate(const TCHAR* Context)
+{
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(BattleRoyaleCardSpawnGateTimerHandle);
+    }
+
+    DS_LOG(TEXT("[DS] Card SpawnGate cleared Context=%s Pending=%d Spawned=%d PendingLevel=%s Round=%d Phase=%s"),
+        Context ? Context : TEXT("<NULL>"),
+        bPendingBattleRoyaleCardSpawn ? 1 : 0,
+        bBattleRoyaleCardsSpawnedThisPhase ? 1 : 0,
+        *PendingBattleRoyaleCardSpawnLevel.ToString(),
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+
+    bPendingBattleRoyaleCardSpawn = false;
+    PendingBattleRoyaleCardSpawnLevel = NAME_None;
+    PendingBattleRoyaleCardSpawnRound = 0;
+    PendingBattleRoyaleCardSpawnContext.Empty();
+    BattleRoyaleCardSpawnGateRetryCount = 0;
+}
+
 void AMainGameMode::StartBattleRoyalePhase()
 {
     if (bGameEndReached)
@@ -446,10 +777,31 @@ void AMainGameMode::StartBattleRoyalePhase()
         return;
     }
 
-    // 배틀로얄 진입 셋업(레벨/모드 전환, 카드 번들 스폰, 폰 활성화, 라운드 무기)은
-    // UTPSPhaseStrategy::OnPhaseStart 로 이전됨. GameMode는 타이머 머신만 구동한다.
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(BattleRoyaleCardSpawnGateTimerHandle);
+    }
+    bPendingBattleRoyaleCardSpawn = false;
+    bBattleRoyaleCardsSpawnedThisPhase = false;
+    PendingBattleRoyaleCardSpawnLevel = NAME_None;
+    PendingBattleRoyaleCardSpawnRound = CurrentRound;
+    PendingBattleRoyaleCardSpawnContext.Empty();
+    BattleRoyaleCardSpawnGateRetryCount = 0;
+
+    // 배틀로얄 진입 셋업(레벨/모드 전환, 카드 스폰 gate, 폰 활성화, 라운드 무기)은
+    // UTPSPhaseStrategy::OnPhaseStart 로 이전됨. 제한 시간 타이머는 카드 스폰 성공 후 시작한다.
     BeginPhase(EGamePhase::TPS);
-    StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
+
+    ClearServerPhaseTimer();
+    CurrentServerPhase = EDediServerPhase::BattleRoyale;
+    RemainingPhaseSeconds = 0;
+    SetServerRemainingTime(0);
+
+    DS_LOG(TEXT("[DS] PhasePrepare Round=%d Phase=%s WaitForCardSpawnGate=1"),
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+
+    TrySpawnBattleRoyaleCardsWhenStreamReady();
 }
 
 void AMainGameMode::StartTransitionToCardPhase()
@@ -462,6 +814,7 @@ void AMainGameMode::StartTransitionToCardPhase()
 
     // TPS 종료 teardown(폰 비활성/카드 드롭 정리/무브먼트 베이스 정리)은
     // UTPSPhaseStrategy::OnPhaseEnd(EndPhase 호출 시점)로 이전됨. 여기선 전환 글루만 수행.
+    ClearBattleRoyaleCardSpawnGate(TEXT("TransitionToCard"));
     EndPhase();
     BroadcastSwitchLevel(TEXT("TPS_Game_Stage"), TEXT("Card_Game_Stage"));
     RequestMovePlayersToCardIslandSeats(TEXT("TransitionToCard"));
@@ -1514,6 +1867,76 @@ namespace
             Out.Append(Data, UseLen);
         }
     }
+}
+
+void AMainGameMode::NotifyIocpServerReady() const
+{
+    constexpr uint16 ServerReadyPacketType = 301;
+    constexpr TCHAR IocpHost[] = TEXT("127.0.0.1");
+    constexpr int32 IocpPort = 9000;
+
+    if (DediRoomId <= 0)
+    {
+        DS_LOG(TEXT("[DS] IOCP ServerReadyNotify skipped. Invalid RoomId=%d"), DediRoomId);
+        return;
+    }
+
+    TArray<uint8> Payload;
+    ManagerAppendU32BE(Payload, static_cast<uint32>(DediRoomId));
+
+    TArray<uint8> Packet;
+    const uint16 TotalSize = static_cast<uint16>(4 + Payload.Num());
+
+    ManagerAppendU16BE(Packet, TotalSize);
+    ManagerAppendU16BE(Packet, ServerReadyPacketType);
+    Packet.Append(Payload);
+
+    ISocketSubsystem* SocketSubsystem = ISocketSubsystem::Get(PLATFORM_SOCKETSUBSYSTEM);
+    if (!SocketSubsystem)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] IOCP ServerReadyNotify failed. No SocketSubsystem RoomId=%d"), DediRoomId);
+        return;
+    }
+
+    TSharedRef<FInternetAddr> Addr = SocketSubsystem->CreateInternetAddr();
+
+    bool bIpValid = false;
+    Addr->SetIp(IocpHost, bIpValid);
+    Addr->SetPort(IocpPort);
+
+    if (!bIpValid)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] IOCP ServerReadyNotify failed. Invalid IP=%s"), IocpHost);
+        return;
+    }
+
+    FSocket* Socket = SocketSubsystem->CreateSocket(NAME_Stream, TEXT("ManagerIocpServerReadyNotify"), false);
+    if (!Socket)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] IOCP ServerReadyNotify failed. CreateSocket RoomId=%d"), DediRoomId);
+        return;
+    }
+
+    Socket->SetNonBlocking(false);
+
+    bool bConnected = Socket->Connect(*Addr);
+    int32 BytesSent = 0;
+    bool bSent = false;
+
+    if (bConnected)
+    {
+        bSent = Socket->Send(Packet.GetData(), Packet.Num(), BytesSent);
+    }
+
+    DS_LOG(TEXT("[DS] IOCP ServerReadyNotify RoomId=%d Connected=%d Sent=%d Bytes=%d/%d"),
+        DediRoomId,
+        bConnected ? 1 : 0,
+        bSent ? 1 : 0,
+        BytesSent,
+        Packet.Num());
+
+    Socket->Close();
+    SocketSubsystem->DestroySocket(Socket);
 }
 
 void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary) const

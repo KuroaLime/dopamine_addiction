@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/MainPlayerController.h"
+#include "Game/InGame/MainGameMode.h"
 #include "Manager.h"
 #include "Engine/Engine.h"
 #include "EnhancedInputComponent.h"
@@ -261,17 +262,54 @@ void AMainPlayerController::Server_SwitchToLevel_Implementation(FName LevelToUnl
 
 void AMainPlayerController::Client_SwitchToLevel_Implementation(FName LevelToUnload, FName LevelToLoad)
 {
+	PendingClientStreamLevelToUnload = LevelToUnload;
+	PendingClientStreamLevelToLoad = LevelToLoad;
+
 	if (!LevelToUnload.IsNone())
 	{
-		FLatentActionInfo UnloadInfo(1, 1, TEXT(""), this);
+		FLatentActionInfo UnloadInfo(1, 1, TEXT("OnClientStreamLevelUnloaded"), this);
 		UGameplayStatics::UnloadStreamLevel(GetWorld(), LevelToUnload, UnloadInfo, false);
 	}
 
 	if (!LevelToLoad.IsNone())
 	{
-		FLatentActionInfo LoadInfo(2, 2, TEXT(""), this);
+		FLatentActionInfo LoadInfo(2, 2, TEXT("OnClientStreamLevelLoaded"), this);
 		UGameplayStatics::LoadStreamLevel(GetWorld(), LevelToLoad, true, false, LoadInfo);
 	}
+}
+
+void AMainPlayerController::OnClientStreamLevelLoaded()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[CL] StreamLevelLoaded Level=%s Phase=%d Local=%d"),
+		*PendingClientStreamLevelToLoad.ToString(),
+		static_cast<int32>(CurrentPhase),
+		IsLocalPlayerController() ? 1 : 0);
+
+	Server_ReportStreamLevelLoaded(PendingClientStreamLevelToLoad, CurrentPhase);
+}
+
+void AMainPlayerController::OnClientStreamLevelUnloaded()
+{
+	UE_LOG(LogTemp, Warning, TEXT("[CL] StreamLevelUnloaded Level=%s Phase=%d Local=%d"),
+		*PendingClientStreamLevelToUnload.ToString(),
+		static_cast<int32>(CurrentPhase),
+		IsLocalPlayerController() ? 1 : 0);
+}
+
+bool AMainPlayerController::Server_ReportStreamLevelLoaded_Validate(FName LoadedLevel, EGamePhase ClientPhase)
+{
+	return !LoadedLevel.IsNone();
+}
+
+void AMainPlayerController::Server_ReportStreamLevelLoaded_Implementation(FName LoadedLevel, EGamePhase ClientPhase)
+{
+	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+	if (!GM)
+	{
+		return;
+	}
+
+	GM->HandleClientStreamLevelLoaded(this, LoadedLevel, ClientPhase);
 }
 
 bool AMainPlayerController::Server_SwitchState_Validate(EGamePhase NewPhase)

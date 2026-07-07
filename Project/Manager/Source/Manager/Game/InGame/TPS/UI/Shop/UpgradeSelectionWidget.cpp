@@ -29,6 +29,12 @@ void UUpgradeSelectionWidget::HandleCardSelected(int32 CardID) {
 
 //여기 생성한 카드 번호를 받아와서 set 해주기
 void UUpgradeSelectionWidget::SetCardID(const TArray<FRandomCardOption>& Options) {
+	if (Options.Num() < 3)
+	{
+		UE_LOG(LogTemp, Error, TEXT("[UI] UpgradeSelectionWidget SetCardID failed. Options=%d Required=3"), Options.Num());
+		return;
+	}
+
 	if (SelectionCard00) SelectionCard00->SetUpgradeType(Options[0], 0);
 	if (SelectionCard01) SelectionCard01->SetUpgradeType(Options[1], 1);
 	if (SelectionCard02) SelectionCard02->SetUpgradeType(Options[2], 2);

@@ -565,9 +565,8 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
     UNavigationSystemV1* NavSystem = UNavigationSystemV1::GetCurrent(World);
     if (!NavSystem)
     {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Zone=%s Reason=NoNavSystem"),
-            IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()));
-        return false;
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card DropNoNavSystem Island=%d Slot=%d Zone=%s Key=%s Source=%s Result=TryGroundTraceFallback"),
+            IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source);
     }
 
     const FVector Extent = DropZone.Bounds.GetExtent();
@@ -595,6 +594,12 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
 
     auto TryAddNavAnchor = [&](const FVector& QueryPoint, const TCHAR* Source) -> void
     {
+        if (!NavSystem)
+        {
+            ++AnchorNavFail;
+            return;
+        }
+
         FNavLocation NavLocation;
         if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, AnchorProjectExtent))
         {
@@ -640,19 +645,26 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
 
     if (NavAnchors.Num() == 0)
     {
-        UE_LOG(LogTemp, Error,
-            TEXT("[DS] Card DropFail Island=%d Slot=%d Zone=%s Key=%s Source=%s Reason=NoNavAnchor AnchorNavFail=%d AnchorBoundsFail=%d Center=%s Extent=%s"),
+        UE_LOG(LogTemp, Warning,
+            TEXT("[DS] Card DropNoNavAnchor Island=%d Slot=%d Zone=%s Key=%s Source=%s Result=TryGroundTraceFallback AnchorNavFail=%d AnchorBoundsFail=%d Center=%s Extent=%s"),
             IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
             AnchorNavFail, AnchorBoundsFail, *Center.ToCompactString(), *Extent.ToCompactString());
-        return false;
     }
 
     float ReferenceNavZ = 0.0f;
-    for (const FVector& Anchor : NavAnchors)
+    const bool bHasNavReference = NavAnchors.Num() > 0;
+    if (bHasNavReference)
     {
-        ReferenceNavZ += Anchor.Z;
+        for (const FVector& Anchor : NavAnchors)
+        {
+            ReferenceNavZ += Anchor.Z;
+        }
+        ReferenceNavZ /= static_cast<float>(NavAnchors.Num());
     }
-    ReferenceNavZ /= static_cast<float>(NavAnchors.Num());
+    else
+    {
+        ReferenceNavZ = Center.Z;
+    }
 
     int32 NavFail = 0;
     int32 BoundsFail = 0;
@@ -681,7 +693,8 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
 
         const FVector Candidate = NavLocation.Location + FVector(0.0f, 0.0f, CardIslandGroundOffsetZ);
 
-        if (!IsCardDropZSane(DropZone, ReferenceNavZ, Candidate))
+        const float CandidateReferenceNavZ = bHasNavReference ? ReferenceNavZ : NavLocation.Location.Z;
+        if (!IsCardDropZSane(DropZone, CandidateReferenceNavZ, Candidate))
         {
             ++ZFail;
             return false;
@@ -716,7 +729,7 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
             TEXT("[DS] Card DropInstance Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s PickSource=%s Attempts=%d TotalCandidates=%d ExistingCards=%d Location=%s SpawnZ=%.1f NavZ=%.1f RefNavZ=%.1f"),
             IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
             Source, Attempt, TotalCandidates, ExistingIslandLocations.Num(), *Candidate.ToCompactString(),
-            Candidate.Z, NavLocation.Location.Z, ReferenceNavZ);
+            Candidate.Z, NavLocation.Location.Z, CandidateReferenceNavZ);
         return true;
     };
 
@@ -724,48 +737,54 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
     const float CandidateRadii[] = { PatternRadius, PatternRadius * 0.72f, PatternRadius * 1.18f };
     int32 PatternAttempt = 0;
 
-    for (float CandidateRadius : CandidateRadii)
+    if (NavSystem)
     {
-        for (int32 Step = 0; Step < 5; ++Step)
+        for (float CandidateRadius : CandidateRadii)
         {
-            ++PatternAttempt;
+            for (int32 Step = 0; Step < 5; ++Step)
+            {
+                ++PatternAttempt;
 
-            const int32 PatternIndex = (SlotIndex + Step) % 5;
-            const float AngleDegrees = BaseAngleDegrees + static_cast<float>(PatternIndex) * 72.0f;
-            const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
-            const FVector QueryPoint(
-                Center.X + FMath::Cos(AngleRadians) * CandidateRadius,
-                Center.Y + FMath::Sin(AngleRadians) * CandidateRadius,
-                Center.Z);
+                const int32 PatternIndex = (SlotIndex + Step) % 5;
+                const float AngleDegrees = BaseAngleDegrees + static_cast<float>(PatternIndex) * 72.0f;
+                const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
+                const FVector QueryPoint(
+                    Center.X + FMath::Cos(AngleRadians) * CandidateRadius,
+                    Center.Y + FMath::Sin(AngleRadians) * CandidateRadius,
+                    Center.Z);
+
+                FNavLocation NavLocation;
+                if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, AnchorProjectExtent))
+                {
+                    ++NavFail;
+                    continue;
+                }
+
+                if (TryAcceptNavLocation(NavLocation, TEXT("NavPattern"), PatternAttempt))
+                {
+                    return true;
+                }
+            }
+        }
+    }
+
+    if (NavAnchors.Num() > 0)
+    {
+        for (int32 Attempt = 1; Attempt <= MaxAttempts; ++Attempt)
+        {
+            const FVector& Anchor = NavAnchors[(Attempt + SlotIndex + IslandIndex) % NavAnchors.Num()];
 
             FNavLocation NavLocation;
-            if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, AnchorProjectExtent))
+            if (!NavSystem->GetRandomReachablePointInRadius(Anchor, RandomRadius, NavLocation))
             {
                 ++NavFail;
                 continue;
             }
 
-            if (TryAcceptNavLocation(NavLocation, TEXT("NavPattern"), PatternAttempt))
+            if (TryAcceptNavLocation(NavLocation, TEXT("NavRandom"), Attempt))
             {
                 return true;
             }
-        }
-    }
-
-    for (int32 Attempt = 1; Attempt <= MaxAttempts; ++Attempt)
-    {
-        const FVector& Anchor = NavAnchors[(Attempt + SlotIndex + IslandIndex) % NavAnchors.Num()];
-
-        FNavLocation NavLocation;
-        if (!NavSystem->GetRandomReachablePointInRadius(Anchor, RandomRadius, NavLocation))
-        {
-            ++NavFail;
-            continue;
-        }
-
-        if (TryAcceptNavLocation(NavLocation, TEXT("NavRandom"), Attempt))
-        {
-            return true;
         }
     }
 
@@ -774,42 +793,156 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
     const float GoldenAngleDegrees = 137.50777f;
     int32 SpiralAttempt = 0;
 
-    for (int32 Ring = 1; Ring <= SpiralRings; ++Ring)
+    if (NavAnchors.Num() > 0)
     {
-        const float RingAlpha = static_cast<float>(Ring) / static_cast<float>(SpiralRings);
-        const float RingRadius = FMath::Lerp(MinDistance, RandomRadius, RingAlpha);
-
-        for (int32 PointIndex = 0; PointIndex < PointsPerRing; ++PointIndex)
+        for (int32 Ring = 1; Ring <= SpiralRings; ++Ring)
         {
-            ++SpiralAttempt;
+            const float RingAlpha = static_cast<float>(Ring) / static_cast<float>(SpiralRings);
+            const float RingRadius = FMath::Lerp(MinDistance, RandomRadius, RingAlpha);
 
-            const FVector& Anchor = NavAnchors[(PointIndex + SlotIndex + IslandIndex) % NavAnchors.Num()];
-            const float AngleDegrees = GoldenAngleDegrees * static_cast<float>(PointIndex + SlotIndex * 3 + IslandIndex * 7)
-                + 360.0f * RingAlpha;
-            const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
-
-            const FVector QueryPoint(
-                Anchor.X + FMath::Cos(AngleRadians) * RingRadius,
-                Anchor.Y + FMath::Sin(AngleRadians) * RingRadius,
-                Anchor.Z);
-
-            FNavLocation NavLocation;
-            if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, CandidateProjectExtent))
+            for (int32 PointIndex = 0; PointIndex < PointsPerRing; ++PointIndex)
             {
-                ++NavFail;
-                continue;
-            }
+                ++SpiralAttempt;
 
-            if (TryAcceptNavLocation(NavLocation, TEXT("NavSpiral"), SpiralAttempt))
-            {
-                return true;
+                const FVector& Anchor = NavAnchors[(PointIndex + SlotIndex + IslandIndex) % NavAnchors.Num()];
+                const float AngleDegrees = GoldenAngleDegrees * static_cast<float>(PointIndex + SlotIndex * 3 + IslandIndex * 7)
+                    + 360.0f * RingAlpha;
+                const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
+
+                const FVector QueryPoint(
+                    Anchor.X + FMath::Cos(AngleRadians) * RingRadius,
+                    Anchor.Y + FMath::Sin(AngleRadians) * RingRadius,
+                    Anchor.Z);
+
+                FNavLocation NavLocation;
+                if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, CandidateProjectExtent))
+                {
+                    ++NavFail;
+                    continue;
+                }
+
+                if (TryAcceptNavLocation(NavLocation, TEXT("NavSpiral"), SpiralAttempt))
+                {
+                    return true;
+                }
             }
         }
     }
 
+    auto TryGroundTraceFallback = [&]() -> bool
+    {
+        const float TraceHalfHeight = FMath::Max(1000.0f, CardIslandGroundTraceHalfHeight);
+        const float FallbackRadius = FMath::Clamp(FMath::Min(Extent.X, Extent.Y) * 0.30f, 250.0f, VisibleRadius);
+        const int32 FallbackAttempts = 32;
+
+        int32 TraceFail = 0;
+        int32 BoundsReject = 0;
+        int32 WalkableReject = 0;
+        int32 ZReject = 0;
+        int32 NoDropReject = 0;
+        int32 DistReject = 0;
+        int32 OverlapReject = 0;
+        int32 OverheadReject = 0;
+
+        for (int32 Attempt = 0; Attempt < FallbackAttempts; ++Attempt)
+        {
+            const float RingAlpha = static_cast<float>((Attempt / 8) + 1) / 4.0f;
+            const float Radius = FMath::Clamp(FallbackRadius * RingAlpha, 0.0f, FallbackRadius);
+            const float AngleDegrees = static_cast<float>((Attempt % 8) * 45) + static_cast<float>(SlotIndex * 17 + IslandIndex * 29);
+            const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
+
+            const FVector TraceXY(
+                Center.X + FMath::Cos(AngleRadians) * Radius,
+                Center.Y + FMath::Sin(AngleRadians) * Radius,
+                Center.Z);
+
+            if (!DropZone.Bounds.IsInsideXY(TraceXY))
+            {
+                ++BoundsReject;
+                continue;
+            }
+
+            const FVector Start(TraceXY.X, TraceXY.Y, Center.Z + TraceHalfHeight);
+            const FVector End(TraceXY.X, TraceXY.Y, Center.Z - TraceHalfHeight);
+
+            FHitResult Hit;
+            FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CardIslandGroundFallback), false);
+            const bool bHit = World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, QueryParams);
+            if (!bHit || !Hit.bBlockingHit)
+            {
+                ++TraceFail;
+                continue;
+            }
+
+            if (!DropZone.Bounds.IsInsideXY(Hit.ImpactPoint))
+            {
+                ++BoundsReject;
+                continue;
+            }
+
+            if (!IsCardIslandSurfaceWalkable(Hit))
+            {
+                ++WalkableReject;
+                continue;
+            }
+
+            const FVector Candidate = Hit.ImpactPoint + FVector(0.0f, 0.0f, CardIslandGroundOffsetZ);
+
+            const float GroundReferenceZ = bHasNavReference ? ReferenceNavZ : Hit.ImpactPoint.Z;
+            if (!IsCardDropZSane(DropZone, GroundReferenceZ, Candidate))
+            {
+                ++ZReject;
+                continue;
+            }
+
+            if (IsInsideNoDropZone(Candidate))
+            {
+                ++NoDropReject;
+                continue;
+            }
+
+            if (!IsFarEnoughFromIslandCards(Candidate, ExistingIslandLocations))
+            {
+                ++DistReject;
+                continue;
+            }
+
+            if (!IsCardDropLocationClear(Candidate))
+            {
+                ++OverlapReject;
+                continue;
+            }
+
+            if (!HasOverheadClearance(Candidate))
+            {
+                ++OverheadReject;
+                continue;
+            }
+
+            OutLocation = Candidate;
+            UE_LOG(LogTemp, Warning,
+                TEXT("[DS] Card DropInstance Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s PickSource=GroundTraceFallback Attempt=%d ExistingCards=%d Location=%s Impact=%s RefNavZ=%.1f"),
+                IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
+                Attempt + 1, ExistingIslandLocations.Num(), *Candidate.ToCompactString(), *Hit.ImpactPoint.ToCompactString(), GroundReferenceZ);
+            return true;
+        }
+
+        UE_LOG(LogTemp, Warning,
+            TEXT("[DS] Card GroundTraceFallbackRejected Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Attempts=%d TraceFail=%d BoundsReject=%d WalkableReject=%d ZReject=%d DistReject=%d OverlapReject=%d OverheadReject=%d NoDropReject=%d"),
+            IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
+            FallbackAttempts, TraceFail, BoundsReject, WalkableReject, ZReject, DistReject, OverlapReject, OverheadReject, NoDropReject);
+        return false;
+    };
+
+    if (TryGroundTraceFallback())
+    {
+        return true;
+    }
+
     UE_LOG(LogTemp, Error,
-        TEXT("[DS] Card DropFail Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Reason=AllNavCandidatesRejected Anchors=%d MaxAttempts=%d SpiralCandidates=%d VisibleRadius=%.0f RandomRadius=%.0f RefNavZ=%.1f NavFail=%d BoundsFail=%d ZFail=%d DistFail=%d OverlapFail=%d OverheadFail=%d NoDrop=%d ExistingCards=%d TotalCandidates=%d"),
+        TEXT("[DS] Card DropFail Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Reason=%s Anchors=%d MaxAttempts=%d SpiralCandidates=%d VisibleRadius=%.0f RandomRadius=%.0f RefNavZ=%.1f NavFail=%d BoundsFail=%d ZFail=%d DistFail=%d OverlapFail=%d OverheadFail=%d NoDrop=%d ExistingCards=%d TotalCandidates=%d"),
         IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
+        NavSystem ? TEXT("AllNavCandidatesRejected") : TEXT("NoNavSystemGroundTraceRejected"),
         NavAnchors.Num(), MaxAttempts, SpiralRings * PointsPerRing, VisibleRadius, RandomRadius, ReferenceNavZ,
         NavFail, BoundsFail, ZFail, DistFail, OverlapFail, OverheadFail, NoDropFail, ExistingIslandLocations.Num(), TotalCandidates);
     return false;

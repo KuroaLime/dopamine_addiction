@@ -1016,7 +1016,7 @@ ACardDropActor* UCardGameService::SpawnCardDrop(ECardID CardID, const FVector& S
     }
 
     FActorSpawnParameters Params;
-    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::DontSpawnIfColliding;
+    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
     ACardDropActor* CardActor = GetWorld()->SpawnActor<ACardDropActor>(SpawnClass, SpawnLocation, FRotator::ZeroRotator, Params);
     if (!CardActor)
@@ -1208,10 +1208,31 @@ void UCardGameService::SpawnRoundCardBundleForBattleRoyale()
 
     if (IslandDropZones.Num() < IslandCardGroups.Num())
     {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Reason=NotEnoughDropZones Found=%d Required=%d Result=AbortIslandCardSpawn"),
+        UE_LOG(LogTemp, Warning, TEXT("[DS] Card DropZoneRecover Reason=NotEnoughDropZones Found=%d Required=%d Result=ReuseOrFallback"),
             IslandDropZones.Num(),
             IslandCardGroups.Num());
-        return;
+
+        if (IslandDropZones.Num() == 0)
+        {
+            const FVector FallbackExtent(
+                FMath::Max(100.0f, CardPlacement.CardBundleDropExtent.X),
+                FMath::Max(100.0f, CardPlacement.CardBundleDropExtent.Y),
+                FMath::Max(1000.0f, CardPlacement.CardIslandGroundTraceHalfHeight));
+
+            FCardIslandDropZone FallbackZone;
+            FallbackZone.Bounds = FBox(CardPlacement.CardBundleDropCenter - FallbackExtent, CardPlacement.CardBundleDropCenter + FallbackExtent);
+            FallbackZone.Center = CardPlacement.CardBundleDropCenter;
+            FallbackZone.IslandKey = FName(TEXT("BundleFallback"));
+            FallbackZone.Source = TEXT("GeneratedBundleBounds");
+            FallbackZone.SortOrder = 9000;
+
+            IslandDropZones.Add(FallbackZone);
+
+            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DropZoneRecover CreatedFallbackZone Key=%s Center=%s Extent=%s"),
+                *FallbackZone.IslandKey.ToString(),
+                *FallbackZone.Center.ToCompactString(),
+                *FallbackZone.Bounds.GetExtent().ToCompactString());
+        }
     }
 
     if (IslandDropZones.Num() != OwnerGM->GetCardIslandDropExpectedZoneCount())
@@ -1229,16 +1250,26 @@ void UCardGameService::SpawnRoundCardBundleForBattleRoyale()
     }
 
     int32 PlannedCount = 0;
+    TMap<int32, TArray<FVector>> ExistingLocationsByZoneIndex;
 
     for (int32 IslandIndex = 0; IslandIndex < IslandCardGroups.Num(); ++IslandIndex)
     {
-        const FCardIslandDropZone& DropZone = IslandDropZones[IslandIndex];
+        const int32 ZoneIndex = IslandDropZones.Num() > 0 ? IslandIndex % IslandDropZones.Num() : INDEX_NONE;
+        if (ZoneIndex == INDEX_NONE)
+        {
+            UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Island=%d Reason=NoDropZoneAfterRecovery Result=SkippedGroup"),
+                IslandIndex);
+            continue;
+        }
+
+        const FCardIslandDropZone& DropZone = IslandDropZones[ZoneIndex];
         const TArray<ECardID>& CardsInIsland = IslandCardGroups[IslandIndex];
         const int32 BalanceValue = CardPlacement.GetCardIslandGroupBalanceValue(CardsInIsland);
 
         AActor* ZoneActor = DropZone.ZoneActor.Get();
-        DS_LOG(TEXT("[DS] Card IslandGroup Island=%d Zone=%s Key=%s Source=%s Cards=%d BalanceValue=%d BoundsCenter=%s BoundsExtent=%s"),
+        DS_LOG(TEXT("[DS] Card IslandGroup Island=%d ZoneIndex=%d Zone=%s Key=%s Source=%s Cards=%d BalanceValue=%d BoundsCenter=%s BoundsExtent=%s"),
             IslandIndex,
+            ZoneIndex,
             ZoneActor ? *ZoneActor->GetName() : TEXT("None"),
             *DropZone.IslandKey.ToString(),
             *DropZone.Source,
@@ -1247,7 +1278,7 @@ void UCardGameService::SpawnRoundCardBundleForBattleRoyale()
             *DropZone.Center.ToString(),
             *DropZone.Bounds.GetExtent().ToString());
 
-        TArray<FVector> ExistingIslandLocations;
+        TArray<FVector>& ExistingIslandLocations = ExistingLocationsByZoneIndex.FindOrAdd(ZoneIndex);
         int32 IslandPlaced = 0;
 
         for (int32 SlotIndex = 0; SlotIndex < CardsInIsland.Num(); ++SlotIndex)
@@ -1275,8 +1306,8 @@ void UCardGameService::SpawnRoundCardBundleForBattleRoyale()
                 SpawnedCard ? TEXT("OK") : TEXT("SpawnNull"), *SpawnLocation.ToCompactString(), SpawnLocation.Z);
         }
 
-        DS_LOG(TEXT("[DS] Card IslandDropSummary Island=%d Zone=%s Key=%s Source=%s Placed=%d Requested=%d Center=%s Extent=%s"),
-            IslandIndex, ZoneActor ? *ZoneActor->GetName() : TEXT("None"), *DropZone.IslandKey.ToString(), *DropZone.Source,
+        DS_LOG(TEXT("[DS] Card IslandDropSummary Island=%d ZoneIndex=%d Zone=%s Key=%s Source=%s Placed=%d Requested=%d Center=%s Extent=%s"),
+            IslandIndex, ZoneIndex, ZoneActor ? *ZoneActor->GetName() : TEXT("None"), *DropZone.IslandKey.ToString(), *DropZone.Source,
             IslandPlaced, CardsInIsland.Num(), *DropZone.Center.ToCompactString(), *DropZone.Bounds.GetExtent().ToCompactString());
     }
 

@@ -11,10 +11,19 @@
 #include <windows.h>
 #endif
 
-#include <thread>
-#include <chrono>
 #include <string>
 #include <cstdlib>
+#include <random>
+#include <utility>
+
+#ifndef MANAGER_LOBBY_TRACE_LOG
+#define MANAGER_LOBBY_TRACE_LOG 0
+#endif
+
+#define LOBBY_TRACE(...) do { if (MANAGER_LOBBY_TRACE_LOG) { printf(__VA_ARGS__); } } while (0)
+#define LOBBY_INFO(...)  do { printf(__VA_ARGS__); } while (0)
+#define LOBBY_WARN(...)  do { printf(__VA_ARGS__); } while (0)
+#define LOBBY_ERR(...)   do { printf(__VA_ARGS__); } while (0)
 
 
 // ===========================================================================
@@ -61,7 +70,6 @@ static const char* DEDI_PUBLIC_IP =
 "127.0.0.1";
 
 static constexpr size_t MIN_PLAYERS_TO_START = 1;
-static constexpr int DEDI_GAME_START_DELAY_SECONDS = 15;
 
 static std::string GetDirectoryName(const std::string& path)
 {
@@ -311,10 +319,199 @@ uint16_t LobbyService::AllocPort()
 
 void LobbyService::FreePort(uint16_t port)
 {
-    if (port != 0)
+    if (port == 0)
     {
-        m_freePorts.push_back(port);
+        return;
     }
+
+    if (std::find(m_freePorts.begin(), m_freePorts.end(), port) != m_freePorts.end())
+    {
+        LOBBY_WARN("[DEDI][WARN] FreePort skipped duplicate port=%u freeCount=%zu\n",
+            port,
+            m_freePorts.size());
+        return;
+    }
+
+    m_freePorts.push_back(port);
+}
+
+void LobbyService::CleanupDedicatedServerForRoom_Unsafe(Room& room, const char* reason, bool terminateProcess)
+{
+    const uint16_t oldPort = room.dedicatedPort;
+    const HANDLE oldProcessHandle = room.dedicatedProcessHandle;
+    const DWORD oldProcessId = room.dedicatedProcessId;
+
+    room.dedicatedPort = 0;
+    room.dedicatedProcessHandle = NULL;
+    room.dedicatedProcessId = 0;
+    room.gameStartSent = false;
+    room.handoverTickets.clear();
+
+    if (oldPort != 0)
+    {
+        FreePort(oldPort);
+    }
+
+    if (!oldProcessHandle)
+    {
+        if (oldPort != 0)
+        {
+            LOBBY_INFO("[DEDI] Cleanup roomId=%u reason=%s port=%u pid=0 result=PORT_ONLY\n",
+                room.id,
+                reason ? reason : "Unknown",
+                oldPort);
+        }
+        return;
+    }
+
+    DWORD exitCode = STILL_ACTIVE;
+    const bool hasExitCode = GetExitCodeProcess(oldProcessHandle, &exitCode) != FALSE;
+    const bool stillActive = hasExitCode && exitCode == STILL_ACTIVE;
+
+    if (stillActive && terminateProcess)
+    {
+        if (TerminateProcess(oldProcessHandle, 0))
+        {
+            LOBBY_INFO("[DEDI] Cleanup roomId=%u reason=%s port=%u pid=%lu result=TERMINATED\n",
+                room.id,
+                reason ? reason : "Unknown",
+                oldPort,
+                oldProcessId);
+        }
+        else
+        {
+            LOBBY_ERR("[DEDI][ERR] Cleanup roomId=%u reason=%s port=%u pid=%lu result=TERMINATE_FAILED gle=%lu\n",
+                room.id,
+                reason ? reason : "Unknown",
+                oldPort,
+                oldProcessId,
+                GetLastError());
+        }
+    }
+    else
+    {
+        LOBBY_INFO("[DEDI] Cleanup roomId=%u reason=%s port=%u pid=%lu result=%s exitCode=%lu\n",
+            room.id,
+            reason ? reason : "Unknown",
+            oldPort,
+            oldProcessId,
+            stillActive ? "HANDLE_RELEASED" : "PROCESS_EXITED",
+            hasExitCode ? exitCode : GetLastError());
+    }
+
+    CloseHandle(oldProcessHandle);
+}
+
+void LobbyService::SweepDedicatedServerProcesses()
+{
+    std::vector<uint32_t> changedRooms;
+
+    AcquireSRWLockExclusive(&m_lock);
+
+    for (auto& kv : m_rooms)
+    {
+        Room& room = kv.second;
+        if (!room.dedicatedProcessHandle)
+        {
+            continue;
+        }
+
+        DWORD exitCode = STILL_ACTIVE;
+        if (!GetExitCodeProcess(room.dedicatedProcessHandle, &exitCode))
+        {
+            LOBBY_ERR("[DEDI][ERR] Process handle invalid before cleanup. roomId=%u port=%u pid=%lu gle=%lu\n",
+                room.id,
+                room.dedicatedPort,
+                room.dedicatedProcessId,
+                GetLastError());
+
+            CleanupDedicatedServerForRoom_Unsafe(room, "ProcessHandleInvalid", false);
+            room.state = RoomState::WAITING;
+
+            for (uint32_t sid : room.members)
+            {
+                room.readyStatus[sid] = (sid == room.hostId);
+            }
+
+            changedRooms.push_back(room.id);
+            continue;
+        }
+
+        if (exitCode == STILL_ACTIVE)
+        {
+            continue;
+        }
+
+        LOBBY_ERR("[DEDI][ERR] Process exited before cleanup. roomId=%u port=%u pid=%lu exitCode=%lu\n",
+            room.id,
+            room.dedicatedPort,
+            room.dedicatedProcessId,
+            exitCode);
+
+        CleanupDedicatedServerForRoom_Unsafe(room, "ProcessExited", false);
+        room.state = RoomState::WAITING;
+
+        for (uint32_t sid : room.members)
+        {
+            room.readyStatus[sid] = (sid == room.hostId);
+        }
+
+        changedRooms.push_back(room.id);
+    }
+
+    ReleaseSRWLockExclusive(&m_lock);
+
+    for (uint32_t roomId : changedRooms)
+    {
+        BroadcastRoomList();
+        BroadcastRoomMemberList(roomId);
+    }
+}
+
+uint32_t LobbyService::GenerateHandoverTicket_Unsafe(const Room& room) const
+{
+    static thread_local std::random_device randomDevice;
+    static thread_local std::mt19937 rng(randomDevice());
+    std::uniform_int_distribution<uint32_t> dist(100000000u, 0xFFFFFFFEu);
+
+    uint32_t ticket = 0;
+    do
+    {
+        ticket = dist(rng);
+    }
+    while (ticket == 0 ||
+        std::find_if(
+            room.handoverTickets.begin(),
+            room.handoverTickets.end(),
+            [ticket](const std::pair<const uint32_t, uint32_t>& entry)
+            {
+                return entry.second == ticket;
+            }) != room.handoverTickets.end());
+
+    return ticket;
+}
+
+std::string LobbyService::BuildHandoverTicketList_Unsafe(const Room& room) const
+{
+    std::string result;
+
+    for (uint32_t sid : room.members)
+    {
+        auto itTicket = room.handoverTickets.find(sid);
+        if (itTicket == room.handoverTickets.end())
+        {
+            continue;
+        }
+
+        if (!result.empty())
+        {
+            result += ",";
+        }
+
+        result += std::to_string(itTicket->second);
+    }
+
+    return result;
 }
 
 
@@ -322,15 +519,19 @@ void LobbyService::FreePort(uint16_t port)
 // Dedicated Server Launch
 // ===========================================================================
 
-bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_t requiredPlayers)
+bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_t requiredPlayers, const std::string& allowedTickets, HANDLE& outProcessHandle, DWORD& outProcessId)
 {
-    char mapWithOptions[512]{};
+    outProcessHandle = NULL;
+    outProcessId = 0;
+
+    char mapWithOptions[1024]{};
     sprintf_s(
         mapWithOptions,
-        "%s?RoomId=%u?RequiredPlayers=%u",
+        "%s?RoomId=%u?RequiredPlayers=%u?Tickets=%s",
         DEDI_MAP_PATH,
         roomId,
-        static_cast<unsigned>(requiredPlayers)
+        static_cast<unsigned>(requiredPlayers),
+        allowedTickets.c_str()
     );
 
     const std::string packagedServerExePath = GetPackagedServerExePath();
@@ -343,7 +544,7 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_
     {
         workingDir = GetParentDirectory(packagedServerExePath);
 
-        printf("[DEDI] ResolvePackagedServer serverExe=%s workingDir=%s serverExists=%d workingDirExists=%d\n",
+        LOBBY_TRACE("[DEDI] ResolvePackagedServer serverExe=%s workingDir=%s serverExists=%d workingDirExists=%d\n",
             packagedServerExePath.c_str(),
             workingDir.c_str(),
             FileExists(packagedServerExePath) ? 1 : 0,
@@ -363,7 +564,7 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_
         const std::string projectPath = GetDediProjectPath();
         workingDir = GetDediWorkingDir();
 
-        printf("[DEDI] ResolveEditorServer editor=%s project=%s workingDir=%s editorExists=%d projectExists=%d workingDirExists=%d\n",
+        LOBBY_TRACE("[DEDI] ResolveEditorServer editor=%s project=%s workingDir=%s editorExists=%d projectExists=%d workingDirExists=%d\n",
             editorExePath.c_str(),
             projectPath.c_str(),
             workingDir.c_str(),
@@ -403,25 +604,26 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_
     {
         DWORD err = GetLastError();
 
-        printf("[DEDI] Launch failed. roomId=%u requiredPlayers=%u port=%u err=%lu cmd=%s\n",
+        LOBBY_ERR("[DEDI][ERR] Launch failed. roomId=%u requiredPlayers=%u port=%u err=%lu usePackaged=%d\n",
             roomId,
             static_cast<unsigned>(requiredPlayers),
             port,
             err,
-            cmdLine);
+            bUsePackagedServer ? 1 : 0);
 
         return false;
     }
 
-    printf("[DEDI] Launch success. roomId=%u requiredPlayers=%u port=%u pid=%lu cmd=%s\n",
+    LOBBY_INFO("[DEDI] Launch success. roomId=%u requiredPlayers=%u port=%u pid=%lu usePackaged=%d\n",
         roomId,
         static_cast<unsigned>(requiredPlayers),
         port,
         pi.dwProcessId,
-        cmdLine);
+        bUsePackagedServer ? 1 : 0);
 
     CloseHandle(pi.hThread);
-    CloseHandle(pi.hProcess);
+    outProcessHandle = pi.hProcess;
+    outProcessId = pi.dwProcessId;
 
     return true;
 }
@@ -433,6 +635,8 @@ bool LobbyService::LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_
 
 void LobbyService::OnClientAccepted(ClientContext* c)
 {
+    SweepDedicatedServerProcesses();
+
     AcquireSRWLockExclusive(&m_lock);
 
     uint32_t sid = m_nextSessionId++;
@@ -441,7 +645,7 @@ void LobbyService::OnClientAccepted(ClientContext* c)
     m_ctxBySession[sid] = c;
     m_roomBySession[sid] = 0;
 
-    printf("[LOBBY] ACCEPT sid=%u\n", sid);
+    LOBBY_TRACE("[LOBBY] ACCEPT sid=%u\n", sid);
 
     ReleaseSRWLockExclusive(&m_lock);
 
@@ -450,6 +654,8 @@ void LobbyService::OnClientAccepted(ClientContext* c)
 
 void LobbyService::OnClientDisconnected(ClientContext* c)
 {
+    SweepDedicatedServerProcesses();
+
     bool shouldBroadcast = false;
     uint32_t oldRid = 0;
 
@@ -466,7 +672,7 @@ void LobbyService::OnClientDisconnected(ClientContext* c)
             oldRid = itRoomBySession->second;
         }
 
-        printf("[LOBBY] DISCONNECT sid=%u rid=%u\n", sid, oldRid);
+        LOBBY_TRACE("[LOBBY] DISCONNECT sid=%u rid=%u\n", sid, oldRid);
 
         if (oldRid != 0 && m_rooms.count(oldRid) > 0)
         {
@@ -474,12 +680,12 @@ void LobbyService::OnClientDisconnected(ClientContext* c)
 
             if (r.state != RoomState::IN_GAME)
             {
-                printf("[LOBBY] DISCONNECT sid=%u leave room internally\n", sid);
+                LOBBY_TRACE("[LOBBY] DISCONNECT sid=%u leave room internally\n", sid);
                 LeaveRoomInternal_Unsafe(sid, shouldBroadcast);
             }
             else
             {
-                printf("[LOBBY] DISCONNECT sid=%u stays as ghost (IN_GAME)\n", sid);
+                LOBBY_TRACE("[LOBBY] DISCONNECT sid=%u stays as ghost (IN_GAME)\n", sid);
             }
         }
 
@@ -509,13 +715,16 @@ void LobbyService::OnClientDisconnected(ClientContext* c)
 
 void LobbyService::OnPacket(ClientContext* c, uint16_t type, const char* payload, uint16_t payloadLen)
 {
+    SweepDedicatedServerProcesses();
+
     PacketType pktType = static_cast<PacketType>(type);
 
     bool allowedWithoutLogin =
         (pktType == PacketType::C2S_LOGIN_REQ) ||
         (pktType == PacketType::C2S_REGISTER_REQ) ||
         (pktType == PacketType::C2S_PING) ||
-        (pktType == PacketType::D2L_MATCH_END_NOTIFY);
+        (pktType == PacketType::D2L_MATCH_END_NOTIFY) ||
+        (pktType == PacketType::D2L_SERVER_READY_NOTIFY);
 
     bool isLoggedIn = false;
 
@@ -541,6 +750,10 @@ void LobbyService::OnPacket(ClientContext* c, uint16_t type, const char* payload
     {
     case PacketType::D2L_MATCH_END_NOTIFY:
         HandleDediMatchEndNotify(c, payload, payloadLen);
+        break;
+
+    case PacketType::D2L_SERVER_READY_NOTIFY:
+        HandleDediServerReadyNotify(c, payload, payloadLen);
         break;
 
     case PacketType::C2S_LOGIN_REQ:
@@ -814,9 +1027,28 @@ void LobbyService::HandleLoginReq(ClientContext* c, const char* payload, uint16_
         {
             Room& r = m_rooms[rid];
 
-            if (r.state == RoomState::IN_GAME)
+            if (r.state == RoomState::IN_GAME && r.gameStartSent)
             {
                 uint16_t port = r.dedicatedPort;
+                uint32_t reconnectTicket = 0;
+                auto itTicket = r.handoverTickets.find(oldSid);
+                if (itTicket != r.handoverTickets.end())
+                {
+                    reconnectTicket = itTicket->second;
+                }
+
+                if (reconnectTicket == 0)
+                {
+                    ReleaseSRWLockExclusive(&m_lock);
+
+                    printf("[AUTH] LOGIN id=%s sid=%u result=%s reason=NO_HANDOVER_TICKET\n",
+                        id.c_str(),
+                        oldSid,
+                        LoginResultToString(LoginResult::INVALID_FORMAT));
+
+                    m_net.SendLoginRes(c, LoginResult::INVALID_FORMAT);
+                    return;
+                }
 
                 ReleaseSRWLockExclusive(&m_lock);
 
@@ -827,7 +1059,7 @@ void LobbyService::HandleLoginReq(ClientContext* c, const char* payload, uint16_
                     port);
 
                 m_net.SendLoginRes(c, LoginResult::OK_RECONNECT);
-                m_net.SendGameStart(c, DEDI_PUBLIC_IP, port, oldSid);
+                m_net.SendGameStart(c, DEDI_PUBLIC_IP, port, reconnectTicket);
                 return;
             }
         }
@@ -1333,18 +1565,41 @@ void LobbyService::HandleRoomStartReq(ClientContext* c)
     }
 
     std::vector<uint32_t> membersCopy = r.members;
+    r.handoverTickets.clear();
+    for (uint32_t mSid : r.members)
+    {
+        const uint32_t ticket = GenerateHandoverTicket_Unsafe(r);
+        r.handoverTickets[mSid] = ticket;
+    }
+
+    const std::string allowedTickets = BuildHandoverTicketList_Unsafe(r);
+    if (allowedTickets.empty())
+    {
+        FreePort(port);
+        ReleaseSRWLockExclusive(&m_lock);
+
+        printf("[ROOM] START sid=%u rid=%u result=NO_HANDOVER_TICKETS\n",
+            sid,
+            rid);
+
+        m_net.SendRoomStartRes(c, RoomResult::BAD_PAYLOAD);
+        return;
+    }
 
     // Important:
     // Reserve the room as IN_GAME before launching Dedi.
     // This prevents duplicate Start requests from launching 7777, 7778, ...
     r.state = RoomState::IN_GAME;
     r.dedicatedPort = port;
+    r.gameStartSent = false;
 
     ReleaseSRWLockExclusive(&m_lock);
 
     uint16_t requiredPlayers = static_cast<uint16_t>(membersCopy.size());
+    HANDLE dediProcessHandle = NULL;
+    DWORD dediProcessId = 0;
 
-    if (!LaunchDedicatedServer(port, rid, requiredPlayers))
+    if (!LaunchDedicatedServer(port, rid, requiredPlayers, allowedTickets, dediProcessHandle, dediProcessId))
     {
         AcquireSRWLockExclusive(&m_lock);
 
@@ -1353,6 +1608,10 @@ void LobbyService::HandleRoomStartReq(ClientContext* c)
         {
             itRollbackRoom->second.state = RoomState::WAITING;
             itRollbackRoom->second.dedicatedPort = 0;
+            itRollbackRoom->second.dedicatedProcessHandle = NULL;
+            itRollbackRoom->second.dedicatedProcessId = 0;
+            itRollbackRoom->second.gameStartSent = false;
+            itRollbackRoom->second.handoverTickets.clear();
         }
 
         FreePort(port);
@@ -1370,47 +1629,128 @@ void LobbyService::HandleRoomStartReq(ClientContext* c)
         return;
     }
 
-    printf("[ROOM] START sid=%u rid=%u result=%s port=%u members=%zu\n",
+    bool launchOwnedByRoom = false;
+    const DWORD launchedDediProcessId = dediProcessId;
+    AcquireSRWLockExclusive(&m_lock);
+
+    auto itStoreRoom = m_rooms.find(rid);
+    if (itStoreRoom != m_rooms.end() &&
+        itStoreRoom->second.state == RoomState::IN_GAME &&
+        itStoreRoom->second.dedicatedPort == port)
+    {
+        itStoreRoom->second.dedicatedProcessHandle = dediProcessHandle;
+        itStoreRoom->second.dedicatedProcessId = dediProcessId;
+        dediProcessHandle = NULL;
+        dediProcessId = 0;
+        launchOwnedByRoom = true;
+    }
+
+    ReleaseSRWLockExclusive(&m_lock);
+
+    if (!launchOwnedByRoom)
+    {
+        if (dediProcessHandle)
+        {
+            TerminateProcess(dediProcessHandle, 0);
+            CloseHandle(dediProcessHandle);
+        }
+
+        LOBBY_WARN("[ROOM][WARN] START sid=%u rid=%u result=ROOM_RELEASED_DURING_LAUNCH port=%u\n",
+            sid,
+            rid,
+            port);
+
+        m_net.SendRoomStartRes(c, RoomResult::BAD_PAYLOAD);
+        BroadcastRoomList();
+        BroadcastRoomMemberList(rid);
+        return;
+    }
+
+    LOBBY_INFO("[ROOM] START sid=%u rid=%u result=%s port=%u pid=%lu members=%zu\n",
         sid,
         rid,
         RoomResultToString(RoomResult::OK),
         port,
+        launchedDediProcessId,
         membersCopy.size());
 
     m_net.SendRoomStartRes(c, RoomResult::OK);
 
-    printf("[ROOM] GAME_START_DELAY rid=%u port=%u seconds=%d\n",
+    LOBBY_INFO("[ROOM] GAME_START_WAIT_READY rid=%u port=%u members=%zu\n",
         rid,
         port,
-        DEDI_GAME_START_DELAY_SECONDS);
-
-    std::thread([this, rid, port, membersCopy]()
-        {
-            std::this_thread::sleep_for(std::chrono::seconds(DEDI_GAME_START_DELAY_SECONDS));
-
-            AcquireSRWLockShared(&m_lock);
-
-            for (uint32_t mSid : membersCopy)
-            {
-                auto itCtx = m_ctxBySession.find(mSid);
-
-                if (itCtx != m_ctxBySession.end())
-                {
-                    printf("[ROOM] GAME_START rid=%u sid=%u ip=%s port=%u\n",
-                        rid,
-                        mSid,
-                        DEDI_PUBLIC_IP,
-                        port);
-
-                    m_net.SendGameStart(itCtx->second, DEDI_PUBLIC_IP, port, mSid);
-                }
-            }
-
-            ReleaseSRWLockShared(&m_lock);
-        }).detach();
+        membersCopy.size());
 
     BroadcastRoomList();
     BroadcastRoomMemberList(rid);
+}
+
+void LobbyService::SendGameStartForRoom_Unsafe(uint32_t roomId, const char* reason)
+{
+    auto itRoom = m_rooms.find(roomId);
+    if (itRoom == m_rooms.end())
+    {
+        LOBBY_WARN("[ROOM][WARN] GAME_START_SKIP rid=%u reason=%s result=ROOM_NOT_FOUND\n",
+            roomId,
+            reason ? reason : "Unknown");
+        return;
+    }
+
+    Room& room = itRoom->second;
+    if (room.state != RoomState::IN_GAME || room.dedicatedPort == 0)
+    {
+        LOBBY_WARN("[ROOM][WARN] GAME_START_SKIP rid=%u reason=%s state=%s port=%u result=ROOM_NOT_IN_GAME\n",
+            roomId,
+            reason ? reason : "Unknown",
+            RoomStateToString(room.state),
+            room.dedicatedPort);
+        return;
+    }
+
+    if (room.gameStartSent)
+    {
+        LOBBY_TRACE("[ROOM] GAME_START_SKIP rid=%u reason=%s port=%u result=ALREADY_SENT\n",
+            roomId,
+            reason ? reason : "Unknown",
+            room.dedicatedPort);
+        return;
+    }
+
+    room.gameStartSent = true;
+    const uint16_t port = room.dedicatedPort;
+    std::vector<uint32_t> membersCopy = room.members;
+
+    for (uint32_t mSid : membersCopy)
+    {
+        auto itCtx = m_ctxBySession.find(mSid);
+        if (itCtx == m_ctxBySession.end())
+        {
+            LOBBY_WARN("[ROOM][WARN] GAME_START_TARGET_MISSING rid=%u sid=%u reason=%s\n",
+                roomId,
+                mSid,
+                reason ? reason : "Unknown");
+            continue;
+        }
+
+        auto itTicket = room.handoverTickets.find(mSid);
+        if (itTicket == room.handoverTickets.end() || itTicket->second == 0)
+        {
+            LOBBY_WARN("[ROOM][WARN] GAME_START_TARGET_NO_TICKET rid=%u sid=%u reason=%s\n",
+                roomId,
+                mSid,
+                reason ? reason : "Unknown");
+            continue;
+        }
+
+        LOBBY_INFO("[ROOM] GAME_START rid=%u sid=%u ip=%s port=%u reason=%s ticketIssued=1\n",
+            roomId,
+            mSid,
+            DEDI_PUBLIC_IP,
+            port,
+            reason ? reason : "Unknown");
+
+        m_net.SendGameStart(itCtx->second, DEDI_PUBLIC_IP, port, itTicket->second);
+    }
 }
 
 
@@ -1544,6 +1884,7 @@ RoomResult LobbyService::LeaveRoomInternal_Unsafe(uint32_t sid, bool& shouldBroa
 
     m_roomBySession[sid] = 0;
     r.readyStatus.erase(sid);
+    r.handoverTickets.erase(sid);
 
     if (r.hostId == sid)
     {
@@ -1553,7 +1894,7 @@ RoomResult LobbyService::LeaveRoomInternal_Unsafe(uint32_t sid, bool& shouldBroa
             r.hostId = r.members.front();
             r.readyStatus[r.hostId] = true;
 
-            printf("[ROOM] HOST_CHANGE rid=%u oldHost=%u newHost=%u\n",
+            LOBBY_INFO("[ROOM] HOST_CHANGE rid=%u oldHost=%u newHost=%u\n",
                 rid,
                 oldHost,
                 r.hostId);
@@ -1567,11 +1908,11 @@ RoomResult LobbyService::LeaveRoomInternal_Unsafe(uint32_t sid, bool& shouldBroa
     if (r.members.empty())
     {
         uint16_t oldPort = r.dedicatedPort;
+        DWORD oldProcessId = r.dedicatedProcessId;
 
-        if (r.dedicatedPort != 0)
+        if (r.dedicatedPort != 0 || r.dedicatedProcessHandle)
         {
-            FreePort(r.dedicatedPort);
-            r.dedicatedPort = 0;
+            CleanupDedicatedServerForRoom_Unsafe(r, "RoomEmpty", true);
         }
 
         m_roomOrder.erase(
@@ -1580,9 +1921,10 @@ RoomResult LobbyService::LeaveRoomInternal_Unsafe(uint32_t sid, bool& shouldBroa
 
         m_rooms.erase(itRoom);
 
-        printf("[ROOM] EMPTY_DELETE rid=%u freePort=%u\n",
+        LOBBY_INFO("[ROOM] EMPTY_DELETE rid=%u freePort=%u pid=%lu\n",
             rid,
-            oldPort);
+            oldPort,
+            oldProcessId);
 
         shouldBroadcast = true;
         return RoomResult::OK;
@@ -1611,7 +1953,7 @@ void LobbyService::BroadcastRoomList()
             continue;
         }
 
-        printf("[ROOM] BROADCAST_TARGET sid=%u\n", sid);
+        LOBBY_TRACE("[ROOM] BROADCAST_TARGET sid=%u\n", sid);
 
         targets.push_back(ctx);
         AddIO(ctx);
@@ -1619,7 +1961,7 @@ void LobbyService::BroadcastRoomList()
 
     ReleaseSRWLockShared(&m_lock);
 
-    printf("[ROOM] BROADCAST_ROOM_LIST targets=%zu rooms=%zu\n",
+    LOBBY_TRACE("[ROOM] BROADCAST_ROOM_LIST targets=%zu rooms=%zu\n",
         targets.size(),
         rooms.size());
 
@@ -1660,7 +2002,7 @@ void LobbyService::BroadcastRoomMemberList(uint32_t roomId)
 
     ReleaseSRWLockShared(&m_lock);
 
-    printf("[ROOM] BROADCAST_MEMBER_LIST rid=%u targets=%zu members=%zu\n",
+    LOBBY_TRACE("[ROOM] BROADCAST_MEMBER_LIST rid=%u targets=%zu members=%zu\n",
         roomId,
         targets.size(),
         members.size());
@@ -1689,7 +2031,7 @@ void LobbyService::HandleDediMatchEndNotify(ClientContext* c, const char* payloa
 {
     if (!payload || payloadLen < 5)
     {
-        printf("[DEDI] MATCH_END_NOTIFY bad payload len=%u\n", payloadLen);
+        LOBBY_WARN("[DEDI][WARN] MATCH_END_NOTIFY bad payload len=%u\n", payloadLen);
         return;
     }
 
@@ -1706,7 +2048,7 @@ void LobbyService::HandleDediMatchEndNotify(ClientContext* c, const char* payloa
     uint8_t winnerLen = p[offset++];
     if (offset + winnerLen > payloadLen)
     {
-        printf("[DEDI] MATCH_END_NOTIFY bad winner roomId=%u len=%u payloadLen=%u\n",
+        LOBBY_WARN("[DEDI][WARN] MATCH_END_NOTIFY bad winner roomId=%u len=%u payloadLen=%u\n",
             roomId, winnerLen, payloadLen);
         return;
     }
@@ -1740,10 +2082,9 @@ void LobbyService::HandleDediMatchEndNotify(ClientContext* c, const char* payloa
         oldPort = r.dedicatedPort;
         memberCount = r.members.size();
 
-        if (r.dedicatedPort != 0)
+        if (r.dedicatedPort != 0 || r.dedicatedProcessHandle)
         {
-            FreePort(r.dedicatedPort);
-            r.dedicatedPort = 0;
+            CleanupDedicatedServerForRoom_Unsafe(r, "MatchEnd", true);
         }
 
         r.state = RoomState::WAITING;
@@ -1758,7 +2099,7 @@ void LobbyService::HandleDediMatchEndNotify(ClientContext* c, const char* payloa
 
     ReleaseSRWLockExclusive(&m_lock);
 
-    printf("[DEDI] MATCH_END_NOTIFY roomId=%u winner=%s summary=%s oldPort=%u members=%zu result=%s\n",
+    LOBBY_INFO("[DEDI] MATCH_END_NOTIFY roomId=%u winner=%s summary=%s oldPort=%u members=%zu result=%s\n",
         roomId,
         winner.c_str(),
         summary.c_str(),
@@ -1771,4 +2112,60 @@ void LobbyService::HandleDediMatchEndNotify(ClientContext* c, const char* payloa
         BroadcastRoomList();
         BroadcastRoomMemberList(roomId);
     }
+}
+
+void LobbyService::HandleDediServerReadyNotify(ClientContext* c, const char* payload, uint16_t payloadLen)
+{
+    if (!payload || payloadLen < 4)
+    {
+        LOBBY_WARN("[DEDI][WARN] SERVER_READY_NOTIFY bad payload len=%u\n", payloadLen);
+        return;
+    }
+
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(payload);
+
+    uint32_t roomId = 0;
+    roomId |= static_cast<uint32_t>(p[0]) << 24;
+    roomId |= static_cast<uint32_t>(p[1]) << 16;
+    roomId |= static_cast<uint32_t>(p[2]) << 8;
+    roomId |= static_cast<uint32_t>(p[3]);
+
+    uint16_t readyPort = 0;
+    if (payloadLen >= 6)
+    {
+        readyPort |= static_cast<uint16_t>(p[4]) << 8;
+        readyPort |= static_cast<uint16_t>(p[5]);
+    }
+
+    AcquireSRWLockExclusive(&m_lock);
+
+    auto itRoom = m_rooms.find(roomId);
+    if (itRoom == m_rooms.end())
+    {
+        ReleaseSRWLockExclusive(&m_lock);
+
+        LOBBY_WARN("[DEDI][WARN] SERVER_READY_NOTIFY roomId=%u port=%u result=ROOM_NOT_FOUND\n",
+            roomId,
+            readyPort);
+        return;
+    }
+
+    const uint16_t roomPort = itRoom->second.dedicatedPort;
+    if (readyPort != 0 && roomPort != 0 && readyPort != roomPort)
+    {
+        LOBBY_WARN("[DEDI][WARN] SERVER_READY_NOTIFY roomId=%u readyPort=%u roomPort=%u result=PORT_MISMATCH_CONTINUE\n",
+            roomId,
+            readyPort,
+            roomPort);
+    }
+    else
+    {
+        LOBBY_INFO("[DEDI] SERVER_READY_NOTIFY roomId=%u port=%u result=OK\n",
+            roomId,
+            roomPort);
+    }
+
+    SendGameStartForRoom_Unsafe(roomId, "DediReady");
+
+    ReleaseSRWLockExclusive(&m_lock);
 }

@@ -76,6 +76,15 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
 
+	UFUNCTION()
+	void OnClientStreamLevelLoaded();
+
+	UFUNCTION()
+	void OnClientStreamLevelUnloaded();
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_ReportStreamLevelLoaded(FName LoadedLevel, EGamePhase ClientPhase);
+
 	UFUNCTION(Client, Reliable)
 	void Client_SetGameplayInputLocked(bool bLocked, const FString& Context);
 
@@ -128,6 +137,12 @@ public:
 
 	UPROPERTY()
 	TArray<FRandomCardOption> CurrentUpgradeOptions;
+
+	UPROPERTY()
+	FName PendingClientStreamLevelToLoad = NAME_None;
+
+	UPROPERTY()
+	FName PendingClientStreamLevelToUnload = NAME_None;
 
 	UPROPERTY()
 	bool bGameplayInputLocked = false;

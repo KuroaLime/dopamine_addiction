@@ -91,6 +91,9 @@ enum class PacketType : uint16_t
 
     // [In-Game] ���� ���� �� ���� �̵� (Session Handover)
     S2C_GAME_START = 200,
+
+    D2L_MATCH_END_NOTIFY = 300,
+    D2L_SERVER_READY_NOTIFY = 301,
 };
 
 struct PacketHeader

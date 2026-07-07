@@ -9,6 +9,10 @@ ACardDropActor::ACardDropActor()
     PrimaryActorTick.bCanEverTick = false;
     bReplicates = true;
     SetReplicateMovement(true);
+    bAlwaysRelevant = true;
+    SetNetUpdateFrequency(10.0f);
+    SetMinNetUpdateFrequency(2.0f);
+    SetNetCullDistanceSquared(FMath::Square(200000.0f));
 
     SceneRoot = CreateDefaultSubobject<USceneComponent>(TEXT("SceneRoot"));
     RootComponent = SceneRoot;

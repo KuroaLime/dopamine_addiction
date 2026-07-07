@@ -18,7 +18,7 @@ void UTPSPhaseStrategy::OnPhaseStart()
 	{
 		GM->EnsureBattleRoyaleStageLoaded();
 		GM->BroadcastSwitchMode(EGamePhase::TPS);
-		GM->GetCardGameService()->SpawnRoundCardBundleForBattleRoyale();
+		GM->RequestBattleRoyaleCardSpawnAfterStreamReady(TEXT("TPSPhaseStart"));
 		GM->SetPlayerPawnGameplayEnabled(true, TEXT("BattleRoyale"));
 	}
 

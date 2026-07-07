@@ -30,6 +30,7 @@ public:
     void OnPacket(ClientContext* c, uint16_t type, const char* payload, uint16_t payloadLen);
 
     void HandleDediMatchEndNotify(ClientContext* c, const char* payload, uint16_t payloadLen);
+    void HandleDediServerReadyNotify(ClientContext* c, const char* payload, uint16_t payloadLen);
 
 
 private:
@@ -49,6 +50,10 @@ private:
         std::unordered_map<uint32_t, bool> readyStatus; // Session ID -> Ready
 
         uint16_t dedicatedPort = 0; // 0 = none
+        bool gameStartSent = false;
+        std::unordered_map<uint32_t, uint32_t> handoverTickets; // Session ID -> one-time Dedi ticket
+        HANDLE dedicatedProcessHandle = NULL;
+        DWORD dedicatedProcessId = 0;
     };
 
     struct UserRecord
@@ -93,7 +98,12 @@ private:
     uint16_t AllocPort();
     void     FreePort(uint16_t port);
 
-    bool     LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_t requiredPlayers);
+    bool     LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_t requiredPlayers, const std::string& allowedTickets, HANDLE& outProcessHandle, DWORD& outProcessId);
+    void     CleanupDedicatedServerForRoom_Unsafe(Room& room, const char* reason, bool terminateProcess);
+    void     SweepDedicatedServerProcesses();
+    void     SendGameStartForRoom_Unsafe(uint32_t roomId, const char* reason);
+    uint32_t GenerateHandoverTicket_Unsafe(const Room& room) const;
+    std::string BuildHandoverTicketList_Unsafe(const Room& room) const;
 
     void     BroadcastRoomList();
     void     BroadcastRoomMemberList(uint32_t roomId);

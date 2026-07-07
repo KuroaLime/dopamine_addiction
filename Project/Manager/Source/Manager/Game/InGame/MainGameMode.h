@@ -70,6 +70,8 @@ public:
     // 페이즈 전략(UTPSPhaseStrategy/UCardPhaseStrategy)이 셋업을 수행할 때 호출하는 공개 연산.
     // 상태/타이머는 GameMode가 소유하며, 전략은 friend 없이 이 API로만 Context를 조작한다.
     void EnsureBattleRoyaleStageLoaded();
+    void HandleClientStreamLevelLoaded(AMainPlayerController* PlayerController, FName LoadedLevel, EGamePhase ClientPhase);
+    void RequestBattleRoyaleCardSpawnAfterStreamReady(const TCHAR* Context);
     void SetPlayerPawnGameplayEnabled(bool bEnabled, const TCHAR* Context);
     void SetPlayerPawnGameplayState(bool bVisible, bool bMovementEnabled, bool bCollisionEnabled, const TCHAR* Context);
     void ClearPlayerPawnMovementBases(const TCHAR* Context);
@@ -104,6 +106,9 @@ protected:
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server")
     int32 RequiredPlayerCount = 1;
+
+    TSet<int64> AllowedDediTickets;
+    TSet<int64> UsedDediTickets;
 
     UPROPERTY(BlueprintReadOnly, Category = "Dedicated Server")
     bool bGameStarted = false;
@@ -180,6 +185,12 @@ protected:
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Server")
     int32 MaxCardsPerPlayerPerRound = 3;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Server")
+    float BattleRoyaleCardSpawnGateRetryInterval = 0.5f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Server")
+    int32 BattleRoyaleCardSpawnGateMaxRetries = 0;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Bundle")
     FVector CardBundleDropCenter = FVector(0.0f, 0.0f, 180.0f);
@@ -276,9 +287,18 @@ private:
     FTimerHandle PhaseTimerHandle;
     FTimerHandle MatchEndShutdownTimerHandle;
     FTimerHandle CardSeatMoveRetryTimerHandle;
+    FTimerHandle BattleRoyaleCardSpawnGateTimerHandle;
     int32 ServerStreamingLatentActionId = 10000;
     int32 CardSeatMoveRetryCount = 0;
+    int32 BattleRoyaleCardSpawnGateRetryCount = 0;
     FString PendingCardSeatMoveContext;
+    FString PendingBattleRoyaleCardSpawnContext;
+    TMap<TWeakObjectPtr<AMainPlayerController>, FName> ClientLoadedStreamLevels;
+    TMap<TWeakObjectPtr<AMainPlayerController>, EGamePhase> ClientLoadedStreamPhases;
+    FName PendingBattleRoyaleCardSpawnLevel = NAME_None;
+    int32 PendingBattleRoyaleCardSpawnRound = 0;
+    bool bPendingBattleRoyaleCardSpawn = false;
+    bool bBattleRoyaleCardsSpawnedThisPhase = false;
 
     EDediServerPhase CurrentServerPhase = EDediServerPhase::None;
     bool bGameEndReached = false;
@@ -311,8 +331,15 @@ private:
     void StartTransitionToBattlePhase();
     void StartGameEndPhase();
     void ShutdownDedicatedServerAfterMatchEnd();
+    void NotifyIocpServerReady() const;
     void NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary) const;
     void LoadServerStreamLevelForPhase(FName LevelToLoad, const TCHAR* Context);
+    void ResetClientStreamLevelAcks(const TCHAR* Context);
+    bool HaveRequiredClientsLoadedStreamLevel(FName TargetLevel, int32& OutLoadedClients, int32& OutTargetClients) const;
+    void TrySpawnBattleRoyaleCardsWhenStreamReady();
+    void ScheduleBattleRoyaleCardSpawnGateRetry(const TCHAR* Context);
+    void RetryBattleRoyaleCardSpawnGate();
+    void ClearBattleRoyaleCardSpawnGate(const TCHAR* Context);
 
 
     void ScheduleCardSeatMoveRetry(const TCHAR* Context);
