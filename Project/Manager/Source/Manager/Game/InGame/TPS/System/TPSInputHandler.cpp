@@ -95,6 +95,11 @@ void UTPSInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputComponen
 	if (IA_Reload) {
 		EnhancedInputComponent->BindAction(IA_Reload, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Reload);
 	}
+	if (IA_CardDiscard)
+	{
+		EnhancedInputComponent->BindAction(IA_CardDiscard, ETriggerEvent::Started, this, &UTPSInputHandler::Input_CardDiscard);
+		EnhancedInputComponent->BindAction(IA_CardDiscard, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_CardDiscardEnd);
+	}
 }
 
 void UTPSInputHandler::Input_Move(const FInputActionValue& Value)
@@ -207,5 +212,24 @@ void UTPSInputHandler::Input_Reload()
 	{
 		
 		ASC->TryActivateAbilityByTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Reload")));
+	}
+}
+
+void UTPSInputHandler::Input_CardDiscard()
+{
+	
+	if (UPFGASC* ASC = ResolveOwnerASC())
+	{
+		ASC->TryActivateAbilityByTag(
+			FGameplayTag::RequestGameplayTag(FName("Ability.Action.CardDiscard")));
+	}
+}
+
+void UTPSInputHandler::Input_CardDiscardEnd()
+{
+	if (UPFGASC* ASC = ResolveOwnerASC())
+	{
+		ASC->CancelAbilitiesWithTag(
+			FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("Ability.Action.CardDiscard"))));
 	}
 }

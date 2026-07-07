@@ -320,8 +320,8 @@ TArray<FCardIslandDropZone> FCardPlacementService::FindCardIslandDropZones() con
             FCardIslandDropZone Zone = MakeZone(Actor, Origin, Extent, Actor->GetFName(), TEXT("CardIslandNavArea"), TaggedNavAreaZones.Num());
             TaggedNavAreaZones.Add(Zone);
 
-            DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=CardIslandNavArea Actor=%s Key=%s Center=%s Extent=%s"),
-                *GetNameSafe(Actor), *Zone.IslandKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString());
+           // DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=CardIslandNavArea Actor=%s Key=%s Center=%s Extent=%s"),
+              //  *GetNameSafe(Actor), *Zone.IslandKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString());
         }
 
         if (bAutoDetectSeasonIslandActorsAsDropZones && !SeasonKey.IsNone())
@@ -335,13 +335,13 @@ TArray<FCardIslandDropZone> FCardPlacementService::FindCardIslandDropZones() con
             {
                 SeasonZonesByKey.Add(SeasonKey, Zone);
 
-                DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=SeasonIslandActor Actor=%s Key=%s Center=%s Extent=%s Selected=%d"),
-                    *GetNameSafe(Actor), *SeasonKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString(), 1);
+                //DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=SeasonIslandActor Actor=%s Key=%s Center=%s Extent=%s Selected=%d"),
+                //    *GetNameSafe(Actor), *SeasonKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString(), 1);
             }
             else
             {
-                DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=SeasonIslandActor Actor=%s Key=%s Center=%s Extent=%s Selected=%d Reason=SmallerDuplicate"),
-                    *GetNameSafe(Actor), *SeasonKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString(), 0);
+                //DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=SeasonIslandActor Actor=%s Key=%s Center=%s Extent=%s Selected=%d Reason=SmallerDuplicate"),
+                   // *GetNameSafe(Actor), *SeasonKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString(), 0);
             }
         }
     }
@@ -349,18 +349,18 @@ TArray<FCardIslandDropZone> FCardPlacementService::FindCardIslandDropZones() con
     if (TaggedNavAreaZones.Num() >= CardIslandDropExpectedZoneCount)
     {
         DropZones = TaggedNavAreaZones;
-        DS_LOG(TEXT("[DS] Card IslandAreas Mode=CardIslandNavArea Count=%d"), DropZones.Num());
+        //DS_LOG(TEXT("[DS] Card IslandAreas Mode=CardIslandNavArea Count=%d"), DropZones.Num());
     }
     else if (SeasonZonesByKey.Num() > 0)
     {
         SeasonZonesByKey.GenerateValueArray(DropZones);
-        DS_LOG(TEXT("[DS] Card IslandAreas Mode=SeasonIslandActor Count=%d TaggedNavAreas=%d"),
-            DropZones.Num(), TaggedNavAreaZones.Num());
+        //DS_LOG(TEXT("[DS] Card IslandAreas Mode=SeasonIslandActor Count=%d TaggedNavAreas=%d"),
+            //DropZones.Num(), TaggedNavAreaZones.Num());
     }
     else if (TaggedNavAreaZones.Num() > 0)
     {
         DropZones = TaggedNavAreaZones;
-        DS_LOG(TEXT("[DS] Card IslandAreas Mode=PartialCardIslandNavArea Count=%d"), DropZones.Num());
+        //DS_LOG(TEXT("[DS] Card IslandAreas Mode=PartialCardIslandNavArea Count=%d"), DropZones.Num());
     }
 
     // 혹시 섬 액터/NavArea를 못 찾으면 기존 TriggerBox 방식으로만 fallback
@@ -387,11 +387,11 @@ TArray<FCardIslandDropZone> FCardPlacementService::FindCardIslandDropZones() con
 
             DropZones.Add(Zone);
 
-            DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=TriggerBoxFallback Actor=%s Key=%s Center=%s Extent=%s"),
-                *GetNameSafe(Actor), *Zone.IslandKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString());
+            /*DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=TriggerBoxFallback Actor=%s Key=%s Center=%s Extent=%s"),
+                *GetNameSafe(Actor), *Zone.IslandKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString());*/
         }
 
-        DS_LOG(TEXT("[DS] Card IslandAreas FallbackToTriggerBoxes Count=%d"), DropZones.Num());
+        //DS_LOG(TEXT("[DS] Card IslandAreas FallbackToTriggerBoxes Count=%d"), DropZones.Num());
     }
 
     DropZones.Sort([](const FCardIslandDropZone& A, const FCardIslandDropZone& B)
@@ -412,9 +412,9 @@ TArray<FCardIslandDropZone> FCardPlacementService::FindCardIslandDropZones() con
     for (int32 Index = 0; Index < DropZones.Num(); ++Index)
     {
         const FCardIslandDropZone& Zone = DropZones[Index];
-        DS_LOG(TEXT("[DS] Card IslandArea Selected Index=%d Source=%s Key=%s Actor=%s Center=%s Extent=%s"),
+        /*DS_LOG(TEXT("[DS] Card IslandArea Selected Index=%d Source=%s Key=%s Actor=%s Center=%s Extent=%s"),
             Index, *Zone.Source, *Zone.IslandKey.ToString(), *GetNameSafe(Zone.ZoneActor.Get()),
-            *Zone.Center.ToCompactString(), *Zone.Bounds.GetExtent().ToCompactString());
+            *Zone.Center.ToCompactString(), *Zone.Bounds.GetExtent().ToCompactString());*/
     }
 
     return DropZones;
@@ -623,9 +623,9 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
 
         NavAnchors.Add(NavLocation.Location);
 
-        DS_LOG(TEXT("[DS] Card NavIsland Anchor Island=%d Slot=%d Zone=%s Key=%s Source=%s Location=%s NavZ=%.1f"),
-            IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), Source,
-            *NavLocation.Location.ToCompactString(), NavLocation.Location.Z);
+       // DS_LOG(TEXT("[DS] Card NavIsland Anchor Island=%d Slot=%d Zone=%s Key=%s Source=%s Location=%s NavZ=%.1f"),
+          //  IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), Source,
+          //  *NavLocation.Location.ToCompactString(), NavLocation.Location.Z);
     };
 
     TryAddNavAnchor(Center, TEXT("Center"));
