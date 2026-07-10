@@ -48,4 +48,7 @@ public:
 	virtual void SetRoundWeapon(EWeaponType InWeaponID) = 0;
 	virtual EWeaponType GetWeaponID() const = 0;
 	virtual int32 GetWeaponBaseData(EWeaponType WeaponID, EWeaponBaseStatType StatType) const = 0;
+
+	// 무기별 탄퍼짐/펠릿수/히트 판정 두께. DT_Weapon에 값이 없으면 SpreadAngle=0, PelletCount=1, TraceRadius=0(기존 라인 트레이스와 동일).
+	virtual void GetWeaponFireProfile(EWeaponType WeaponID, float& OutSpreadAngle, int32& OutPelletCount, float& OutTraceRadius) const = 0;
 };

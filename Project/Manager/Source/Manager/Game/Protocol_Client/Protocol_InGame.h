@@ -277,6 +277,16 @@ struct FWeaponDataTable : public FTableRowBase
     int32 BaseMagazineCapacity = 0;
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     int32 BaseReloadTime = 0;
+
+    // 탄퍼짐 콘 반각(도). 0이면 무탄퍼짐(저격 등), 샷건은 크게.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float SpreadAngle = 0.f;
+    // 한 발에 발사되는 펠릿 수. 샷건 외에는 1.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 PelletCount = 1;
+    // 히트 판정 스윕 반지름(cm). 0이면 기존과 동일한 두께 0 라인 트레이스.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float TraceRadius = 0.f;
 };
 
 USTRUCT(BlueprintType)
