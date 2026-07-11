@@ -287,6 +287,9 @@ struct FWeaponDataTable : public FTableRowBase
     // 히트 판정 스윕 반지름(cm). 0이면 기존과 동일한 두께 0 라인 트레이스.
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     float TraceRadius = 0.f;
+    // true면 눌러서 홀드 중 FireRate 주기로 계속 발사(연사). false면 클릭당 1발만(세미오토).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    bool bFullAuto = true;
 };
 
 USTRUCT(BlueprintType)

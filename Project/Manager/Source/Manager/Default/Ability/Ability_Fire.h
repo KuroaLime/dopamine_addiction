@@ -30,6 +30,9 @@ protected:
 private:
 	FTimerHandle ServerFireTimerHandle;
 	FTimerHandle ClientFireTimerHandle;
+	// 쿨다운 중에 들어온 클릭 1회를 큐잉하는 단발 타이머 (연사 루프용 타이머와 별개).
+	FTimerHandle PendingServerShotTimerHandle;
+	FTimerHandle PendingClientShotTimerHandle;
 	bool bIsServerFire;
 	bool bIsClientFire;
 	float LastClientFireTime;

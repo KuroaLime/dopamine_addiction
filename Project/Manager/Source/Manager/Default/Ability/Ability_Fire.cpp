@@ -32,67 +32,73 @@ UAbility_Fire::UAbility_Fire()
 
 void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 {
-	if (!bIsClientFire)
+	if (bIsClientFire) return;
+
+	ACharacter* Character = Cast<ACharacter>(InOwner);
+	if (!Character) return;
+
+	IAbilityCheckInterface* CheckInterface = Cast<IAbilityCheckInterface>(Character);
+	if (!CheckInterface || !CheckInterface->IsCharacterAiming()) return;
+
+	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
+	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
+	if (!PS_Interface || !GS_Interface) return;
+
+	const EWeaponType WeaponID = PS_Interface->GetWeaponID();
+
+	int32 BaseFireRate = GS_Interface->GetWeaponBaseData(WeaponID, EWeaponBaseStatType::FireRate);
+	int32 LvFireRate = PS_Interface->GetWeaponStatLV(EWeaponStatType::FireRate);
+	float FireRate = CalculateFireRate(BaseFireRate, LvFireRate);
+
+	bool bFullAuto = true;
+	GS_Interface->GetWeaponFireMode(WeaponID, bFullAuto);
+
+	bIsClientFire = true;
+
+	float CurrentTime = Character->GetWorld()->GetTimeSeconds();
+	float TimeSinceLastShot = CurrentTime - LastClientFireTime;
+
+	TWeakObjectPtr<ACharacter> WeakChar(Character);
+
+	if (TimeSinceLastShot >= FireRate)
 	{
-		ACharacter* Character = Cast<ACharacter>(InOwner);
-		if (!Character) return;
+		Client_ExecuteFire(InOwner);
+		LastClientFireTime = CurrentTime;
 
-		IAbilityCheckInterface* CheckInterface = Cast<IAbilityCheckInterface>(Character);
-		if (!CheckInterface || !CheckInterface->IsCharacterAiming()) return;
+		// 세미오토(샷건/저격 등): 한 발만 나가고 홀드해도 루프를 걸지 않음. 다음 발은 재클릭해야 함.
+		if (!bFullAuto) return;
 
-		IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
-		IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
-		if (!PS_Interface || !GS_Interface) return;
+		FTimerDelegate Delegate;
+		Delegate.BindLambda([this, WeakChar]()
+			{
+				if (!WeakChar.IsValid()) return;
+				Client_ExecuteFire(WeakChar.Get());
+				LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+			});
 
-		int32 BaseFireRate = GS_Interface->GetWeaponBaseData(
-			PS_Interface->GetWeaponID(),
-			EWeaponBaseStatType::FireRate);
-		int32 LvFireRate = PS_Interface->GetWeaponStatLV(EWeaponStatType::FireRate);
+		Character->GetWorldTimerManager().SetTimer(
+			ClientFireTimerHandle,
+			Delegate,
+			FireRate,
+			true
+		);
+	}
+	else
+	{
+		// 쿨다운 중 클릭: 버리지 않고 남은 시간만큼 큐잉. LocalCancelWithOwner가 이 타이머는 건드리지 않으므로
+		// 손을 떼도(정상 릴리즈) 예정대로 발사된다.
+		float RemainingDelay = FireRate - TimeSinceLastShot;
 
-		float FireRate = CalculateFireRate(BaseFireRate, LvFireRate);
+		FTimerDelegate PendingDelegate;
+		PendingDelegate.BindLambda([this, WeakChar, bFullAuto, FireRate]()
+			{
+				if (!WeakChar.IsValid()) return;
+				Client_ExecuteFire(WeakChar.Get());
+				LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
 
-		float CurrentTime = Character->GetWorld()->GetTimeSeconds();
-		float TimeSinceLastShot = CurrentTime - LastClientFireTime;
-
-		bIsClientFire = true;
-
-		TWeakObjectPtr<ACharacter> WeakChar(Character);
-
-		if (TimeSinceLastShot >= FireRate)
-		{
-			// 즉시 발사 가능
-			Client_ExecuteFire(InOwner);
-			LastClientFireTime = CurrentTime;
-
-			// 이후 루핑 타이머 시작
-			FTimerDelegate Delegate;
-			Delegate.BindLambda([this, WeakChar]()
+				// 큐잉된 발사가 실행되는 시점에도 여전히 누르고 있고 풀오토라면 그때부터 연사 루프 시작.
+				if (bFullAuto && bIsClientFire)
 				{
-					if (!WeakChar.IsValid()) return;
-					Client_ExecuteFire(WeakChar.Get());
-					LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-				});
-
-			Character->GetWorldTimerManager().SetTimer(
-				ClientFireTimerHandle,
-				Delegate,
-				FireRate,
-				true
-			);
-		}
-		else
-		{
-			// 지연 발사: 남은 쿨다운만큼 대기 후 첫 발사 실행, 이후 루핑 전환
-			float InitialDelay = FireRate - TimeSinceLastShot;
-
-			FTimerDelegate FirstShotDelegate;
-			FirstShotDelegate.BindLambda([this, WeakChar, FireRate]()
-				{
-					if (!WeakChar.IsValid()) return;
-					Client_ExecuteFire(WeakChar.Get());
-					LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-
-					// 첫 발사 후 정규 루핑 타이머로 재설정
 					FTimerDelegate LoopDelegate;
 					LoopDelegate.BindLambda([this, WeakChar]()
 						{
@@ -107,15 +113,15 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 						FireRate,
 						true
 					);
-				});
+				}
+			});
 
-			Character->GetWorldTimerManager().SetTimer(
-				ClientFireTimerHandle,
-				FirstShotDelegate,
-				InitialDelay,
-				false
-			);
-		}
+		Character->GetWorldTimerManager().SetTimer(
+			PendingClientShotTimerHandle,
+			PendingDelegate,
+			RemainingDelay,
+			false
+		);
 	}
 }
 
@@ -129,64 +135,72 @@ void UAbility_Fire::LocalCancelWithOwner(AActor* InOwner)
 void UAbility_Fire::ActivateAbility()
 {
 	if (!OwnerCharacter || !OwnerCharacter->HasAuthority()) return;
+	if (bIsServerFire) return;
 
 	IAbilityCheckInterface* CheckInterface = Cast<IAbilityCheckInterface>(OwnerCharacter);
 	if (!CheckInterface || !CheckInterface->IsCharacterAiming()) return;
 
-	if (!bIsServerFire)
+	IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
+	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
+	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(OwnerCharacter->GetWorld()->GetGameState());
+
+	if (!Owner || !PS_Interface || !GS_Interface) return;
+
+	const EWeaponType WeaponID = PS_Interface->GetWeaponID();
+
+	int32 BaseFireRate = GS_Interface->GetWeaponBaseData(WeaponID, EWeaponBaseStatType::FireRate);
+	int32 LvFireRate = PS_Interface->GetWeaponStatLV(EWeaponStatType::FireRate);
+	float FireRate = CalculateFireRate(BaseFireRate, LvFireRate);
+
+	bool bFullAuto = true;
+	GS_Interface->GetWeaponFireMode(WeaponID, bFullAuto);
+
+	bIsServerFire = true;
+
+	float CurrentTime = OwnerCharacter->GetWorld()->GetTimeSeconds();
+	float TimeSinceLastShot = CurrentTime - LastServerFireTime;
+
+	TWeakObjectPtr<ACharacter> WeakChar(OwnerCharacter);
+
+	if (TimeSinceLastShot >= FireRate)
 	{
-		IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
-		IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
-		IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(OwnerCharacter->GetWorld()->GetGameState());
+		Server_ExecuteFire();
+		LastServerFireTime = CurrentTime;
 
-		if (!Owner || !PS_Interface || !GS_Interface) return;
+		// 세미오토(샷건/저격 등): 한 발만 나가고 홀드해도 루프를 걸지 않음. 다음 발은 재클릭해야 함.
+		if (!bFullAuto) return;
 
-		int32 BaseFireRate = GS_Interface->GetWeaponBaseData(
-			PS_Interface->GetWeaponID(),
-			EWeaponBaseStatType::FireRate);
-		int32 LvFireRate = PS_Interface->GetWeaponStatLV(EWeaponStatType::FireRate);
+		FTimerDelegate Delegate;
+		Delegate.BindLambda([this, WeakChar]()
+			{
+				if (!WeakChar.IsValid()) return;
+				Server_ExecuteFire();
+				LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+			});
 
-		float FireRate = CalculateFireRate(BaseFireRate, LvFireRate);
+		OwnerCharacter->GetWorldTimerManager().SetTimer(
+			ServerFireTimerHandle,
+			Delegate,
+			FireRate,
+			true
+		);
+	}
+	else
+	{
+		// 쿨다운 중 클릭: 버리지 않고 남은 시간만큼 큐잉. EndAbility가 정상 릴리즈(bWasCancelled=false)면
+		// 이 타이머를 건드리지 않으므로 손을 떼도 예정대로 발사된다.
+		float RemainingDelay = FireRate - TimeSinceLastShot;
 
-		float CurrentTime = OwnerCharacter->GetWorld()->GetTimeSeconds();
-		float TimeSinceLastShot = CurrentTime - LastServerFireTime;
+		FTimerDelegate PendingDelegate;
+		PendingDelegate.BindLambda([this, WeakChar, bFullAuto, FireRate]()
+			{
+				if (!WeakChar.IsValid()) return;
+				Server_ExecuteFire();
+				LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
 
-		bIsServerFire = true;
-
-		TWeakObjectPtr<ACharacter> WeakChar(OwnerCharacter);
-
-		if (TimeSinceLastShot >= FireRate)
-		{
-			Server_ExecuteFire();
-			LastServerFireTime = CurrentTime;
-
-			FTimerDelegate Delegate;
-			Delegate.BindLambda([this, WeakChar]()
+				// 큐잉된 발사가 실행되는 시점에도 여전히 누르고 있고 풀오토라면 그때부터 연사 루프 시작.
+				if (bFullAuto && bIsServerFire)
 				{
-					if (!WeakChar.IsValid()) return;
-					Server_ExecuteFire();
-					LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-				});
-
-			OwnerCharacter->GetWorldTimerManager().SetTimer(
-				ServerFireTimerHandle,
-				Delegate,
-				FireRate,
-				true
-			);
-		}
-		else
-		{
-			// 지연 발사: 서버에서도 남은 시간만큼 대기 후 첫 발사 실행, 이후 루핑 전환
-			float InitialDelay = FireRate - TimeSinceLastShot;
-
-			FTimerDelegate FirstShotDelegate;
-			FirstShotDelegate.BindLambda([this, WeakChar, FireRate]()
-				{
-					if (!WeakChar.IsValid()) return;
-					Server_ExecuteFire();
-					LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-
 					FTimerDelegate LoopDelegate;
 					LoopDelegate.BindLambda([this, WeakChar]()
 						{
@@ -201,15 +215,15 @@ void UAbility_Fire::ActivateAbility()
 						FireRate,
 						true
 					);
-				});
+				}
+			});
 
-			OwnerCharacter->GetWorldTimerManager().SetTimer(
-				ServerFireTimerHandle,
-				FirstShotDelegate,
-				InitialDelay,
-				false
-			);
-		}
+		OwnerCharacter->GetWorldTimerManager().SetTimer(
+			PendingServerShotTimerHandle,
+			PendingDelegate,
+			RemainingDelay,
+			false
+		);
 	}
 }
 
@@ -218,6 +232,13 @@ void UAbility_Fire::EndAbility(bool bWasCancelled)
 	if (!OwnerCharacter || !OwnerCharacter->HasAuthority()) return;
 	OwnerCharacter->GetWorldTimerManager().ClearTimer(ServerFireTimerHandle);
 	bIsServerFire = false;
+
+	if (bWasCancelled)
+	{
+		// 사망/무기교체 등 강제 종료라면 큐잉된 발사도 함께 취소. 정상 릴리즈(bWasCancelled=false)면
+		// 큐잉된 발사는 그대로 둬서 예정대로 나가게 한다.
+		OwnerCharacter->GetWorldTimerManager().ClearTimer(PendingServerShotTimerHandle);
+	}
 	Super::EndAbility(bWasCancelled);
 }
 

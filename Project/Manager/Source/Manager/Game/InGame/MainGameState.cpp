@@ -91,6 +91,16 @@ void AMainGameState::GetWeaponFireProfile(EWeaponType WeaponID, float& OutSpread
 	}
 }
 
+void AMainGameState::GetWeaponFireMode(EWeaponType WeaponID, bool& OutFullAuto) const
+{
+	OutFullAuto = true;
+
+	if (const FWeaponDataTable* FoundData = WeaponDataMap.Find(WeaponID))
+	{
+		OutFullAuto = FoundData->bFullAuto;
+	}
+}
+
 void AMainGameState::OnRep_RemainingTime() {
 	if (OnTimeUpdated.IsBound())
 		OnTimeUpdated.Broadcast(RemainingTime);
