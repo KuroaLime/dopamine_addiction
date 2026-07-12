@@ -290,6 +290,13 @@ struct FWeaponDataTable : public FTableRowBase
     // true면 눌러서 홀드 중 FireRate 주기로 계속 발사(연사). false면 클릭당 1발만(세미오토).
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     bool bFullAuto = true;
+
+    // 발사마다 카메라가 위로 튀는 각도(도).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float RecoilPitch = 0.f;
+    // 발사마다 좌우로 랜덤하게 튀는 최대 각도(도). +-RecoilYaw 범위에서 랜덤.
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    float RecoilYaw = 0.f;
 };
 
 USTRUCT(BlueprintType)

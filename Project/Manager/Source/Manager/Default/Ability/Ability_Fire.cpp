@@ -253,8 +253,76 @@ void UAbility_Fire::Client_ExecuteFire(AActor* InOwner)
 	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
 	if (!EquippedGun || !EquippedGun->Setting || !EquippedGun->m_pMesh) return;
 
+	// 탄약이 없거나 장전 중이면 발사 자체(반동 포함)를 하지 않는다. Server_ExecuteFire의 체크와 동일.
+	if (EquippedGun->Setting->IsReloading() || EquippedGun->Setting->GetCurrentAmmo() <= 0) return;
+
 	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
 	//EquippedGun->Setting->Fire(MuzzleLoc);
+
+	// 반동: 로컬(발사한 본인) 카메라만 즉시 튀게 한다. 컨트롤 로테이션이 서버로 복제되므로
+	// 서버 판정에도 자연스럽게 반영된다.
+	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
+	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
+	if (PS_Interface && GS_Interface)
+	{
+		float RecoilPitch = 0.f;
+		float RecoilYaw = 0.f;
+		GS_Interface->GetWeaponRecoil(PS_Interface->GetWeaponID(), RecoilPitch, RecoilYaw);
+
+		if (RecoilPitch != 0.f || RecoilYaw != 0.f)
+		{
+			// 부호는 프로젝트 입력 설정에 따라 다를 수 있음. 반동이 아래로 향하면 부호를 반대로 바꿀 것.
+			ApplyRecoilKick(Character, -RecoilPitch, FMath::FRandRange(-RecoilYaw, RecoilYaw));
+		}
+	}
+}
+
+void UAbility_Fire::ApplyRecoilKick(ACharacter* Character, float TotalPitchDegrees, float TotalYawDegrees)
+{
+	if (!Character) return;
+	if (FMath::IsNearlyZero(TotalPitchDegrees) && FMath::IsNearlyZero(TotalYawDegrees)) return;
+
+	// 발마다 독립된 타이머를 새로 걸면 연사 중 겹칠 때 이전 발의 남은 반동이 유실된다.
+	// 대신 "적용해야 할 반동 총량"에 누적만 하고, 드레인 타이머 하나가 계속 돌면서 조금씩 깎아 나간다.
+	PendingRecoilPitch += TotalPitchDegrees;
+	PendingRecoilYaw += TotalYawDegrees;
+
+	if (Character->GetWorldTimerManager().IsTimerActive(RecoilStepTimerHandle)) return;
+
+	constexpr float StepInterval = 0.016f; // 약 60fps 한 프레임 간격
+	constexpr float DrainRatio = 0.35f;    // 매 스텝마다 남은 반동의 35%를 적용 (지수 감쇠로 부드럽게 잦아듦)
+
+	TWeakObjectPtr<ACharacter> WeakChar(Character);
+
+	FTimerDelegate DrainDelegate;
+	DrainDelegate.BindLambda([this, WeakChar]()
+		{
+			if (!WeakChar.IsValid())
+			{
+				PendingRecoilPitch = 0.f;
+				PendingRecoilYaw = 0.f;
+				return;
+			}
+			ACharacter* Char = WeakChar.Get();
+
+			const float StepPitch = PendingRecoilPitch * DrainRatio;
+			const float StepYaw = PendingRecoilYaw * DrainRatio;
+
+			Char->AddControllerPitchInput(StepPitch);
+			Char->AddControllerYawInput(StepYaw);
+
+			PendingRecoilPitch -= StepPitch;
+			PendingRecoilYaw -= StepYaw;
+
+			if (FMath::Abs(PendingRecoilPitch) < 0.01f && FMath::Abs(PendingRecoilYaw) < 0.01f)
+			{
+				PendingRecoilPitch = 0.f;
+				PendingRecoilYaw = 0.f;
+				Char->GetWorldTimerManager().ClearTimer(RecoilStepTimerHandle);
+			}
+		});
+
+	Character->GetWorldTimerManager().SetTimer(RecoilStepTimerHandle, DrainDelegate, StepInterval, true);
 }
 
 void UAbility_Fire::Server_ExecuteFire()
