@@ -4,6 +4,7 @@
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/MainGameMode.h"
 #include "Manager.h"
+#include "Algo/Unique.h"
 #include "Engine/Engine.h"
 #include "EnhancedInputComponent.h"
 #include "Game/InGame/Handler/UIHandler.h"
@@ -15,6 +16,8 @@
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/Card/CardGameService.h"
 #include "Game/InGame/Card/Actor/CardDropActor.h"
+#include "EngineUtils.h"
+#include "Engine/LevelStreaming.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
@@ -22,8 +25,23 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Game/InGame/TPS/UI/Shop/ShopWidget.h"
+#include "TimerManager.h"
 
 #include "Game/InGame/MainGameState.h"
+
+namespace
+{
+	const FName& GetPersistentMainWorldLevelName()
+	{
+		static const FName LevelName(TEXT("Main_Game_World"));
+		return LevelName;
+	}
+
+	bool IsPersistentMainWorldTarget(FName LevelName)
+	{
+		return LevelName == GetPersistentMainWorldLevelName();
+	}
+}
 
 void AMainPlayerController::BeginPlay()
 {
@@ -32,11 +50,17 @@ void AMainPlayerController::BeginPlay()
 	InitHandler();
 	SetupHandlerInput();
 
-	SwitchMode(CurrentPhase);
+	ApplySwitchMode(CurrentPhase);
 }
 
 void AMainPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(PendingClientLevelReadinessTimerHandle);
+		World->GetTimerManager().ClearTimer(PendingClientCardBundleReadinessTimerHandle);
+	}
+
 	Super::EndPlay(EndPlayReason);
 }
 //임시방편
@@ -62,13 +86,16 @@ void AMainPlayerController::SwitchMode(EGamePhase NewPhase)
 	}
 	else
 	{
-		Server_SwitchMode(NewPhase);
+		ApplySwitchMode(NewPhase);
 	}
 }
 
 void AMainPlayerController::SwitchToLevel(FName LevelToUnload, FName LevelToLoad)
 {
-	Server_SwitchToLevel(LevelToUnload, LevelToLoad);
+	if (HasAuthority())
+	{
+		Client_SwitchToLevel(LevelToUnload, LevelToLoad);
+	}
 }
 
 void AMainPlayerController::SwitchState(EGamePhase NewPhase)
@@ -79,7 +106,7 @@ void AMainPlayerController::SwitchState(EGamePhase NewPhase)
 	}
 	else
 	{
-		Server_SwitchState(NewPhase);
+		Client_SwitchState_Implementation(NewPhase);
 	}
 }
 
@@ -109,7 +136,7 @@ void AMainPlayerController::SetUITimer(int32 time)
 	if (HasAuthority())
 		Client_SetUITimer(time);
 	else
-		Server_SetUITimer(time);
+		Client_SetUITimer_Implementation(time);
 }
 
 void AMainPlayerController::InitHandler()
@@ -135,7 +162,7 @@ void AMainPlayerController::InitHandler()
 		{
 			Handler->RegisterComponent();
 			UIHandlerMap.Add(Pair.Key, Handler);
-			UE_LOG(LogTemp, Warning, TEXT("[%s] UIHandlerInit Phase=%d Class=%s Obj=%s Local=%d"),
+			UE_LOG(LogTemp, Verbose, TEXT("[%s] UIHandlerInit Phase=%d Class=%s Obj=%s Local=%d"),
 				HasAuthority() ? TEXT("SV") : TEXT("CL"),
 				static_cast<int32>(Pair.Key),
 				*GetNameSafe(Handler->GetClass()),
@@ -170,8 +197,9 @@ void AMainPlayerController::Multicast_SwitchMode_Implementation(EGamePhase NewPh
 
 void AMainPlayerController::Server_SwitchMode_Implementation(EGamePhase NewPhase)
 {
-
-	Multicast_SwitchMode(NewPhase);
+	UE_LOG(LogTemp, Warning, TEXT("[DS] Rejected client phase switch request Phase=%d Player=%s"),
+		static_cast<int32>(NewPhase),
+		*GetNameSafe(PlayerState));
 }
 
 void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
@@ -179,7 +207,7 @@ void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
 	const bool bHasUIForPhase = UIHandlerMap.Contains(NewPhase);
 	const bool bHasInputForPhase = InputHandlerMap.Contains(NewPhase);
 
-	UE_LOG(LogTemp, Warning, TEXT("[%s] ApplySwitchMode NewPhase=%d HasUI=%d HasInput=%d UIHandlers=%d InputHandlers=%d Local=%d"),
+	UE_LOG(LogTemp, Verbose, TEXT("[%s] ApplySwitchMode NewPhase=%d HasUI=%d HasInput=%d UIHandlers=%d InputHandlers=%d Local=%d"),
 		HasAuthority() ? TEXT("SV") : TEXT("CL"),
 		static_cast<int32>(NewPhase),
 		bHasUIForPhase ? 1 : 0,
@@ -242,7 +270,7 @@ void AMainPlayerController::ApplyGameplayInputLock(bool bLocked, const TCHAR* Co
 		SetIgnoreLookInput(true);
 	}
 
-	UE_LOG(LogTemp, Warning, TEXT("[%s] GameplayInputLock Locked=%d Context=%s Local=%d Phase=%d"),
+	UE_LOG(LogTemp, Verbose, TEXT("[%s] GameplayInputLock Locked=%d Context=%s Local=%d Phase=%d"),
 		HasAuthority() ? TEXT("SV") : TEXT("CL"),
 		bLocked ? 1 : 0,
 		Context ? Context : TEXT("<NULL>"),
@@ -252,48 +280,201 @@ void AMainPlayerController::ApplyGameplayInputLock(bool bLocked, const TCHAR* Co
 
 bool AMainPlayerController::Server_SwitchToLevel_Validate(FName LevelToUnload, FName LevelToLoad)
 {
-	return true;
+	return false;
 }
 
 void AMainPlayerController::Server_SwitchToLevel_Implementation(FName LevelToUnload, FName LevelToLoad)
 {
-	Client_SwitchToLevel(LevelToUnload, LevelToLoad);
 }
 
 void AMainPlayerController::Client_SwitchToLevel_Implementation(FName LevelToUnload, FName LevelToLoad)
 {
+	ClearPendingCardBundleExpectation();
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(PendingClientLevelReadinessTimerHandle);
+	}
+
 	PendingClientStreamLevelToUnload = LevelToUnload;
 	PendingClientStreamLevelToLoad = LevelToLoad;
+	PendingClientLevelReadinessRetryCount = 0;
+	bPendingClientLevelReadyReported = false;
 
-	if (!LevelToUnload.IsNone())
+	if (!LevelToUnload.IsNone() && !IsPersistentMainWorldTarget(LevelToUnload))
 	{
-		FLatentActionInfo UnloadInfo(1, 1, TEXT("OnClientStreamLevelUnloaded"), this);
+		FLatentActionInfo UnloadInfo;
+		UnloadInfo.CallbackTarget = this;
+		UnloadInfo.ExecutionFunction = TEXT("OnClientStreamLevelUnloaded");
+		UnloadInfo.Linkage = 1;
+		UnloadInfo.UUID = ++ClientStreamingLatentActionId;
 		UGameplayStatics::UnloadStreamLevel(GetWorld(), LevelToUnload, UnloadInfo, false);
 	}
 
-	if (!LevelToLoad.IsNone())
+	if (IsPersistentMainWorldTarget(LevelToLoad))
 	{
-		FLatentActionInfo LoadInfo(2, 2, TEXT("OnClientStreamLevelLoaded"), this);
-		UGameplayStatics::LoadStreamLevel(GetWorld(), LevelToLoad, true, false, LoadInfo);
+		if (!TryReportPendingClientLevelReady(TEXT("PersistentWorldRequest")))
+		{
+			SchedulePendingClientLevelReadinessRetry();
+		}
 	}
+	else if (!LevelToLoad.IsNone())
+	{
+		FLatentActionInfo LoadInfo;
+		LoadInfo.CallbackTarget = this;
+		LoadInfo.ExecutionFunction = TEXT("OnClientStreamLevelLoaded");
+		LoadInfo.Linkage = 1;
+		LoadInfo.UUID = ++ClientStreamingLatentActionId;
+		UGameplayStatics::LoadStreamLevel(GetWorld(), LevelToLoad, true, false, LoadInfo);
+		SchedulePendingClientLevelReadinessRetry();
+	}
+}
+
+void AMainPlayerController::Client_SynchronizePhase_Implementation(EGamePhase ServerPhase)
+{
+	ApplySwitchMode(ServerPhase);
 }
 
 void AMainPlayerController::OnClientStreamLevelLoaded()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[CL] StreamLevelLoaded Level=%s Phase=%d Local=%d"),
-		*PendingClientStreamLevelToLoad.ToString(),
-		static_cast<int32>(CurrentPhase),
-		IsLocalPlayerController() ? 1 : 0);
-
-	Server_ReportStreamLevelLoaded(PendingClientStreamLevelToLoad, CurrentPhase);
+	if (!TryReportPendingClientLevelReady(TEXT("LoadCallback")))
+	{
+		SchedulePendingClientLevelReadinessRetry();
+	}
 }
 
 void AMainPlayerController::OnClientStreamLevelUnloaded()
 {
-	UE_LOG(LogTemp, Warning, TEXT("[CL] StreamLevelUnloaded Level=%s Phase=%d Local=%d"),
+	UE_LOG(LogManagerCard, Verbose, TEXT("[CL] StreamLevelUnloaded Level=%s Phase=%d Local=%d"),
 		*PendingClientStreamLevelToUnload.ToString(),
 		static_cast<int32>(CurrentPhase),
 		IsLocalPlayerController() ? 1 : 0);
+
+	if (!TryReportPendingClientLevelReady(TEXT("UnloadCallback")))
+	{
+		SchedulePendingClientLevelReadinessRetry();
+	}
+}
+
+bool AMainPlayerController::TryReportPendingClientLevelReady(const TCHAR* Context)
+{
+	if (bPendingClientLevelReadyReported || PendingClientStreamLevelToLoad.IsNone())
+	{
+		return bPendingClientLevelReadyReported;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	const bool bPersistentTarget = IsPersistentMainWorldTarget(PendingClientStreamLevelToLoad);
+	ULevelStreaming* TargetStreamingLevel = bPersistentTarget
+		? nullptr
+		: UGameplayStatics::GetStreamingLevel(World, PendingClientStreamLevelToLoad);
+
+	bool bTargetFound = false;
+	bool bTargetLoaded = false;
+	bool bTargetVisible = false;
+	FString TargetObjectName;
+
+	if (bPersistentTarget)
+	{
+		const FString CurrentLevelName = UGameplayStatics::GetCurrentLevelName(this, true);
+		bTargetFound = FName(*CurrentLevelName) == PendingClientStreamLevelToLoad;
+		bTargetLoaded = bTargetFound && World->PersistentLevel != nullptr && World->HasBegunPlay();
+		bTargetVisible = bTargetLoaded;
+		TargetObjectName = CurrentLevelName;
+	}
+	else
+	{
+		bTargetFound = TargetStreamingLevel != nullptr;
+		bTargetLoaded = TargetStreamingLevel && TargetStreamingLevel->IsLevelLoaded();
+		bTargetVisible = TargetStreamingLevel && TargetStreamingLevel->IsLevelVisible();
+		TargetObjectName = GetNameSafe(TargetStreamingLevel);
+	}
+
+	ULevelStreaming* StreamingLevelToUnload = PendingClientStreamLevelToUnload.IsNone()
+		|| IsPersistentMainWorldTarget(PendingClientStreamLevelToUnload)
+		? nullptr
+		: UGameplayStatics::GetStreamingLevel(World, PendingClientStreamLevelToUnload);
+	const bool bUnloadComplete = !StreamingLevelToUnload
+		|| (!StreamingLevelToUnload->IsLevelLoaded() && !StreamingLevelToUnload->IsLevelVisible());
+	const bool bReady = bTargetFound && bTargetLoaded && bTargetVisible && bUnloadComplete;
+
+	if (!bReady)
+	{
+		if (PendingClientLevelReadinessRetryCount == 0
+			|| PendingClientLevelReadinessRetryCount % 40 == 0)
+		{
+			UE_LOG(LogManagerCard, Display,
+				TEXT("[CL] LevelReadyWait Target=%s Mode=%s TargetObject=%s Found=%d Loaded=%d Visible=%d Unload=%s UnloadComplete=%d Retry=%d Context=%s Phase=%d Local=%d"),
+				*PendingClientStreamLevelToLoad.ToString(),
+				bPersistentTarget ? TEXT("Persistent") : TEXT("Streaming"),
+				*TargetObjectName,
+				bTargetFound ? 1 : 0,
+				bTargetLoaded ? 1 : 0,
+				bTargetVisible ? 1 : 0,
+				*PendingClientStreamLevelToUnload.ToString(),
+				bUnloadComplete ? 1 : 0,
+				PendingClientLevelReadinessRetryCount,
+				Context ? Context : TEXT("<NULL>"),
+				static_cast<int32>(CurrentPhase),
+				IsLocalPlayerController() ? 1 : 0);
+		}
+
+		return false;
+	}
+
+	World->GetTimerManager().ClearTimer(PendingClientLevelReadinessTimerHandle);
+	bPendingClientLevelReadyReported = true;
+
+	UE_LOG(LogManagerCard, Display,
+		TEXT("[CL] LevelReadyAck Target=%s Mode=%s TargetObject=%s Unload=%s UnloadComplete=1 Retry=%d Context=%s Phase=%d Local=%d"),
+		*PendingClientStreamLevelToLoad.ToString(),
+		bPersistentTarget ? TEXT("Persistent") : TEXT("Streaming"),
+		*TargetObjectName,
+		*PendingClientStreamLevelToUnload.ToString(),
+		PendingClientLevelReadinessRetryCount,
+		Context ? Context : TEXT("<NULL>"),
+		static_cast<int32>(CurrentPhase),
+		IsLocalPlayerController() ? 1 : 0);
+
+	Server_ReportStreamLevelLoaded(PendingClientStreamLevelToLoad, CurrentPhase);
+	return true;
+}
+
+void AMainPlayerController::SchedulePendingClientLevelReadinessRetry()
+{
+	UWorld* World = GetWorld();
+	if (!World || bPendingClientLevelReadyReported
+		|| World->GetTimerManager().IsTimerActive(PendingClientLevelReadinessTimerHandle))
+	{
+		return;
+	}
+
+	World->GetTimerManager().SetTimer(
+		PendingClientLevelReadinessTimerHandle,
+		this,
+		&AMainPlayerController::RetryPendingClientLevelReadiness,
+		0.25f,
+		false);
+}
+
+void AMainPlayerController::RetryPendingClientLevelReadiness()
+{
+	if (UWorld* World = GetWorld())
+	{
+		// Executing one-shot timers still report active, so release the handle before rescheduling.
+		World->GetTimerManager().ClearTimer(PendingClientLevelReadinessTimerHandle);
+	}
+
+	++PendingClientLevelReadinessRetryCount;
+	if (!TryReportPendingClientLevelReady(TEXT("RetryTimer")))
+	{
+		SchedulePendingClientLevelReadinessRetry();
+	}
 }
 
 bool AMainPlayerController::Server_ReportStreamLevelLoaded_Validate(FName LoadedLevel, EGamePhase ClientPhase)
@@ -312,14 +493,216 @@ void AMainPlayerController::Server_ReportStreamLevelLoaded_Implementation(FName 
 	GM->HandleClientStreamLevelLoaded(this, LoadedLevel, ClientPhase);
 }
 
+void AMainPlayerController::Client_ExpectCardBundle_Implementation(
+	int32 Round,
+	int32 BundleGeneration,
+	const TArray<int32>& ExpectedInstanceIds)
+{
+	ClearPendingCardBundleExpectation();
+
+	if (Round <= 0 || BundleGeneration <= 0 || ExpectedInstanceIds.IsEmpty())
+	{
+		UE_LOG(LogManagerCard, Error,
+			TEXT("[CL] CardBundleExpectationRejected Round=%d Generation=%d Expected=%d"),
+			Round,
+			BundleGeneration,
+			ExpectedInstanceIds.Num());
+		return;
+	}
+
+	PendingClientCardBundleRound = Round;
+	PendingClientCardBundleGeneration = BundleGeneration;
+	PendingClientExpectedCardInstanceIds = ExpectedInstanceIds;
+	PendingClientExpectedCardInstanceIds.Sort();
+	PendingClientExpectedCardInstanceIds.SetNum(
+		Algo::Unique(PendingClientExpectedCardInstanceIds));
+
+	if (PendingClientExpectedCardInstanceIds.Num() != ExpectedInstanceIds.Num())
+	{
+		UE_LOG(LogManagerCard, Error,
+			TEXT("[CL] CardBundleExpectationRejected Reason=DuplicateInstanceIds Round=%d Generation=%d Received=%d Unique=%d"),
+			Round,
+			BundleGeneration,
+			ExpectedInstanceIds.Num(),
+			PendingClientExpectedCardInstanceIds.Num());
+		ClearPendingCardBundleExpectation();
+		return;
+	}
+
+	if (!TryReportPendingCardBundleReady(TEXT("ExpectationReceived")))
+	{
+		SchedulePendingCardBundleReadinessRetry();
+	}
+}
+
+bool AMainPlayerController::TryReportPendingCardBundleReady(const TCHAR* Context)
+{
+	if (bPendingClientCardBundleReadyReported
+		|| PendingClientCardBundleGeneration <= 0
+		|| PendingClientExpectedCardInstanceIds.IsEmpty())
+	{
+		return bPendingClientCardBundleReadyReported;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return false;
+	}
+
+	TSet<int32> VisibleInstanceIds;
+	for (TActorIterator<ACardDropActor> It(World); It; ++It)
+	{
+		const ACardDropActor* CardActor = *It;
+		if (!IsValid(CardActor)
+			|| CardActor->GetCardInstanceId() <= 0
+			|| CardActor->GetCardID() == ECardID::None
+			|| CardActor->IsPickedUp()
+			|| CardActor->IsHidden())
+		{
+			continue;
+		}
+
+		VisibleInstanceIds.Add(CardActor->GetCardInstanceId());
+	}
+
+	TArray<int32> MissingInstanceIds;
+	for (const int32 ExpectedInstanceId : PendingClientExpectedCardInstanceIds)
+	{
+		if (!VisibleInstanceIds.Contains(ExpectedInstanceId))
+		{
+			MissingInstanceIds.Add(ExpectedInstanceId);
+		}
+	}
+
+	const int32 ExpectedCount = PendingClientExpectedCardInstanceIds.Num();
+	const int32 VisibleExpectedCount = ExpectedCount - MissingInstanceIds.Num();
+	if (!MissingInstanceIds.IsEmpty())
+	{
+		if (PendingClientCardBundleRetryCount == 0
+			|| PendingClientCardBundleRetryCount % 20 == 0)
+		{
+			FString MissingIdsText;
+			for (int32 Index = 0; Index < MissingInstanceIds.Num(); ++Index)
+			{
+				if (Index > 0)
+				{
+					MissingIdsText += TEXT(",");
+				}
+				MissingIdsText += FString::FromInt(MissingInstanceIds[Index]);
+			}
+
+			UE_LOG(LogManagerCard, Display,
+				TEXT("[CL] CardBundleReadyWait Round=%d Generation=%d Visible=%d/%d Missing=[%s] Retry=%d Context=%s Local=%d"),
+				PendingClientCardBundleRound,
+				PendingClientCardBundleGeneration,
+				VisibleExpectedCount,
+				ExpectedCount,
+				*MissingIdsText,
+				PendingClientCardBundleRetryCount,
+				Context ? Context : TEXT("<NULL>"),
+				IsLocalPlayerController() ? 1 : 0);
+		}
+
+		return false;
+	}
+
+	World->GetTimerManager().ClearTimer(PendingClientCardBundleReadinessTimerHandle);
+	bPendingClientCardBundleReadyReported = true;
+
+	UE_LOG(LogManagerCard, Display,
+		TEXT("[CL] CardBundleReadyAck Round=%d Generation=%d Visible=%d/%d Retry=%d Context=%s Local=%d"),
+		PendingClientCardBundleRound,
+		PendingClientCardBundleGeneration,
+		VisibleExpectedCount,
+		ExpectedCount,
+		PendingClientCardBundleRetryCount,
+		Context ? Context : TEXT("<NULL>"),
+		IsLocalPlayerController() ? 1 : 0);
+
+	Server_ReportCardBundleReady(
+		PendingClientCardBundleRound,
+		PendingClientCardBundleGeneration,
+		VisibleExpectedCount);
+	return true;
+}
+
+void AMainPlayerController::SchedulePendingCardBundleReadinessRetry()
+{
+	UWorld* World = GetWorld();
+	if (!World
+		|| bPendingClientCardBundleReadyReported
+		|| PendingClientCardBundleGeneration <= 0
+		|| World->GetTimerManager().IsTimerActive(PendingClientCardBundleReadinessTimerHandle))
+	{
+		return;
+	}
+
+	World->GetTimerManager().SetTimer(
+		PendingClientCardBundleReadinessTimerHandle,
+		this,
+		&AMainPlayerController::RetryPendingCardBundleReadiness,
+		0.25f,
+		false);
+}
+
+void AMainPlayerController::RetryPendingCardBundleReadiness()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(PendingClientCardBundleReadinessTimerHandle);
+	}
+
+	++PendingClientCardBundleRetryCount;
+	if (!TryReportPendingCardBundleReady(TEXT("RetryTimer")))
+	{
+		SchedulePendingCardBundleReadinessRetry();
+	}
+}
+
+void AMainPlayerController::ClearPendingCardBundleExpectation()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(PendingClientCardBundleReadinessTimerHandle);
+	}
+
+	PendingClientCardBundleRound = 0;
+	PendingClientCardBundleGeneration = 0;
+	PendingClientCardBundleRetryCount = 0;
+	bPendingClientCardBundleReadyReported = false;
+	PendingClientExpectedCardInstanceIds.Reset();
+}
+
+bool AMainPlayerController::Server_ReportCardBundleReady_Validate(
+	int32 Round,
+	int32 BundleGeneration,
+	int32 VisibleCount)
+{
+	return Round > 0 && BundleGeneration > 0 && VisibleCount > 0;
+}
+
+void AMainPlayerController::Server_ReportCardBundleReady_Implementation(
+	int32 Round,
+	int32 BundleGeneration,
+	int32 VisibleCount)
+{
+	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+	if (!GM)
+	{
+		return;
+	}
+
+	GM->HandleClientCardBundleReady(this, Round, BundleGeneration, VisibleCount);
+}
+
 bool AMainPlayerController::Server_SwitchState_Validate(EGamePhase NewPhase)
 {
-	return true;
+	return false;
 }
 
 void AMainPlayerController::Server_SwitchState_Implementation(EGamePhase NewPhase)
 {
-	Client_SwitchState(NewPhase);
 }
 
 void AMainPlayerController::Client_SwitchState_Implementation(EGamePhase NewPhase)
@@ -353,6 +736,22 @@ void AMainPlayerController::Client_SwitchState_Implementation(EGamePhase NewPhas
 
 void AMainPlayerController::Server_PushMode_Implementation(EGamePhase NewPhase)
 {
+	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	if (NewPhase != EGamePhase::Shop ||
+		CurrentPhase != EGamePhase::TPS ||
+		!GM ||
+		!GM->IsBattleRoyalePhase() ||
+		!PS ||
+		PS->CurPlayerData.CurrentHP <= 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[DS] Shop push rejected Player=%s Requested=%d Current=%d"),
+			*GetNameSafe(PlayerState),
+			static_cast<int32>(NewPhase),
+			static_cast<int32>(CurrentPhase));
+		return;
+	}
+
 	Multicast_PushMode(NewPhase);
 }
 
@@ -373,6 +772,14 @@ void AMainPlayerController::Multicast_PushMode_Implementation(EGamePhase NewPhas
 
 void AMainPlayerController::Server_PopMode_Implementation()
 {
+	if (CurrentPhase != EGamePhase::Shop)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[DS] Shop pop rejected Player=%s Current=%d"),
+			*GetNameSafe(PlayerState),
+			static_cast<int32>(CurrentPhase));
+		return;
+	}
+
 	Multicast_PopMode();
 }
 
@@ -395,6 +802,23 @@ void AMainPlayerController::Multicast_PopMode_Implementation()
 
 void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
 {
+	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	if (!GM ||
+		!PS ||
+		!GM->IsBattleRoyalePhase() ||
+		CurrentPhase != EGamePhase::Shop ||
+		PS->LastRandomUpgradeClaimedRound == GM->GetCurrentRound() ||
+		CurrentUpgradeOptions.Num() > 0)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[DS] RandomUpgrade request rejected Player=%s Phase=%d Round=%d ClaimedRound=%d PendingOptions=%d"),
+			*GetNameSafe(PlayerState),
+			static_cast<int32>(CurrentPhase),
+			GM ? GM->GetCurrentRound() : INDEX_NONE,
+			PS ? PS->LastRandomUpgradeClaimedRound : INDEX_NONE,
+			CurrentUpgradeOptions.Num());
+		return;
+	}
 
 	AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
 	if (!IsValid(GS)) return;
@@ -458,15 +882,24 @@ void AMainPlayerController::Client_ReceiveRandomUpgradeOptions_Implementation(co
 
 void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 SelectedIndex)
 {
+	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	if (!GM ||
+		!PS ||
+		!GM->IsBattleRoyalePhase() ||
+		CurrentPhase != EGamePhase::Shop ||
+		PS->LastRandomUpgradeClaimedRound == GM->GetCurrentRound())
+	{
+		return;
+	}
 
 	if (!CurrentUpgradeOptions.IsValidIndex(SelectedIndex)) return;
 
 	const FRandomCardOption& ChosenOption = CurrentUpgradeOptions[SelectedIndex];
 
-	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>()) {
-		PS->ApplyCardUpgrade(ChosenOption.RolledStats);
-	}
+	PS->ApplyCardUpgrade(ChosenOption.RolledStats);
 
+	PS->LastRandomUpgradeClaimedRound = GM->GetCurrentRound();
 	CurrentUpgradeOptions.Empty();
 }
 
@@ -529,7 +962,8 @@ int32 AMainPlayerController::GetCurrentUpgradeLevel(AMainPlayerState* PS, EUpgra
 }
 void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int32 SelectedIndex) {
 
-	if (CurrentPhase != EGamePhase::Shop)
+	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+	if (CurrentPhase != EGamePhase::Shop || !GM || !GM->IsBattleRoyalePhase())
 	{
 		return;
 	}
@@ -560,7 +994,9 @@ void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int3
 }
 void AMainPlayerController::Server_SetUITimer_Implementation(int32 time)
 {
-	Client_SetUITimer(time);
+	UE_LOG(LogTemp, Warning, TEXT("[DS] Rejected client UI timer request Player=%s Value=%d"),
+		*GetNameSafe(PlayerState),
+		time);
 }
 
 void AMainPlayerController::Client_SetUITimer_Implementation(int32 time)

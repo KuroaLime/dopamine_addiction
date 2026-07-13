@@ -9,6 +9,13 @@ class UWorld;
 class AActor;
 struct FHitResult;
 
+enum class ECardDropPlacementSource : uint8
+{
+    None,
+    Navigation,
+    GroundTraceFallback
+};
+
 // 카드 섬 드롭 후보 구역. 기존 AMainGameMode 내부 private 구조체에서 이전.
 struct FCardIslandDropZone
 {
@@ -81,6 +88,12 @@ public:
     bool IsInsideNoDropZone(const FVector& Candidate) const;
     bool HasOverheadClearance(const FVector& Candidate) const;
 
-    bool PickIslandCardDropLocation(const FCardIslandDropZone& DropZone, const TArray<FVector>& ExistingIslandLocations, int32 IslandIndex, int32 SlotIndex, FVector& OutLocation) const;
+    bool PickIslandCardDropLocation(
+        const FCardIslandDropZone& DropZone,
+        const TArray<FVector>& ExistingIslandLocations,
+        int32 IslandIndex,
+        int32 SlotIndex,
+        FVector& OutLocation,
+        ECardDropPlacementSource* OutSource = nullptr) const;
     bool PickDeathCardDropLocation(const FVector& DeathLocation, const TArray<FVector>& ExistingDropLocations, int32 CardIndex, FVector& OutLocation) const;
 };

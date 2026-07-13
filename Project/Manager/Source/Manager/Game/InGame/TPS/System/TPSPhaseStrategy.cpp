@@ -19,7 +19,9 @@ void UTPSPhaseStrategy::OnPhaseStart()
 		GM->EnsureBattleRoyaleStageLoaded();
 		GM->BroadcastSwitchMode(EGamePhase::TPS);
 		GM->RequestBattleRoyaleCardSpawnAfterStreamReady(TEXT("TPSPhaseStart"));
-		GM->SetPlayerPawnGameplayEnabled(true, TEXT("BattleRoyale"));
+		// Keep pawns visible/collidable while the server commits the full card bundle
+		// and every required client confirms that all card actors are replicated.
+		GM->SetPlayerPawnGameplayState(true, false, true, TEXT("BattleRoyalePreparingCards"));
 	}
 
 	LoadStage();

@@ -88,6 +88,14 @@ public:
     // [Game] Dedicated Server 이동 명령
     // -----------------------------------------------------------------------
     void SendGameStart(ClientContext* c, const char* ip, uint16_t port, uint32_t ticket);
+    void SendDediControlAck(
+        ClientContext* c,
+        PacketType ackType,
+        uint32_t roomId,
+        uint16_t port,
+        uint32_t generation,
+        uint64_t controlToken,
+        bool accepted);
 
 
 private:
@@ -101,4 +109,5 @@ private:
     static void AppendU8(std::vector<char>& out, uint8_t v);
     static void AppendU16(std::vector<char>& out, uint16_t vNet);
     static void AppendU32(std::vector<char>& out, uint32_t vNet);
+    static void AppendU64BE(std::vector<char>& out, uint64_t vHost);
 };

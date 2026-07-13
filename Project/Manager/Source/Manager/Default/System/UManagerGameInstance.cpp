@@ -5,6 +5,7 @@
 
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
+#include "HAL/PlatformMisc.h"
 
 #define UE_ASYNC_GUARD if (!IsValid(this) || !GetWorld()) return;
 
@@ -31,6 +32,44 @@ namespace
 
         return SafeName.Left(32);
     }
+
+    FString ManagerGameInstanceGetTrimmedEnvValue(const TCHAR* EnvName)
+    {
+        FString Value;
+#ifdef GetEnvironmentVariable
+#pragma push_macro("GetEnvironmentVariable")
+#undef GetEnvironmentVariable
+#define MANAGER_GI_RESTORE_GETENV_MACRO 1
+#endif
+        Value = FPlatformMisc::GetEnvironmentVariable(EnvName);
+#ifdef MANAGER_GI_RESTORE_GETENV_MACRO
+#pragma pop_macro("GetEnvironmentVariable")
+#undef MANAGER_GI_RESTORE_GETENV_MACRO
+#endif
+        Value.TrimStartAndEndInline();
+        return Value;
+    }
+
+    FString ManagerGameInstanceResolveIocpHost()
+    {
+        const FString Host = ManagerGameInstanceGetTrimmedEnvValue(TEXT("MANAGER_IOCP_HOST"));
+        return Host.IsEmpty() ? FString(TEXT("127.0.0.1")) : Host;
+    }
+
+    uint16_t ManagerGameInstanceResolveIocpPort()
+    {
+        const FString PortText = ManagerGameInstanceGetTrimmedEnvValue(TEXT("MANAGER_IOCP_PORT"));
+        if (PortText.IsNumeric())
+        {
+            const int32 ParsedPort = FCString::Atoi(*PortText);
+            if (ParsedPort > 0 && ParsedPort <= 65535)
+            {
+                return static_cast<uint16_t>(ParsedPort);
+            }
+        }
+
+        return 9000;
+    }
 }
 
 UUManagerGameInstance::UUManagerGameInstance() {
@@ -46,14 +85,33 @@ UUManagerGameInstance::UUManagerGameInstance() {
 void UUManagerGameInstance::Init() {
 	
 
-    const FString ip = "127.0.0.1";
-    const uint16_t port = 9000;
+    FString ip = ManagerGameInstanceResolveIocpHost();
+    const uint16_t port = ManagerGameInstanceResolveIocpPort();
 
-    if (Connect(ip, port))
+    bool bConnected = Connect(ip, port);
+    if (!bConnected && !ip.Equals(TEXT("127.0.0.1"), ESearchCase::IgnoreCase))
     {
         if (GEngine)
         {
-            DS_SCREEN(-1, 5.f, FColor::Green, TEXT("Connected to login server"));
+            DS_SCREEN(-1, 5.f, FColor::Yellow,
+                FString::Printf(TEXT("Login server connect failed: %s:%u, fallback to 127.0.0.1:%u"),
+                    *ip,
+                    static_cast<uint32>(port),
+                    static_cast<uint32>(port)));
+        }
+
+        ip = TEXT("127.0.0.1");
+        bConnected = Connect(ip, port);
+    }
+
+    if (bConnected)
+    {
+        if (GEngine)
+        {
+            DS_SCREEN(-1, 5.f, FColor::Green,
+                FString::Printf(TEXT("Connected to login server %s:%u"),
+                    *ip,
+                    static_cast<uint32>(port)));
         }
     }
     else

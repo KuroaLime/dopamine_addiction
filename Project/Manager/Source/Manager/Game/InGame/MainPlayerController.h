@@ -76,14 +76,27 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
 
+	UFUNCTION(Client, Reliable)
+	void Client_SynchronizePhase(EGamePhase ServerPhase);
+
 	UFUNCTION()
 	void OnClientStreamLevelLoaded();
 
 	UFUNCTION()
 	void OnClientStreamLevelUnloaded();
 
+	bool TryReportPendingClientLevelReady(const TCHAR* Context);
+	void SchedulePendingClientLevelReadinessRetry();
+	void RetryPendingClientLevelReadiness();
+
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_ReportStreamLevelLoaded(FName LoadedLevel, EGamePhase ClientPhase);
+
+	UFUNCTION(Client, Reliable)
+	void Client_ExpectCardBundle(int32 Round, int32 BundleGeneration, const TArray<int32>& ExpectedInstanceIds);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_ReportCardBundleReady(int32 Round, int32 BundleGeneration, int32 VisibleCount);
 
 	UFUNCTION(Client, Reliable)
 	void Client_SetGameplayInputLocked(bool bLocked, const FString& Context);
@@ -143,6 +156,25 @@ public:
 
 	UPROPERTY()
 	FName PendingClientStreamLevelToUnload = NAME_None;
+
+	FTimerHandle PendingClientLevelReadinessTimerHandle;
+	int32 ClientStreamingLatentActionId = 1000;
+	int32 PendingClientLevelReadinessRetryCount = 0;
+	bool bPendingClientLevelReadyReported = false;
+
+	bool TryReportPendingCardBundleReady(const TCHAR* Context);
+	void SchedulePendingCardBundleReadinessRetry();
+	void RetryPendingCardBundleReadiness();
+	void ClearPendingCardBundleExpectation();
+
+	FTimerHandle PendingClientCardBundleReadinessTimerHandle;
+	int32 PendingClientCardBundleRound = 0;
+	int32 PendingClientCardBundleGeneration = 0;
+	int32 PendingClientCardBundleRetryCount = 0;
+	bool bPendingClientCardBundleReadyReported = false;
+
+	UPROPERTY()
+	TArray<int32> PendingClientExpectedCardInstanceIds;
 
 	UPROPERTY()
 	bool bGameplayInputLocked = false;

@@ -30,6 +30,14 @@ void NetApi::AppendU32(std::vector<char>& out, uint32_t vNet)
     out.insert(out.end(), b, b + 4);
 }
 
+void NetApi::AppendU64BE(std::vector<char>& out, uint64_t vHost)
+{
+    for (int shift = 56; shift >= 0; shift -= 8)
+    {
+        out.push_back(static_cast<char>((vHost >> shift) & 0xFF));
+    }
+}
+
 
 // ===========================================================================
 // Packet Senders
@@ -339,6 +347,32 @@ void NetApi::SendGameStart(ClientContext* c, const char* ip, uint16_t port, uint
     m_send(
         c,
         static_cast<uint16_t>(PacketType::S2C_GAME_START),
+        payload.data(),
+        static_cast<uint16_t>(payload.size())
+    );
+}
+
+void NetApi::SendDediControlAck(
+    ClientContext* c,
+    PacketType ackType,
+    uint32_t roomId,
+    uint16_t port,
+    uint32_t generation,
+    uint64_t controlToken,
+    bool accepted)
+{
+    std::vector<char> payload;
+    payload.reserve(19);
+
+    AppendU32(payload, htonl(roomId));
+    AppendU16(payload, htons(port));
+    AppendU32(payload, htonl(generation));
+    AppendU64BE(payload, controlToken);
+    AppendU8(payload, accepted ? 1 : 0);
+
+    m_send(
+        c,
+        static_cast<uint16_t>(ackType),
         payload.data(),
         static_cast<uint16_t>(payload.size())
     );

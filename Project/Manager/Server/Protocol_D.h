@@ -35,6 +35,8 @@ enum class PacketType : uint16_t
 
     D2L_MATCH_END_NOTIFY = 300,
     D2L_SERVER_READY_NOTIFY = 301,
+    L2D_MATCH_END_ACK = 302,
+    L2D_SERVER_READY_ACK = 303,
 };
 
 struct PacketHeader

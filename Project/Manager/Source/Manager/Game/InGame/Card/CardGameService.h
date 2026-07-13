@@ -62,12 +62,16 @@ public:
     bool SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, EBettingAction Action);
 
     // ----- 페이즈/매치 흐름에서 호출 -----
-    void SpawnRoundCardBundleForBattleRoyale();
+    bool SpawnRoundCardBundleForBattleRoyale(TArray<int32>& OutSpawnedCardInstanceIds);
     void EnsureThreeCardsForCardGame();
     void ResetSeotdaRoundStates();
     void ClearCardDrops();
     void ClearRoundCardsForAllPlayers();
     void ResolveSeotdaRoundResult(const TCHAR* Reason);
+    void DetachPlayerForReconnect(int64 Ticket, AMainPlayerState* PlayerState);
+    void ReattachPlayerAfterReconnect(int64 Ticket, AMainPlayerState* PlayerState);
+    void ExpireReconnectState(int64 Ticket, const TCHAR* Reason);
+    void HandlePlayerDisconnectedAfterLogout(int64 Ticket, const TCHAR* Reason);
 
     ACardDropActor* SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation);
     int32 DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const FVector& BaseDropLocation);
@@ -94,6 +98,7 @@ private:
     int32 PaySeotdaBet(AMainPlayerState* TargetPS, int32 Amount);
     int32 GetActiveSeotdaPlayerCount() const;
     bool AreSeotdaBetsSettled() const;
+    void ClearReconnectSeotdaStateForRound(const TCHAR* Reason);
     bool ShouldForceSeotdaRedeal() const;
     bool TryApplySeotdaRedealFromRemainingCards(const TCHAR* Reason);
 
@@ -117,6 +122,8 @@ private:
 
     TMap<AMainPlayerState*, FSeotdaPlayerRoundState> SeotdaRoundStates;
     TArray<TWeakObjectPtr<AMainPlayerState>> SeotdaTurnOrder;
+    TMap<int64, FSeotdaPlayerRoundState> ReconnectSeotdaStates;
+    TMap<int64, TArray<int32>> ReconnectTurnOrderIndices;
     int32 SeotdaPot = 0;
     int32 SeotdaCurrentBet = 0;
     int32 SeotdaCurrentTurnIndex = 0;

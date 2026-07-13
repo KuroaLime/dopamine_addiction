@@ -8,6 +8,7 @@
 #include <atomic>
 #include <cstdint>
 #include <cstdio>
+#include <cstdlib>
 #include <cstring>
 #include <deque>
 #include <string>
@@ -61,6 +62,8 @@ const char* PacketTypeToString(uint16_t type) {
     case PacketType::S2C_GAME_START:      return "S2C_GAME_START";
     case PacketType::D2L_MATCH_END_NOTIFY: return "D2L_MATCH_END_NOTIFY";
     case PacketType::D2L_SERVER_READY_NOTIFY: return "D2L_SERVER_READY_NOTIFY";
+    case PacketType::L2D_MATCH_END_ACK: return "L2D_MATCH_END_ACK";
+    case PacketType::L2D_SERVER_READY_ACK: return "L2D_SERVER_READY_ACK";
     default:                              return "UNKNOWN_PACKET";
     }
 }
@@ -68,8 +71,9 @@ const char* PacketTypeToString(uint16_t type) {
 // ===========================================================================
 // ���� ���� �� ����
 // ===========================================================================
-static const char* LISTEN_IP = "0.0.0.0";
-static const uint16_t LISTEN_PORT = 9000;
+static const char* DEFAULT_LISTEN_IP = "0.0.0.0";
+static const char* FALLBACK_LISTEN_IP = "127.0.0.1";
+static const uint16_t DEFAULT_LISTEN_PORT = 9000;
 static const int RECV_BUF_SIZE = 4096;
 
 static HANDLE g_iocp = NULL;
@@ -106,6 +110,7 @@ struct ClientContext {
     PerIoContext recvCtx;
     std::atomic<long> ioRef{ 0 };
     std::atomic<bool> closing{ false };
+    std::atomic<bool> baseRefReleased{ false };
     SRWLOCK closeLock{};
 
     // ���� ���� ���� (TCP ��� ó����)
@@ -132,9 +137,73 @@ void SendPacket(ClientContext* c, uint16_t type, const void* payload, uint16_t p
 NetApi       g_net(SendPacket);
 LobbyService g_lobby(g_net);
 
+std::string TrimCopy(std::string value) {
+    const char* whitespace = " \t\r\n";
+    const size_t first = value.find_first_not_of(whitespace);
+    if (first == std::string::npos) {
+        return {};
+    }
+
+    const size_t last = value.find_last_not_of(whitespace);
+    return value.substr(first, last - first + 1);
+}
+
+std::string GetEnvStringOrDefault(const char* name, const char* fallback) {
+    const DWORD requiredSize = GetEnvironmentVariableA(name, nullptr, 0);
+    if (requiredSize == 0) {
+        return fallback ? fallback : "";
+    }
+
+    std::string value(requiredSize, '\0');
+    const DWORD copiedSize = GetEnvironmentVariableA(name, value.data(), requiredSize);
+    if (copiedSize == 0 || copiedSize >= requiredSize) {
+        return fallback ? fallback : "";
+    }
+
+    value.resize(copiedSize);
+    value = TrimCopy(value);
+    return value.empty() ? (fallback ? fallback : "") : value;
+}
+
+uint16_t GetEnvPortOrDefault(const char* name, uint16_t fallback) {
+    const std::string value = GetEnvStringOrDefault(name, "");
+    if (value.empty()) {
+        return fallback;
+    }
+
+    char* end = nullptr;
+    const unsigned long parsed = std::strtoul(value.c_str(), &end, 10);
+    if (!end || *end != '\0' || parsed == 0 || parsed > 65535) {
+        printf("[Server][WARN] Invalid %s=%s. fallback=%u\n",
+            name,
+            value.c_str(),
+            static_cast<unsigned>(fallback));
+        return fallback;
+    }
+
+    return static_cast<uint16_t>(parsed);
+}
+
+bool BuildListenAddress(const std::string& ip, uint16_t port, sockaddr_in& outAddr) {
+    std::memset(&outAddr, 0, sizeof(outAddr));
+    outAddr.sin_family = AF_INET;
+    outAddr.sin_port = htons(port);
+
+    if (inet_pton(AF_INET, ip.c_str(), &outAddr.sin_addr) != 1) {
+        printf("[Server][ERR] inet_pton failed. ip=%s WSA=%d\n",
+            ip.c_str(),
+            WSAGetLastError());
+        return false;
+    }
+
+    return true;
+}
+
 void AddIO(ClientContext* c) {
     c->ioRef.fetch_add(1, std::memory_order_relaxed);
 }
+
+void ReleaseIO(ClientContext* c);
 
 void CloseClientSocketOnce(ClientContext* c) {
     if (!c) {
@@ -161,7 +230,8 @@ void MarkClientClosing(ClientContext* c, const char* reason) {
         return;
     }
 
-    if (!c->closing.exchange(true, std::memory_order_acq_rel)) {
+    const bool firstClose = !c->closing.exchange(true, std::memory_order_acq_rel);
+    if (firstClose) {
         IOCP_TRACE("[CONN] CLOSE reason=%s to=%d.%d.%d.%d\n",
             reason ? reason : "Unknown",
             c->addr.sin_addr.S_un.S_un_b.s_b1,
@@ -172,6 +242,11 @@ void MarkClientClosing(ClientContext* c, const char* reason) {
     }
 
     CloseClientSocketOnce(c);
+
+    if (firstClose &&
+        !c->baseRefReleased.exchange(true, std::memory_order_acq_rel)) {
+        ReleaseIO(c);
+    }
 }
 
 void ReleaseIO(ClientContext* c) {
@@ -474,11 +549,20 @@ int main() {
         return 1;
     }
 
+    std::string listenIp = GetEnvStringOrDefault("MANAGER_IOCP_BIND_IP", DEFAULT_LISTEN_IP);
+    const uint16_t listenPort = GetEnvPortOrDefault("MANAGER_IOCP_PORT", DEFAULT_LISTEN_PORT);
+
     sockaddr_in serverAddr{};
-    serverAddr.sin_family = AF_INET;
-    serverAddr.sin_port = htons(LISTEN_PORT);
-    if (inet_pton(AF_INET, LISTEN_IP, &serverAddr.sin_addr) != 1) {
-        printf("[Server][ERR] inet_pton failed. ip=%s WSA=%d\n", LISTEN_IP, WSAGetLastError());
+    bool listenAddrReady = BuildListenAddress(listenIp, listenPort, serverAddr);
+    if (!listenAddrReady && listenIp != FALLBACK_LISTEN_IP) {
+        printf("[Server][WARN] Falling back bind ip to %s from %s\n",
+            FALLBACK_LISTEN_IP,
+            listenIp.c_str());
+        listenIp = FALLBACK_LISTEN_IP;
+        listenAddrReady = BuildListenAddress(listenIp, listenPort, serverAddr);
+    }
+
+    if (!listenAddrReady) {
         closesocket(g_listenSock);
         CloseHandle(g_iocp);
         WSACleanup();
@@ -486,20 +570,37 @@ int main() {
     }
 
     if (bind(g_listenSock, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+        const int firstBindErr = WSAGetLastError();
         printf("[Server][ERR] bind failed. ip=%s port=%u WSA=%d\n",
-            LISTEN_IP,
-            static_cast<unsigned>(LISTEN_PORT),
-            WSAGetLastError());
-        closesocket(g_listenSock);
-        CloseHandle(g_iocp);
-        WSACleanup();
-        return 1;
+            listenIp.c_str(),
+            static_cast<unsigned>(listenPort),
+            firstBindErr);
+
+        if (listenIp != FALLBACK_LISTEN_IP &&
+            BuildListenAddress(FALLBACK_LISTEN_IP, listenPort, serverAddr)) {
+            printf("[Server][WARN] Retrying bind on fallback ip=%s port=%u\n",
+                FALLBACK_LISTEN_IP,
+                static_cast<unsigned>(listenPort));
+            listenIp = FALLBACK_LISTEN_IP;
+        }
+
+        if (listenIp != FALLBACK_LISTEN_IP ||
+            bind(g_listenSock, (sockaddr*)&serverAddr, sizeof(serverAddr)) == SOCKET_ERROR) {
+            printf("[Server][ERR] fallback bind failed. ip=%s port=%u WSA=%d\n",
+                listenIp.c_str(),
+                static_cast<unsigned>(listenPort),
+                WSAGetLastError());
+            closesocket(g_listenSock);
+            CloseHandle(g_iocp);
+            WSACleanup();
+            return 1;
+        }
     }
 
     if (listen(g_listenSock, SOMAXCONN) == SOCKET_ERROR) {
         printf("[Server][ERR] listen failed. ip=%s port=%u WSA=%d\n",
-            LISTEN_IP,
-            static_cast<unsigned>(LISTEN_PORT),
+            listenIp.c_str(),
+            static_cast<unsigned>(listenPort),
             WSAGetLastError());
         closesocket(g_listenSock);
         CloseHandle(g_iocp);
@@ -507,11 +608,19 @@ int main() {
         return 1;
     }
 
-    IOCP_INFO("[Server] Listening on %s:%d...\n", LISTEN_IP, LISTEN_PORT);
+    IOCP_INFO("[Server] Listening on %s:%d...\n", listenIp.c_str(), listenPort);
 
     // ��Ŀ ������ 4�� ����
     std::vector<std::thread> workers;
     for (int i = 0; i < 4; ++i) workers.emplace_back(WorkerThread);
+    std::thread maintenanceThread([]() {
+        while (g_running.load(std::memory_order_acquire)) {
+            g_lobby.TickMaintenance();
+            for (int i = 0; i < 10 && g_running.load(std::memory_order_acquire); ++i) {
+                Sleep(100);
+            }
+        }
+    });
 
     // Accept ����
     while (g_running.load()) {
@@ -564,6 +673,7 @@ int main() {
     }
 
     g_running = false;
+    if (maintenanceThread.joinable()) maintenanceThread.join();
     for (size_t i = 0; i < workers.size(); ++i) {
         PostQueuedCompletionStatus(g_iocp, 0, 0, nullptr);
     }

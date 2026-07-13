@@ -191,6 +191,43 @@ void AMainPlayerState::ResetState()
 	ForceNetUpdate();
 }
 
+void AMainPlayerState::CaptureReconnectSnapshot(FMainPlayerReconnectSnapshot& OutSnapshot) const
+{
+	OutSnapshot.WeaponData = WeaponData;
+	OutSnapshot.PlayerData = PlayerData;
+	OutSnapshot.CurPlayerData = CurPlayerData;
+	OutSnapshot.OwnedCards = OwnedCards;
+	OutSnapshot.AccumulatedUpgrades = AccumulatedUpgrades;
+	OutSnapshot.CarriedAmmoList = CarriedAmmoList;
+	OutSnapshot.LastRandomUpgradeClaimedRound = LastRandomUpgradeClaimedRound;
+}
+
+void AMainPlayerState::RestoreReconnectSnapshot(const FMainPlayerReconnectSnapshot& Snapshot)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	const FCurPlayerData OldCurPlayerData = CurPlayerData;
+
+	WeaponData = Snapshot.WeaponData;
+	PlayerData = Snapshot.PlayerData;
+	CurPlayerData = Snapshot.CurPlayerData;
+	OwnedCards = Snapshot.OwnedCards;
+	PublicCardCount = OwnedCards.Num();
+	AccumulatedUpgrades = Snapshot.AccumulatedUpgrades;
+	CarriedAmmoList = Snapshot.CarriedAmmoList;
+	LastRandomUpgradeClaimedRound = Snapshot.LastRandomUpgradeClaimedRound;
+
+	OnRep_PlayerData();
+	OnRep_CurPlayerData(OldCurPlayerData);
+	OnOwnedCardsChangedNative.Broadcast(OwnedCards);
+	OnRep_PublicCardCount();
+	OnRep_AccumulatedUpgrades();
+	ForceNetUpdate();
+}
+
 void AMainPlayerState::AddGold(float Amount)
 {
 	if (!HasAuthority())

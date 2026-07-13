@@ -7,6 +7,8 @@
 
 class UStaticMeshComponent;
 
+DECLARE_LOG_CATEGORY_EXTERN(LogManagerCard, Log, All);
+
 UCLASS(Blueprintable, BlueprintType)
 class MANAGER_API ACardDropActor : public AActor
 {
@@ -15,6 +17,7 @@ class MANAGER_API ACardDropActor : public AActor
 public:
     ACardDropActor();
 
+    virtual void BeginPlay() override;
     virtual void OnConstruction(const FTransform& Transform) override;
     virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;
 
@@ -53,4 +56,7 @@ protected:
 
 private:
     void RefreshVisual();
+    void LogClientReplicationOnce(const TCHAR* Context);
+
+    bool bInitialReplicationLogged = false;
 };

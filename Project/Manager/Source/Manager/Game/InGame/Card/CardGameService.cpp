@@ -8,11 +8,13 @@
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/Card/Actor/CardDropActor.h"
 #include "Game/InGame/Card/CardPlacementService.h"
+#include "Engine/Level.h"
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
+#include "UObject/Package.h"
 
 void UCardGameService::Init(AMainGameMode* InOwner)
 {
@@ -29,6 +31,180 @@ void UCardGameService::Init(AMainGameMode* InOwner)
 UWorld* UCardGameService::GetWorld() const
 {
     return OwnerGM ? OwnerGM->GetWorld() : nullptr;
+}
+
+void UCardGameService::DetachPlayerForReconnect(int64 Ticket, AMainPlayerState* PlayerState)
+{
+    if (Ticket <= 0 || !PlayerState)
+    {
+        return;
+    }
+
+    const bool bWasBettingActive = bSeotdaBettingActive;
+
+    if (FSeotdaPlayerRoundState* ExistingState = SeotdaRoundStates.Find(PlayerState))
+    {
+        FSeotdaPlayerRoundState SavedState = *ExistingState;
+        SavedState.PlayerState.Reset();
+        ReconnectSeotdaStates.Add(Ticket, MoveTemp(SavedState));
+        SeotdaRoundStates.Remove(PlayerState);
+    }
+
+    TArray<int32> TurnIndices;
+    for (int32 Index = 0; Index < SeotdaTurnOrder.Num(); ++Index)
+    {
+        if (SeotdaTurnOrder[Index].Get() == PlayerState)
+        {
+            SeotdaTurnOrder[Index].Reset();
+            TurnIndices.Add(Index);
+        }
+    }
+
+    if (TurnIndices.Num() > 0)
+    {
+        ReconnectTurnOrderIndices.Add(Ticket, MoveTemp(TurnIndices));
+    }
+
+    int32 DetachedCardCount = 0;
+    for (TPair<int32, FServerCardRecord>& Pair : ServerCardRecords)
+    {
+        if (Pair.Value.OwnerPlayerState.Get() == PlayerState)
+        {
+            Pair.Value.OwnerPlayerState.Reset();
+            ++DetachedCardCount;
+        }
+    }
+
+    DS_LOG(TEXT("[DS] Reconnect CardStateDetached Ticket=%lld Player=%s Cards=%d HasSeotda=%d TurnSlots=%d"),
+        Ticket,
+        *PlayerState->GetPlayerName(),
+        DetachedCardCount,
+        ReconnectSeotdaStates.Contains(Ticket) ? 1 : 0,
+        ReconnectTurnOrderIndices.Contains(Ticket) ? ReconnectTurnOrderIndices[Ticket].Num() : 0);
+
+    if (bWasBettingActive && !bSeotdaRoundResolved)
+    {
+        if (GetActiveSeotdaPlayerCount() <= 1 || AreSeotdaBetsSettled())
+        {
+            ResolveSeotdaRoundResult(TEXT("DisconnectAutoFold"));
+            BroadcastSeotdaState();
+
+            if (OwnerGM && OwnerGM->GetCurrentServerPhase() == EDediServerPhase::CardGame)
+            {
+                OwnerGM->FinishCurrentServerPhase(TEXT("SeotdaDisconnectSettled"));
+            }
+        }
+        else
+        {
+            AdvanceSeotdaBettingTurn();
+        }
+    }
+}
+
+void UCardGameService::ReattachPlayerAfterReconnect(int64 Ticket, AMainPlayerState* PlayerState)
+{
+    if (Ticket <= 0 || !PlayerState)
+    {
+        return;
+    }
+
+    const bool bHasSavedTurnSlots = ReconnectTurnOrderIndices.Contains(Ticket);
+    if (FSeotdaPlayerRoundState* SavedState = ReconnectSeotdaStates.Find(Ticket))
+    {
+        if (bSeotdaBettingActive && !bHasSavedTurnSlots)
+        {
+            DS_LOG(TEXT("[DS] Reconnect SeotdaStateDrop Ticket=%lld Player=%s Reason=BettingStartedWithoutTurnSlot"),
+                Ticket,
+                *PlayerState->GetPlayerName());
+        }
+        else
+        {
+            SavedState->PlayerState = PlayerState;
+            SeotdaRoundStates.Add(PlayerState, *SavedState);
+        }
+        ReconnectSeotdaStates.Remove(Ticket);
+    }
+
+    if (TArray<int32>* TurnIndices = ReconnectTurnOrderIndices.Find(Ticket))
+    {
+        for (int32 Index : *TurnIndices)
+        {
+            if (SeotdaTurnOrder.IsValidIndex(Index))
+            {
+                SeotdaTurnOrder[Index] = PlayerState;
+            }
+        }
+        ReconnectTurnOrderIndices.Remove(Ticket);
+    }
+
+    int32 ReattachedCardCount = 0;
+    for (const FOwnedCardInfo& CardInfo : PlayerState->OwnedCards)
+    {
+        if (FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId))
+        {
+            Record->OwnerPlayerState = PlayerState;
+            ++ReattachedCardCount;
+        }
+    }
+
+    DS_LOG(TEXT("[DS] Reconnect CardStateReattached Ticket=%lld Player=%s Cards=%d"),
+        Ticket,
+        *PlayerState->GetPlayerName(),
+        ReattachedCardCount);
+}
+
+void UCardGameService::ExpireReconnectState(int64 Ticket, const TCHAR* Reason)
+{
+    if (Ticket <= 0)
+    {
+        return;
+    }
+
+    const bool bHadSeotdaState = ReconnectSeotdaStates.Remove(Ticket) > 0;
+    const bool bHadTurnState = ReconnectTurnOrderIndices.Remove(Ticket) > 0;
+
+    DS_LOG(TEXT("[DS] Reconnect CardStateExpired Ticket=%lld HasSeotda=%d HasTurn=%d Reason=%s"),
+        Ticket,
+        bHadSeotdaState ? 1 : 0,
+        bHadTurnState ? 1 : 0,
+        Reason ? Reason : TEXT("<NULL>"));
+}
+
+void UCardGameService::HandlePlayerDisconnectedAfterLogout(int64 Ticket, const TCHAR* Reason)
+{
+    if (!OwnerGM || OwnerGM->GetCurrentServerPhase() != EDediServerPhase::CardGame || bSeotdaRoundResolved)
+    {
+        return;
+    }
+
+    if (bSeotdaBettingActive)
+    {
+        return;
+    }
+
+    DS_LOG(TEXT("[DS] Seotda DisconnectAfterLogout Ticket=%lld Reason=%s"),
+        Ticket,
+        Reason ? Reason : TEXT("<NULL>"));
+
+    TryResolveSeotdaRoundIfReady();
+}
+
+void UCardGameService::ClearReconnectSeotdaStateForRound(const TCHAR* Reason)
+{
+    const int32 SavedStateCount = ReconnectSeotdaStates.Num();
+    const int32 SavedTurnCount = ReconnectTurnOrderIndices.Num();
+    if (SavedStateCount <= 0 && SavedTurnCount <= 0)
+    {
+        return;
+    }
+
+    ReconnectSeotdaStates.Empty();
+    ReconnectTurnOrderIndices.Empty();
+
+    DS_LOG(TEXT("[DS] Reconnect SeotdaRoundStateCleared States=%d Turns=%d Reason=%s"),
+        SavedStateCount,
+        SavedTurnCount,
+        Reason ? Reason : TEXT("<NULL>"));
 }
 
 FString UCardGameService::GetOwnedCardsDebugString(const AMainPlayerState* PS) const
@@ -273,6 +449,8 @@ bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC
 
 void UCardGameService::ResetSeotdaRoundStates()
 {
+    ClearReconnectSeotdaStateForRound(TEXT("ResetSeotdaRound"));
+
     SeotdaRoundStates.Empty();
     SeotdaTurnOrder.Empty();
 
@@ -684,6 +862,7 @@ void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
 
         bSeotdaBettingActive = false;
         bSeotdaRoundResolved = true;
+        ClearReconnectSeotdaStateForRound(TEXT("ResultNoWinner"));
         BroadcastSeotdaState();
 
         DS_LOG(TEXT("[DS] Seotda ResultFailed %s"), *LastSeotdaRoundResultSummary);
@@ -714,6 +893,7 @@ void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
 
     bSeotdaBettingActive = false;
     bSeotdaRoundResolved = true;
+    ClearReconnectSeotdaStateForRound(TEXT("ResultResolved"));
     BroadcastSeotdaState();
 
     const FString ClientResultText = FString::Printf(
@@ -861,7 +1041,7 @@ ActiveSubmittedCount++;
 
 if (!State.bActedThisBetRound)
 {
-UE_LOG(LogTemp, Warning,
+UE_LOG(LogTemp, Verbose,
 TEXT("[DS] Seotda SettleCheck Result=0 Reason=NotActed Player=%s Active=%d Acted=%d CurrentBet=%d PlayerBet=%d"),
 *State.PlayerState->GetPlayerName(),
 ActiveSubmittedCount,
@@ -875,7 +1055,7 @@ return false;
 
 if (State.BetMoney < SeotdaCurrentBet)
 {
-UE_LOG(LogTemp, Warning,
+UE_LOG(LogTemp, Verbose,
 TEXT("[DS] Seotda SettleCheck Result=0 Reason=NeedCall Player=%s Active=%d Acted=%d CurrentBet=%d PlayerBet=%d"),
 *State.PlayerState->GetPlayerName(),
 ActiveSubmittedCount,
@@ -892,7 +1072,7 @@ ActedCount++;
 
 const bool bSettled = ActiveSubmittedCount >= 2 && ActedCount == ActiveSubmittedCount;
 
-UE_LOG(LogTemp, Warning,
+UE_LOG(LogTemp, Verbose,
 TEXT("[DS] Seotda SettleCheck Result=%d Active=%d Acted=%d CurrentBet=%d"),
 bSettled ? 1 : 0,
 ActiveSubmittedCount,
@@ -1021,7 +1201,7 @@ ACardDropActor* UCardGameService::SpawnCardDrop(ECardID CardID, const FVector& S
     ACardDropActor* CardActor = GetWorld()->SpawnActor<ACardDropActor>(SpawnClass, SpawnLocation, FRotator::ZeroRotator, Params);
     if (!CardActor)
     {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Card=%d Name=%s Reason=SpawnCollisionOrNull Location=%s"),
+        UE_LOG(LogManagerCard, Error, TEXT("[DS] Card DropFail Card=%d Name=%s Reason=SpawnCollisionOrNull Location=%s"),
             static_cast<int32>(CardID),
             *CardDebug::ToString(CardID),
             *SpawnLocation.ToCompactString());
@@ -1045,12 +1225,27 @@ ACardDropActor* UCardGameService::SpawnCardDrop(ECardID CardID, const FVector& S
         Record->DropActor = CardActor;
     }
 
-    DS_LOG(TEXT("[DS] Card Drop Instance=%d Card=%d Name=%s Actor=%s Location=%s Round=%d"),
+    const FVector ActualLocation = CardActor->GetActorLocation();
+    const float AdjustedDistance = FVector::Dist(SpawnLocation, ActualLocation);
+    const ULevel* ActorLevel = CardActor->GetLevel();
+    const FString LevelPackage = ActorLevel && ActorLevel->GetOutermost()
+        ? ActorLevel->GetOutermost()->GetName()
+        : TEXT("<NO_LEVEL>");
+
+    UE_LOG(LogManagerCard, Display,
+        TEXT("[DS] CardSpawnFinal Instance=%d Card=%d Name=%s Actor=%s Class=%s Requested=%s Actual=%s AdjustedDistance=%.1f Level=%s Replicates=%d AlwaysRelevant=%d Hidden=%d Round=%d"),
         InstanceId,
         static_cast<int32>(CardID),
         *CardDebug::ToString(CardID),
         *CardActor->GetName(),
-        *SpawnLocation.ToString(),
+        *GetNameSafe(CardActor->GetClass()),
+        *SpawnLocation.ToCompactString(),
+        *ActualLocation.ToCompactString(),
+        AdjustedDistance,
+        *LevelPackage,
+        CardActor->GetIsReplicated() ? 1 : 0,
+        CardActor->bAlwaysRelevant ? 1 : 0,
+        CardActor->IsHidden() ? 1 : 0,
         OwnerGM->GetCurrentRound());
 
     return CardActor;
@@ -1193,46 +1388,34 @@ int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, con
     return SpawnedCount;
 }
 
-void UCardGameService::SpawnRoundCardBundleForBattleRoyale()
+bool UCardGameService::SpawnRoundCardBundleForBattleRoyale(TArray<int32>& OutSpawnedCardInstanceIds)
 {
-    const FCardPlacementService CardPlacement = OwnerGM->MakeCardPlacementService();
-    if (!OwnerGM->HasAuthority())
+    OutSpawnedCardInstanceIds.Reset();
+
+    if (!OwnerGM || !OwnerGM->HasAuthority() || !GetWorld())
     {
-        return;
+        UE_LOG(LogManagerCard, Error, TEXT("[DS] CardBundleSpawnRejected Reason=InvalidAuthorityOrWorld"));
+        return false;
     }
 
+    const FCardPlacementService CardPlacement = OwnerGM->MakeCardPlacementService();
     ClearCardDrops();
 
     TArray<FCardIslandDropZone> IslandDropZones = CardPlacement.FindCardIslandDropZones();
     TArray<TArray<ECardID>> IslandCardGroups = CardPlacement.BuildBalancedIslandCardGroups();
 
+    if (IslandCardGroups.Num() == 0)
+    {
+        UE_LOG(LogManagerCard, Error, TEXT("[DS] CardBundlePlanRejected Reason=NoCardGroups"));
+        return false;
+    }
+
     if (IslandDropZones.Num() < IslandCardGroups.Num())
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card DropZoneRecover Reason=NotEnoughDropZones Found=%d Required=%d Result=ReuseOrFallback"),
-            IslandDropZones.Num(),
-            IslandCardGroups.Num());
-
-        if (IslandDropZones.Num() == 0)
-        {
-            const FVector FallbackExtent(
-                FMath::Max(100.0f, CardPlacement.CardBundleDropExtent.X),
-                FMath::Max(100.0f, CardPlacement.CardBundleDropExtent.Y),
-                FMath::Max(1000.0f, CardPlacement.CardIslandGroundTraceHalfHeight));
-
-            FCardIslandDropZone FallbackZone;
-            FallbackZone.Bounds = FBox(CardPlacement.CardBundleDropCenter - FallbackExtent, CardPlacement.CardBundleDropCenter + FallbackExtent);
-            FallbackZone.Center = CardPlacement.CardBundleDropCenter;
-            FallbackZone.IslandKey = FName(TEXT("BundleFallback"));
-            FallbackZone.Source = TEXT("GeneratedBundleBounds");
-            FallbackZone.SortOrder = 9000;
-
-            IslandDropZones.Add(FallbackZone);
-
-            UE_LOG(LogTemp, Warning, TEXT("[DS] Card DropZoneRecover CreatedFallbackZone Key=%s Center=%s Extent=%s"),
-                *FallbackZone.IslandKey.ToString(),
-                *FallbackZone.Center.ToCompactString(),
-                *FallbackZone.Bounds.GetExtent().ToCompactString());
-        }
+        UE_LOG(LogManagerCard, Error,
+            TEXT("[DS] CardBundlePlanRejected Reason=NotEnoughDistinctIslandZones Found=%d Required=%d Result=NoPartialSpawn"),
+            IslandDropZones.Num(), IslandCardGroups.Num());
+        return false;
     }
 
     if (IslandDropZones.Num() != OwnerGM->GetCardIslandDropExpectedZoneCount())
@@ -1249,21 +1432,37 @@ void UCardGameService::SpawnRoundCardBundleForBattleRoyale()
             IslandCardGroups.Num());
     }
 
+    struct FPlannedCardDrop
+    {
+        ECardID CardID = ECardID::None;
+        FVector Location = FVector::ZeroVector;
+        ECardDropPlacementSource PlacementSource = ECardDropPlacementSource::None;
+        int32 IslandIndex = INDEX_NONE;
+        int32 SlotIndex = INDEX_NONE;
+        int32 ZoneIndex = INDEX_NONE;
+    };
+
     int32 PlannedCount = 0;
+    for (const TArray<ECardID>& CardGroup : IslandCardGroups)
+    {
+        PlannedCount += CardGroup.Num();
+    }
+
+    int32 NavigationPlacedCount = 0;
+    int32 FallbackPlacedCount = 0;
+    int32 UnknownSourcePlacedCount = 0;
+    int32 LocationFailedCount = 0;
+    int32 SpawnFailedCount = 0;
     TMap<int32, TArray<FVector>> ExistingLocationsByZoneIndex;
+    TArray<FPlannedCardDrop> PlannedDrops;
+    PlannedDrops.Reserve(PlannedCount);
 
     for (int32 IslandIndex = 0; IslandIndex < IslandCardGroups.Num(); ++IslandIndex)
     {
-        const int32 ZoneIndex = IslandDropZones.Num() > 0 ? IslandIndex % IslandDropZones.Num() : INDEX_NONE;
-        if (ZoneIndex == INDEX_NONE)
-        {
-            UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Island=%d Reason=NoDropZoneAfterRecovery Result=SkippedGroup"),
-                IslandIndex);
-            continue;
-        }
+        const TArray<ECardID>& CardsInIsland = IslandCardGroups[IslandIndex];
+        const int32 ZoneIndex = IslandIndex;
 
         const FCardIslandDropZone& DropZone = IslandDropZones[ZoneIndex];
-        const TArray<ECardID>& CardsInIsland = IslandCardGroups[IslandIndex];
         const int32 BalanceValue = CardPlacement.GetCardIslandGroupBalanceValue(CardsInIsland);
 
         AActor* ZoneActor = DropZone.ZoneActor.Get();
@@ -1284,39 +1483,121 @@ void UCardGameService::SpawnRoundCardBundleForBattleRoyale()
         for (int32 SlotIndex = 0; SlotIndex < CardsInIsland.Num(); ++SlotIndex)
         {
             const ECardID CardID = CardsInIsland[SlotIndex];
-            ++PlannedCount;
 
             FVector SpawnLocation = FVector::ZeroVector;
-            const bool bPicked = CardPlacement.PickIslandCardDropLocation(DropZone, ExistingIslandLocations, IslandIndex, SlotIndex, SpawnLocation);
+            ECardDropPlacementSource PlacementSource = ECardDropPlacementSource::None;
+            const bool bPicked = CardPlacement.PickIslandCardDropLocation(
+                DropZone,
+                ExistingIslandLocations,
+                IslandIndex,
+                SlotIndex,
+                SpawnLocation,
+                &PlacementSource);
 
             if (!bPicked)
             {
+                ++LocationFailedCount;
                 // 자리를 못 잡으면 겹쳐 놓지 않고 이 카드는 건너뛴다. 실패 사유는 PickIslandCardDropLocation 로그에 남는다.
-                UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Card=%d Name=%s Reason=NoValidLocation Result=Skipped"),
+                UE_LOG(LogManagerCard, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Card=%d Name=%s Reason=NoValidLocation Result=RejectWholeBundle"),
                     IslandIndex, SlotIndex, static_cast<int32>(CardID), *CardDebug::ToString(CardID));
                 continue;
             }
 
             ExistingIslandLocations.Add(SpawnLocation);
-            ACardDropActor* SpawnedCard = SpawnCardDrop(CardID, SpawnLocation);
-            if (SpawnedCard) { ++IslandPlaced; }
+            FPlannedCardDrop& PlannedDrop = PlannedDrops.AddDefaulted_GetRef();
+            PlannedDrop.CardID = CardID;
+            PlannedDrop.Location = SpawnLocation;
+            PlannedDrop.PlacementSource = PlacementSource;
+            PlannedDrop.IslandIndex = IslandIndex;
+            PlannedDrop.SlotIndex = SlotIndex;
+            PlannedDrop.ZoneIndex = ZoneIndex;
+            ++IslandPlaced;
 
-            DS_LOG(TEXT("[DS] Card DropInstanceFinal Island=%d Slot=%d Card=%d Name=%s Result=%s Location=%s SpawnZ=%.1f"),
-                IslandIndex, SlotIndex, static_cast<int32>(CardID), *CardDebug::ToString(CardID),
-                SpawnedCard ? TEXT("OK") : TEXT("SpawnNull"), *SpawnLocation.ToCompactString(), SpawnLocation.Z);
+            switch (PlacementSource)
+            {
+            case ECardDropPlacementSource::Navigation:
+                ++NavigationPlacedCount;
+                break;
+            case ECardDropPlacementSource::GroundTraceFallback:
+                ++FallbackPlacedCount;
+                break;
+            default:
+                ++UnknownSourcePlacedCount;
+                break;
+            }
         }
 
-        DS_LOG(TEXT("[DS] Card IslandDropSummary Island=%d ZoneIndex=%d Zone=%s Key=%s Source=%s Placed=%d Requested=%d Center=%s Extent=%s"),
+        UE_LOG(LogManagerCard, Verbose, TEXT("[DS] Card IslandDropSummary Island=%d ZoneIndex=%d Zone=%s Key=%s Source=%s Placed=%d Requested=%d Center=%s Extent=%s"),
             IslandIndex, ZoneIndex, ZoneActor ? *ZoneActor->GetName() : TEXT("None"), *DropZone.IslandKey.ToString(), *DropZone.Source,
             IslandPlaced, CardsInIsland.Num(), *DropZone.Center.ToCompactString(), *DropZone.Bounds.GetExtent().ToCompactString());
     }
 
-    DS_LOG(TEXT("[DS] Card IslandDropComplete Spawned=%d Planned=%d Islands=%d Round=%d Phase=%s"),
-        ActiveCardDrops.Num(),
+    if (LocationFailedCount > 0 || PlannedDrops.Num() != PlannedCount)
+    {
+        UE_LOG(LogManagerCard, Error,
+            TEXT("[DS] CardBundlePlanRejected Reason=IncompletePlacement PlannedCards=%d Locations=%d LocationFailed=%d Zones=%d Islands=%d Result=NoActorsSpawned"),
+            PlannedCount,
+            PlannedDrops.Num(),
+            LocationFailedCount,
+            IslandDropZones.Num(),
+            IslandCardGroups.Num());
+        return false;
+    }
+
+    for (const FPlannedCardDrop& PlannedDrop : PlannedDrops)
+    {
+        ACardDropActor* SpawnedCard = SpawnCardDrop(PlannedDrop.CardID, PlannedDrop.Location);
+        if (!SpawnedCard)
+        {
+            ++SpawnFailedCount;
+            UE_LOG(LogManagerCard, Error,
+                TEXT("[DS] CardBundleCommitFailed Island=%d Slot=%d ZoneIndex=%d Card=%d Name=%s Reason=SpawnActorFailed"),
+                PlannedDrop.IslandIndex,
+                PlannedDrop.SlotIndex,
+                PlannedDrop.ZoneIndex,
+                static_cast<int32>(PlannedDrop.CardID),
+                *CardDebug::ToString(PlannedDrop.CardID));
+            break;
+        }
+
+        OutSpawnedCardInstanceIds.Add(SpawnedCard->GetCardInstanceId());
+    }
+
+    if (SpawnFailedCount > 0
+        || OutSpawnedCardInstanceIds.Num() != PlannedCount
+        || ActiveCardDrops.Num() != PlannedCount)
+    {
+        UE_LOG(LogManagerCard, Error,
+            TEXT("[DS] CardBundleCommitRollback Planned=%d SpawnedIds=%d ActiveActors=%d SpawnFailed=%d Result=DestroyAttemptActors"),
+            PlannedCount,
+            OutSpawnedCardInstanceIds.Num(),
+            ActiveCardDrops.Num(),
+            SpawnFailedCount);
+        ClearCardDrops();
+        for (const int32 FailedInstanceId : OutSpawnedCardInstanceIds)
+        {
+            ServerCardRecords.Remove(FailedInstanceId);
+        }
+        OutSpawnedCardInstanceIds.Reset();
+        return false;
+    }
+
+    UE_LOG(LogManagerCard, Display,
+        TEXT("[DS] CardSpawnSummary Planned=%d LocationFound=%d Spawned=%d NavPlaced=%d FallbackPlaced=%d UnknownSource=%d LocationFailed=%d SpawnFailed=%d Zones=%d Islands=%d Round=%d Phase=%s"),
         PlannedCount,
+        PlannedDrops.Num(),
+        ActiveCardDrops.Num(),
+        NavigationPlacedCount,
+        FallbackPlacedCount,
+        UnknownSourcePlacedCount,
+        LocationFailedCount,
+        SpawnFailedCount,
+        IslandDropZones.Num(),
         IslandCardGroups.Num(),
         OwnerGM->GetCurrentRound(),
         OwnerGM->GetServerPhaseName(OwnerGM->GetCurrentServerPhase()));
+
+    return true;
 }
 
 void UCardGameService::ClearCardDrops()

@@ -1,8 +1,13 @@
 #include "Game/InGame/Card/Actor/CardDropActor.h"
 
 #include "Components/StaticMeshComponent.h"
+#include "Engine/Level.h"
+#include "Engine/StaticMesh.h"
 #include "Net/UnrealNetwork.h"
 #include "UObject/ConstructorHelpers.h"
+#include "UObject/Package.h"
+
+DEFINE_LOG_CATEGORY(LogManagerCard);
 
 ACardDropActor::ACardDropActor()
 {
@@ -31,6 +36,12 @@ ACardDropActor::ACardDropActor()
     }
 
     RefreshVisual();
+}
+
+void ACardDropActor::BeginPlay()
+{
+    Super::BeginPlay();
+    LogClientReplicationOnce(TEXT("BeginPlay"));
 }
 
 void ACardDropActor::OnConstruction(const FTransform& Transform)
@@ -77,6 +88,38 @@ void ACardDropActor::MarkPickedUp()
 void ACardDropActor::OnRep_CardVisual()
 {
     RefreshVisual();
+    LogClientReplicationOnce(TEXT("OnRep_CardVisual"));
+}
+
+void ACardDropActor::LogClientReplicationOnce(const TCHAR* Context)
+{
+    if (HasAuthority() || bInitialReplicationLogged || CardInstanceId <= 0 || CardID == ECardID::None)
+    {
+        return;
+    }
+
+    bInitialReplicationLogged = true;
+
+    const ULevel* ActorLevel = GetLevel();
+    const FString LevelPackage = ActorLevel && ActorLevel->GetOutermost()
+        ? ActorLevel->GetOutermost()->GetName()
+        : TEXT("<NO_LEVEL>");
+
+    UE_LOG(LogManagerCard, Display,
+        TEXT("[CL] CardReplicated Instance=%d Card=%d Actor=%s Class=%s Location=%s Level=%s LocalRole=%d RemoteRole=%d Hidden=%d MeshVisible=%d Mesh=%s Collision=%d Context=%s"),
+        CardInstanceId,
+        static_cast<int32>(CardID),
+        *GetName(),
+        *GetNameSafe(GetClass()),
+        *GetActorLocation().ToCompactString(),
+        *LevelPackage,
+        static_cast<int32>(GetLocalRole()),
+        static_cast<int32>(GetRemoteRole()),
+        IsHidden() ? 1 : 0,
+        CardMesh && CardMesh->IsVisible() ? 1 : 0,
+        *GetNameSafe(CardMesh ? CardMesh->GetStaticMesh().Get() : nullptr),
+        CardMesh ? static_cast<int32>(CardMesh->GetCollisionEnabled()) : -1,
+        Context ? Context : TEXT("<NULL>"));
 }
 
 void ACardDropActor::RefreshVisual()

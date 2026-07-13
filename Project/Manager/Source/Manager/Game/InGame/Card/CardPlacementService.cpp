@@ -1,16 +1,19 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
 #include "Game/InGame/Card/CardPlacementService.h"
+#include "Game/InGame/Card/Actor/CardDropActor.h"
 #include "Manager.h"
 #include "Engine/World.h"
 #include "Engine/HitResult.h"
 #include "Engine/EngineTypes.h"
 #include "CollisionQueryParams.h"
+#include "Components/PrimitiveComponent.h"
 #include "GameFramework/Actor.h"
 #include "EngineUtils.h"
 #include "NavigationSystem.h"
 #include "Kismet/GameplayStatics.h"
 #include "DrawDebugHelpers.h"
+#include "NavMesh/NavMeshBoundsVolume.h"
 
 TArray<ECardID> FCardPlacementService::BuildCardBundleIDs() const
 {
@@ -320,8 +323,8 @@ TArray<FCardIslandDropZone> FCardPlacementService::FindCardIslandDropZones() con
             FCardIslandDropZone Zone = MakeZone(Actor, Origin, Extent, Actor->GetFName(), TEXT("CardIslandNavArea"), TaggedNavAreaZones.Num());
             TaggedNavAreaZones.Add(Zone);
 
-           // DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=CardIslandNavArea Actor=%s Key=%s Center=%s Extent=%s"),
-              //  *GetNameSafe(Actor), *Zone.IslandKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString());
+            UE_LOG(LogManagerCard, VeryVerbose, TEXT("[DS] Card IslandArea Candidate Source=CardIslandNavArea Actor=%s Key=%s Center=%s Extent=%s"),
+                *GetNameSafe(Actor), *Zone.IslandKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString());
         }
 
         if (bAutoDetectSeasonIslandActorsAsDropZones && !SeasonKey.IsNone())
@@ -335,13 +338,13 @@ TArray<FCardIslandDropZone> FCardPlacementService::FindCardIslandDropZones() con
             {
                 SeasonZonesByKey.Add(SeasonKey, Zone);
 
-                //DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=SeasonIslandActor Actor=%s Key=%s Center=%s Extent=%s Selected=%d"),
-                //    *GetNameSafe(Actor), *SeasonKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString(), 1);
+                UE_LOG(LogManagerCard, VeryVerbose, TEXT("[DS] Card IslandArea Candidate Source=SeasonIslandActor Actor=%s Key=%s Center=%s Extent=%s Selected=%d"),
+                    *GetNameSafe(Actor), *SeasonKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString(), 1);
             }
             else
             {
-                //DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=SeasonIslandActor Actor=%s Key=%s Center=%s Extent=%s Selected=%d Reason=SmallerDuplicate"),
-                   // *GetNameSafe(Actor), *SeasonKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString(), 0);
+                UE_LOG(LogManagerCard, VeryVerbose, TEXT("[DS] Card IslandArea Candidate Source=SeasonIslandActor Actor=%s Key=%s Center=%s Extent=%s Selected=%d Reason=SmallerDuplicate"),
+                    *GetNameSafe(Actor), *SeasonKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString(), 0);
             }
         }
     }
@@ -349,18 +352,18 @@ TArray<FCardIslandDropZone> FCardPlacementService::FindCardIslandDropZones() con
     if (TaggedNavAreaZones.Num() >= CardIslandDropExpectedZoneCount)
     {
         DropZones = TaggedNavAreaZones;
-        //DS_LOG(TEXT("[DS] Card IslandAreas Mode=CardIslandNavArea Count=%d"), DropZones.Num());
+        UE_LOG(LogManagerCard, Verbose, TEXT("[DS] Card IslandAreas Mode=CardIslandNavArea Count=%d"), DropZones.Num());
     }
     else if (SeasonZonesByKey.Num() > 0)
     {
         SeasonZonesByKey.GenerateValueArray(DropZones);
-        //DS_LOG(TEXT("[DS] Card IslandAreas Mode=SeasonIslandActor Count=%d TaggedNavAreas=%d"),
-            //DropZones.Num(), TaggedNavAreaZones.Num());
+        UE_LOG(LogManagerCard, Verbose, TEXT("[DS] Card IslandAreas Mode=SeasonIslandActor Count=%d TaggedNavAreas=%d"),
+            DropZones.Num(), TaggedNavAreaZones.Num());
     }
     else if (TaggedNavAreaZones.Num() > 0)
     {
         DropZones = TaggedNavAreaZones;
-        //DS_LOG(TEXT("[DS] Card IslandAreas Mode=PartialCardIslandNavArea Count=%d"), DropZones.Num());
+        UE_LOG(LogManagerCard, Verbose, TEXT("[DS] Card IslandAreas Mode=PartialCardIslandNavArea Count=%d"), DropZones.Num());
     }
 
     // 혹시 섬 액터/NavArea를 못 찾으면 기존 TriggerBox 방식으로만 fallback
@@ -387,11 +390,11 @@ TArray<FCardIslandDropZone> FCardPlacementService::FindCardIslandDropZones() con
 
             DropZones.Add(Zone);
 
-            /*DS_LOG(TEXT("[DS] Card IslandArea Candidate Source=TriggerBoxFallback Actor=%s Key=%s Center=%s Extent=%s"),
-                *GetNameSafe(Actor), *Zone.IslandKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString());*/
+            UE_LOG(LogManagerCard, VeryVerbose, TEXT("[DS] Card IslandArea Candidate Source=TriggerBoxFallback Actor=%s Key=%s Center=%s Extent=%s"),
+                *GetNameSafe(Actor), *Zone.IslandKey.ToString(), *Origin.ToCompactString(), *Extent.ToCompactString());
         }
 
-        //DS_LOG(TEXT("[DS] Card IslandAreas FallbackToTriggerBoxes Count=%d"), DropZones.Num());
+        UE_LOG(LogManagerCard, Verbose, TEXT("[DS] Card IslandAreas FallbackToTriggerBoxes Count=%d"), DropZones.Num());
     }
 
     DropZones.Sort([](const FCardIslandDropZone& A, const FCardIslandDropZone& B)
@@ -412,9 +415,9 @@ TArray<FCardIslandDropZone> FCardPlacementService::FindCardIslandDropZones() con
     for (int32 Index = 0; Index < DropZones.Num(); ++Index)
     {
         const FCardIslandDropZone& Zone = DropZones[Index];
-        /*DS_LOG(TEXT("[DS] Card IslandArea Selected Index=%d Source=%s Key=%s Actor=%s Center=%s Extent=%s"),
+        UE_LOG(LogManagerCard, Verbose, TEXT("[DS] Card IslandArea Selected Index=%d Source=%s Key=%s Actor=%s Center=%s Extent=%s"),
             Index, *Zone.Source, *Zone.IslandKey.ToString(), *GetNameSafe(Zone.ZoneActor.Get()),
-            *Zone.Center.ToCompactString(), *Zone.Bounds.GetExtent().ToCompactString());*/
+            *Zone.Center.ToCompactString(), *Zone.Bounds.GetExtent().ToCompactString());
     }
 
     return DropZones;
@@ -554,18 +557,29 @@ bool FCardPlacementService::HasOverheadClearance(const FVector& Candidate) const
     return !bBlocked;
 }
 
-bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone& DropZone, const TArray<FVector>& ExistingIslandLocations, int32 IslandIndex, int32 SlotIndex, FVector& OutLocation) const
+bool FCardPlacementService::PickIslandCardDropLocation(
+    const FCardIslandDropZone& DropZone,
+    const TArray<FVector>& ExistingIslandLocations,
+    int32 IslandIndex,
+    int32 SlotIndex,
+    FVector& OutLocation,
+    ECardDropPlacementSource* OutSource) const
 {
+    if (OutSource)
+    {
+        *OutSource = ECardDropPlacementSource::None;
+    }
+
     if (!World)
     {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Reason=NoWorld"), IslandIndex, SlotIndex);
+        UE_LOG(LogManagerCard, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Reason=NoWorld"), IslandIndex, SlotIndex);
         return false;
     }
 
     UNavigationSystemV1* NavSystem = UNavigationSystemV1::GetCurrent(World);
     if (!NavSystem)
     {
-        UE_LOG(LogTemp, Warning, TEXT("[DS] Card DropNoNavSystem Island=%d Slot=%d Zone=%s Key=%s Source=%s Result=TryGroundTraceFallback"),
+        UE_LOG(LogManagerCard, Warning, TEXT("[DS] Card DropNoNavSystem Island=%d Slot=%d Zone=%s Key=%s Source=%s Result=TryGroundTraceFallback"),
             IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source);
     }
 
@@ -623,9 +637,9 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
 
         NavAnchors.Add(NavLocation.Location);
 
-       // DS_LOG(TEXT("[DS] Card NavIsland Anchor Island=%d Slot=%d Zone=%s Key=%s Source=%s Location=%s NavZ=%.1f"),
-          //  IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), Source,
-          //  *NavLocation.Location.ToCompactString(), NavLocation.Location.Z);
+        UE_LOG(LogManagerCard, VeryVerbose, TEXT("[DS] Card NavIsland Anchor Island=%d Slot=%d Zone=%s Key=%s Source=%s Location=%s NavZ=%.1f"),
+            IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), Source,
+            *NavLocation.Location.ToCompactString(), NavLocation.Location.Z);
     };
 
     TryAddNavAnchor(Center, TEXT("Center"));
@@ -645,7 +659,7 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
 
     if (NavAnchors.Num() == 0)
     {
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogManagerCard, Verbose,
             TEXT("[DS] Card DropNoNavAnchor Island=%d Slot=%d Zone=%s Key=%s Source=%s Result=TryGroundTraceFallback AnchorNavFail=%d AnchorBoundsFail=%d Center=%s Extent=%s"),
             IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
             AnchorNavFail, AnchorBoundsFail, *Center.ToCompactString(), *Extent.ToCompactString());
@@ -725,7 +739,12 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
         }
 
         OutLocation = Candidate;
-        UE_LOG(LogTemp, Warning,
+        if (OutSource)
+        {
+            *OutSource = ECardDropPlacementSource::Navigation;
+        }
+
+        UE_LOG(LogManagerCard, Verbose,
             TEXT("[DS] Card DropInstance Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s PickSource=%s Attempts=%d TotalCandidates=%d ExistingCards=%d Location=%s SpawnZ=%.1f NavZ=%.1f RefNavZ=%.1f"),
             IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
             Source, Attempt, TotalCandidates, ExistingIslandLocations.Num(), *Candidate.ToCompactString(),
@@ -920,14 +939,66 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
             }
 
             OutLocation = Candidate;
-            UE_LOG(LogTemp, Warning,
-                TEXT("[DS] Card DropInstance Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s PickSource=GroundTraceFallback Attempt=%d ExistingCards=%d Location=%s Impact=%s RefNavZ=%.1f"),
+            if (OutSource)
+            {
+                *OutSource = ECardDropPlacementSource::GroundTraceFallback;
+            }
+
+            const float SurfaceSlopeDegrees = FMath::RadiansToDegrees(
+                FMath::Acos(FMath::Clamp(Hit.ImpactNormal.Z, -1.0f, 1.0f)));
+            bool bNavBoundsXYCovered = false;
+            bool bNavBoundsZCovered = false;
+            float CoveredNavBoundsMinZ = 0.0f;
+            float CoveredNavBoundsMaxZ = 0.0f;
+
+            for (TActorIterator<ANavMeshBoundsVolume> NavBoundsIt(World); NavBoundsIt; ++NavBoundsIt)
+            {
+                FVector NavBoundsOrigin;
+                FVector NavBoundsExtent;
+                NavBoundsIt->GetActorBounds(false, NavBoundsOrigin, NavBoundsExtent);
+                const FBox NavBounds(NavBoundsOrigin - NavBoundsExtent, NavBoundsOrigin + NavBoundsExtent);
+                if (!NavBounds.IsInsideXY(Hit.ImpactPoint))
+                {
+                    continue;
+                }
+
+                bNavBoundsXYCovered = true;
+                CoveredNavBoundsMinZ = NavBounds.Min.Z;
+                CoveredNavBoundsMaxZ = NavBounds.Max.Z;
+                if (Hit.ImpactPoint.Z >= NavBounds.Min.Z && Hit.ImpactPoint.Z <= NavBounds.Max.Z)
+                {
+                    bNavBoundsZCovered = true;
+                    break;
+                }
+            }
+
+            const UPrimitiveComponent* HitComponent = Hit.GetComponent();
+            const bool bSurfaceAffectsNavigation = HitComponent && HitComponent->CanEverAffectNavigation();
+            const TCHAR* NavFailureDiagnosis = !NavSystem
+                ? TEXT("NoNavigationSystem")
+                : !bNavBoundsXYCovered
+                    ? TEXT("OutsideNavBoundsXY")
+                    : !bNavBoundsZCovered
+                        ? TEXT("OutsideNavBoundsZ")
+                        : !bSurfaceAffectsNavigation
+                            ? TEXT("SurfaceExcludedFromNavigation")
+                            : TEXT("NavDataMissingOrStale");
+            UE_LOG(LogManagerCard, Warning,
+                TEXT("[DS] CardFallbackSurface Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Attempt=%d NavAnchors=%d HitActor=%s HitComponent=%s Impact=%s Normal=%s Slope=%.1f Candidate=%s RefNavZ=%.1f NavBoundsXY=%d NavBoundsZ=%d NavBoundsMinZ=%.1f NavBoundsMaxZ=%.1f SurfaceAffectsNav=%d Diagnosis=%s"),
                 IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
-                Attempt + 1, ExistingIslandLocations.Num(), *Candidate.ToCompactString(), *Hit.ImpactPoint.ToCompactString(), GroundReferenceZ);
+                Attempt + 1, NavAnchors.Num(), *GetNameSafe(Hit.GetActor()), *GetNameSafe(Hit.GetComponent()),
+                *Hit.ImpactPoint.ToCompactString(), *Hit.ImpactNormal.ToCompactString(), SurfaceSlopeDegrees,
+                *Candidate.ToCompactString(), GroundReferenceZ,
+                bNavBoundsXYCovered ? 1 : 0,
+                bNavBoundsZCovered ? 1 : 0,
+                CoveredNavBoundsMinZ,
+                CoveredNavBoundsMaxZ,
+                bSurfaceAffectsNavigation ? 1 : 0,
+                NavFailureDiagnosis);
             return true;
         }
 
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogManagerCard, Warning,
             TEXT("[DS] Card GroundTraceFallbackRejected Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Attempts=%d TraceFail=%d BoundsReject=%d WalkableReject=%d ZReject=%d DistReject=%d OverlapReject=%d OverheadReject=%d NoDropReject=%d"),
             IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
             FallbackAttempts, TraceFail, BoundsReject, WalkableReject, ZReject, DistReject, OverlapReject, OverheadReject, NoDropReject);
@@ -939,7 +1010,7 @@ bool FCardPlacementService::PickIslandCardDropLocation(const FCardIslandDropZone
         return true;
     }
 
-    UE_LOG(LogTemp, Error,
+    UE_LOG(LogManagerCard, Error,
         TEXT("[DS] Card DropFail Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Reason=%s Anchors=%d MaxAttempts=%d SpiralCandidates=%d VisibleRadius=%.0f RandomRadius=%.0f RefNavZ=%.1f NavFail=%d BoundsFail=%d ZFail=%d DistFail=%d OverlapFail=%d OverheadFail=%d NoDrop=%d ExistingCards=%d TotalCandidates=%d"),
         IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
         NavSystem ? TEXT("AllNavCandidatesRejected") : TEXT("NoNavSystemGroundTraceRejected"),
@@ -1058,7 +1129,7 @@ bool FCardPlacementService::PickDeathCardDropLocation(const FVector& DeathLocati
 
         OutLocation = Candidate;
 
-        UE_LOG(LogTemp, Warning,
+        UE_LOG(LogManagerCard, Verbose,
             TEXT("[DS] Card DeathDropLocation CardIndex=%d Source=%s Attempt=%d TotalCandidates=%d ExistingCards=%d Death=%s Query=%s Nav=%s Spawn=%s ProjectDist=%.1f DeathDist=%.1f"),
             CardIndex,
             Source,

@@ -14,6 +14,17 @@ DECLARE_MULTICAST_DELEGATE_OneParam(FOnOwnedCardsChangedNative, const TArray<FOw
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnPlayerDataChangedNative, const FPlayerData&);
 DECLARE_MULTICAST_DELEGATE_OneParam(FOnAccumulatedUpgradesChangedNative, const FAccumulatedUpgrades&);
 
+struct FMainPlayerReconnectSnapshot
+{
+	FWeaponData WeaponData;
+	FPlayerData PlayerData;
+	FCurPlayerData CurPlayerData;
+	TArray<FOwnedCardInfo> OwnedCards;
+	FAccumulatedUpgrades AccumulatedUpgrades;
+	TArray<int32> CarriedAmmoList;
+	int32 LastRandomUpgradeClaimedRound = INDEX_NONE;
+};
+
 UCLASS()
 class MANAGER_API AMainPlayerState : public APlayerState,
 									 public IPhasePlayerStateInterface
@@ -34,6 +45,9 @@ public:
 	
 	virtual void SetWeaponID(EWeaponType WeaponID) override;
 	virtual void ResetState() override;
+	void CaptureReconnectSnapshot(FMainPlayerReconnectSnapshot& OutSnapshot) const;
+	void RestoreReconnectSnapshot(const FMainPlayerReconnectSnapshot& Snapshot);
+	int32 LastRandomUpgradeClaimedRound = INDEX_NONE;
 
 protected:
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

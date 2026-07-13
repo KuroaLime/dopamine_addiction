@@ -1,25 +1,25 @@
 {
-	"TargetName": "ManagerServer",
+	"TargetName": "Manager",
 	"Platform": "Win64",
 	"Configuration": "Development",
 	"BuildSettingsVersion": "V6",
-	"TargetBuildEnvironment": "Unique",
-	"TargetType": "Server",
+	"TargetBuildEnvironment": "Shared",
+	"TargetType": "Game",
 	"IsTestTarget": false,
 	"Architecture": "x64",
 	"Project": "../../Manager.uproject",
-	"Launch": "$(ProjectDir)/Binaries/Win64/ManagerServer.exe",
+	"Launch": "$(ProjectDir)/Binaries/Win64/Manager.exe",
 	"Version": 
 	{
 		"MajorVersion": 5,
 		"MinorVersion": 7,
 		"PatchVersion": 4,
-		"Changelist": 0,
+		"Changelist": 51494982,
 		"CompatibleChangelist": 47537391,
 		"IsLicenseeVersion": 0,
 		"IsPromotedBuild": 0,
-		"BranchName": "UE5",
-		"BuildId": "9f42fa96-3b4e-44cd-810d-82a3e826b43d"
+		"BranchName": "++UE5+Release-5.7",
+		"BuildId": "47537391"
 	},
 	"BuildProducts": [
 		{
@@ -35,11 +35,11 @@
 			"Type": "DynamicLibrary"
 		},
 		{
-			"Path": "$(ProjectDir)/Binaries/Win64/ManagerServer.exe",
+			"Path": "$(ProjectDir)/Binaries/Win64/Manager.exe",
 			"Type": "Executable"
 		},
 		{
-			"Path": "$(ProjectDir)/Binaries/Win64/ManagerServer.pdb",
+			"Path": "$(ProjectDir)/Binaries/Win64/Manager.pdb",
 			"Type": "SymbolFile"
 		},
 		{
@@ -78,6 +78,10 @@
 		},
 		{
 			"Path": "$(EngineDir)/Binaries/ThirdParty/Windows/WinPixEventRuntime/x64/WinPixEventRuntime.dll",
+			"Type": "NonUFS"
+		},
+		{
+			"Path": "$(EngineDir)/Binaries/ThirdParty/Windows/XAudio2_9/x64/xaudio2_9redist.dll",
 			"Type": "NonUFS"
 		},
 		{
@@ -3257,7 +3261,19 @@
 			"Type": "UFS"
 		},
 		{
+			"Path": "$(EngineDir)/Plugins/Developer/DumpGPUServices/DumpGPUServices.uplugin",
+			"Type": "UFS"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/GPUReshape/GPUReshape.uplugin",
+			"Type": "UFS"
+		},
+		{
 			"Path": "$(EngineDir)/Plugins/Developer/NamingTokens/NamingTokens.uplugin",
+			"Type": "UFS"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/PixWinPlugin/PixWinPlugin.uplugin",
 			"Type": "UFS"
 		},
 		{
@@ -3509,6 +3525,10 @@
 			"Type": "UFS"
 		},
 		{
+			"Path": "$(EngineDir)/Plugins/Media/WmfMedia/WmfMedia.uplugin",
+			"Type": "UFS"
+		},
+		{
 			"Path": "$(EngineDir)/Plugins/MeshPainting/MeshPainting.uplugin",
 			"Type": "UFS"
 		},
@@ -3714,6 +3734,10 @@
 		},
 		{
 			"Path": "$(EngineDir)/Plugins/Runtime/WaveTable/WaveTable.uplugin",
+			"Type": "UFS"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Runtime/WebMMoviePlayer/WebMMoviePlayer.uplugin",
 			"Type": "UFS"
 		},
 		{
