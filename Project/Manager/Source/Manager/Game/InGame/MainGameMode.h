@@ -25,7 +25,8 @@ enum class EDediServerPhase : uint8
     CardGame,
     Result,
     TransitionToBattle,
-    GameEnd
+    GameEnd,
+    PreBattleShop
 };
 
 struct FDisconnectedPlayerSnapshot
@@ -184,6 +185,12 @@ protected:
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|Debug")
     int32 DebugResultDuration = 5;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|Real")
+    int32 RealPreBattleShopDuration = 20;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|Debug")
+    int32 DebugPreBattleShopDuration = 10;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|CardTransition")
     FName CardPlayerSeatTag = TEXT("CardPlayerSeat");
@@ -444,6 +451,9 @@ public:
     float GetCardDeathDropStartRadius() const { return CardDeathDropStartRadius; }
     float GetCardDeathDropGroundOffsetZ() const { return CardDeathDropGroundOffsetZ; }
     int32 GetCardIslandDropExpectedZoneCount() const { return CardIslandDropExpectedZoneCount; }
+    int32 GetPreBattleShopDuration() const {
+        return bUseDebugPhaseDurations ? DebugPreBattleShopDuration : RealPreBattleShopDuration;
+    }
 
 private:
     // 카드/섯다 진입점·로직(TryPickupCard/SubmitSeotda*/ResolveSeotdaRoundResult 등)은

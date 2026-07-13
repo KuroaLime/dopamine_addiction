@@ -1792,7 +1792,12 @@ void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));
 
-    StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
+    StartTimedServerPhase(EDediServerPhase::PreBattleShop, GetPreBattleShopDuration());
+    if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
+    {
+        GS->SetShopAvailable(true);
+    }
+    //StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
 }
 
 void AMainGameMode::ScheduleBattleRoyaleCardSpawnGateRetry(
@@ -2852,6 +2857,7 @@ bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
 
 void AMainGameMode::StartTimedServerPhase(EDediServerPhase NewPhase, int32 DurationSeconds)
 {
+    DS_SCREEN(-1, 3.f, FColor::Cyan, FString::Printf(TEXT("StartTimedServerPhase Phase=%s Dur=%d"), GetServerPhaseName(NewPhase), DurationSeconds));
     if (bGameEndReached)
     {
         DS_LOG(TEXT("[DS] PhaseGuard Ignore StartTimedServerPhase phase=%s after GameEnd Round=%d"),
@@ -2982,6 +2988,13 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
         }
         StartBattleRoyalePhase();
         break;
+    case EDediServerPhase::PreBattleShop:
+        if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
+        {
+            GS->SetShopAvailable(false);
+        }
+        StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
+        break;
     default:
         break;
     }
@@ -3047,6 +3060,8 @@ const TCHAR* AMainGameMode::GetServerPhaseName(EDediServerPhase Phase) const
         return TEXT("TransitionToBattle");
     case EDediServerPhase::GameEnd:
         return TEXT("GameEnd");
+    case EDediServerPhase::PreBattleShop:
+        return TEXT("PreBattleShop");
     default:
         return TEXT("None");
     }

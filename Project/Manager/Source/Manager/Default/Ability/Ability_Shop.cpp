@@ -6,7 +6,8 @@
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
-
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "GameFramework/GameStateBase.h"
 UAbility_Shop::UAbility_Shop()
 {
 	AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Input.Shop")));
@@ -27,8 +28,14 @@ void UAbility_Shop::LocalActivateWithOwner(AActor* InOwner)
 	switch (CurrentPhase)
 	{
 	case EGamePhase::TPS:
-		PC->PushMode(EGamePhase::Shop);
+	{
+		IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
+		if (GS && GS->IsShopAvailable())
+		{
+			PC->PushMode(EGamePhase::Shop);
+		}
 		break;
+	}
 	case EGamePhase::Shop:
 		PC->PopMode();
 		break;

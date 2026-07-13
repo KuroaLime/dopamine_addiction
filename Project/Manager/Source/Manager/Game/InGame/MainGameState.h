@@ -40,6 +40,9 @@ public:
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Round Data")
 	EWeaponType CurrentRoundWeapon;
 
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Round Data")
+	bool bShopAvailable = false;
+
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingTime)
 	int32 RemainingTime;
 
@@ -96,4 +99,7 @@ public:
 	void OnRep_CurrentRound();
 
 	virtual FOnRoundChanged& GetOnRoundChanged() override { return OnRoundChanged; }
+
+	virtual bool IsShopAvailable() const override { return bShopAvailable; }
+	virtual void SetShopAvailable(bool bAvailable) override { bShopAvailable = bAvailable; }
 };

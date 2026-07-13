@@ -57,4 +57,7 @@ public:
 
 	// 무기별 발사 반동(카메라 피치/요 킥, 도). DT_Weapon에 값이 없으면 0(반동 없음).
 	virtual void GetWeaponRecoil(EWeaponType WeaponID, float& OutRecoilPitch, float& OutRecoilYaw) const = 0;
+	
+	virtual bool IsShopAvailable() const = 0;
+	virtual void SetShopAvailable(bool bAvailable) = 0;
 };
