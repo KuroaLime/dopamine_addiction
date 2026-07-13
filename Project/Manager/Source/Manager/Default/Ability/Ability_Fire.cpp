@@ -85,43 +85,45 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 	}
 	else
 	{
-		// 쿨다운 중 클릭: 버리지 않고 남은 시간만큼 큐잉. LocalCancelWithOwner가 이 타이머는 건드리지 않으므로
-		// 손을 떼도(정상 릴리즈) 예정대로 발사된다.
-		float RemainingDelay = FireRate - TimeSinceLastShot;
+		// 쿨다운이 아직 안 끝났으면, 버튼을 누르고 있는 동안만 짧은 간격으로 재검사해서 쿨다운이 끝나는
+		// 순간 자동 발사한다(상용 게임과 동일). 손을 떼면(bIsClientFire=false) 그 즉시 재검사를 멈춘다.
+		constexpr float RetryInterval = 0.02f;
 
-		FTimerDelegate PendingDelegate;
-		PendingDelegate.BindLambda([this, WeakChar, bFullAuto, FireRate]()
+		FTimerDelegate RetryDelegate;
+		RetryDelegate.BindLambda([this, WeakChar, bFullAuto, FireRate]()
 			{
-				if (!WeakChar.IsValid()) return;
-				Client_ExecuteFire(WeakChar.Get());
-				LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-
-				// 큐잉된 발사가 실행되는 시점에도 여전히 누르고 있고 풀오토라면 그때부터 연사 루프 시작.
-				if (bFullAuto && bIsClientFire)
+				if (!WeakChar.IsValid() || !bIsClientFire)
 				{
-					FTimerDelegate LoopDelegate;
-					LoopDelegate.BindLambda([this, WeakChar]()
-						{
-							if (!WeakChar.IsValid()) return;
-							Client_ExecuteFire(WeakChar.Get());
-							LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-						});
-
-					WeakChar->GetWorldTimerManager().SetTimer(
-						ClientFireTimerHandle,
-						LoopDelegate,
-						FireRate,
-						true
-					);
+					if (WeakChar.IsValid())
+					{
+						WeakChar->GetWorldTimerManager().ClearTimer(ClientFireRetryTimerHandle);
+					}
+					return;
 				}
+
+				ACharacter* Char = WeakChar.Get();
+				const float Now = Char->GetWorld()->GetTimeSeconds();
+				if (Now - LastClientFireTime < FireRate) return; // 아직 준비 안 됨, 다음 재검사 때 다시 확인
+
+				Char->GetWorldTimerManager().ClearTimer(ClientFireRetryTimerHandle);
+
+				Client_ExecuteFire(Char);
+				LastClientFireTime = Now;
+
+				if (!bFullAuto) return;
+
+				FTimerDelegate LoopDelegate;
+				LoopDelegate.BindLambda([this, WeakChar]()
+					{
+						if (!WeakChar.IsValid()) return;
+						Client_ExecuteFire(WeakChar.Get());
+						LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+					});
+
+				Char->GetWorldTimerManager().SetTimer(ClientFireTimerHandle, LoopDelegate, FireRate, true);
 			});
 
-		Character->GetWorldTimerManager().SetTimer(
-			PendingClientShotTimerHandle,
-			PendingDelegate,
-			RemainingDelay,
-			false
-		);
+		Character->GetWorldTimerManager().SetTimer(ClientFireRetryTimerHandle, RetryDelegate, RetryInterval, true);
 	}
 }
 
@@ -129,6 +131,7 @@ void UAbility_Fire::LocalCancelWithOwner(AActor* InOwner)
 {
 	if (!InOwner) return;
 	InOwner->GetWorldTimerManager().ClearTimer(ClientFireTimerHandle);
+	InOwner->GetWorldTimerManager().ClearTimer(ClientFireRetryTimerHandle);
 	bIsClientFire = false;
 }
 
@@ -187,43 +190,45 @@ void UAbility_Fire::ActivateAbility()
 	}
 	else
 	{
-		// 쿨다운 중 클릭: 버리지 않고 남은 시간만큼 큐잉. EndAbility가 정상 릴리즈(bWasCancelled=false)면
-		// 이 타이머를 건드리지 않으므로 손을 떼도 예정대로 발사된다.
-		float RemainingDelay = FireRate - TimeSinceLastShot;
+		// 쿨다운이 아직 안 끝났으면, 버튼을 누르고 있는 동안만 짧은 간격으로 재검사해서 쿨다운이 끝나는
+		// 순간 자동 발사한다(상용 게임과 동일). 손을 떼면(bIsServerFire=false) 그 즉시 재검사를 멈춘다.
+		constexpr float RetryInterval = 0.02f;
 
-		FTimerDelegate PendingDelegate;
-		PendingDelegate.BindLambda([this, WeakChar, bFullAuto, FireRate]()
+		FTimerDelegate RetryDelegate;
+		RetryDelegate.BindLambda([this, WeakChar, bFullAuto, FireRate]()
 			{
-				if (!WeakChar.IsValid()) return;
-				Server_ExecuteFire();
-				LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-
-				// 큐잉된 발사가 실행되는 시점에도 여전히 누르고 있고 풀오토라면 그때부터 연사 루프 시작.
-				if (bFullAuto && bIsServerFire)
+				if (!WeakChar.IsValid() || !bIsServerFire)
 				{
-					FTimerDelegate LoopDelegate;
-					LoopDelegate.BindLambda([this, WeakChar]()
-						{
-							if (!WeakChar.IsValid()) return;
-							Server_ExecuteFire();
-							LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-						});
-
-					WeakChar->GetWorldTimerManager().SetTimer(
-						ServerFireTimerHandle,
-						LoopDelegate,
-						FireRate,
-						true
-					);
+					if (WeakChar.IsValid())
+					{
+						WeakChar->GetWorldTimerManager().ClearTimer(ServerFireRetryTimerHandle);
+					}
+					return;
 				}
+
+				ACharacter* Char = WeakChar.Get();
+				const float Now = Char->GetWorld()->GetTimeSeconds();
+				if (Now - LastServerFireTime < FireRate) return; // 아직 준비 안 됨, 다음 재검사 때 다시 확인
+
+				Char->GetWorldTimerManager().ClearTimer(ServerFireRetryTimerHandle);
+
+				Server_ExecuteFire();
+				LastServerFireTime = Now;
+
+				if (!bFullAuto) return;
+
+				FTimerDelegate LoopDelegate;
+				LoopDelegate.BindLambda([this, WeakChar]()
+					{
+						if (!WeakChar.IsValid()) return;
+						Server_ExecuteFire();
+						LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+					});
+
+				Char->GetWorldTimerManager().SetTimer(ServerFireTimerHandle, LoopDelegate, FireRate, true);
 			});
 
-		OwnerCharacter->GetWorldTimerManager().SetTimer(
-			PendingServerShotTimerHandle,
-			PendingDelegate,
-			RemainingDelay,
-			false
-		);
+		OwnerCharacter->GetWorldTimerManager().SetTimer(ServerFireRetryTimerHandle, RetryDelegate, RetryInterval, true);
 	}
 }
 
@@ -231,14 +236,10 @@ void UAbility_Fire::EndAbility(bool bWasCancelled)
 {
 	if (!OwnerCharacter || !OwnerCharacter->HasAuthority()) return;
 	OwnerCharacter->GetWorldTimerManager().ClearTimer(ServerFireTimerHandle);
+	OwnerCharacter->GetWorldTimerManager().ClearTimer(ServerFireRetryTimerHandle);
 	bIsServerFire = false;
-
-	if (bWasCancelled)
-	{
-		// 사망/무기교체 등 강제 종료라면 큐잉된 발사도 함께 취소. 정상 릴리즈(bWasCancelled=false)면
-		// 큐잉된 발사는 그대로 둬서 예정대로 나가게 한다.
-		OwnerCharacter->GetWorldTimerManager().ClearTimer(PendingServerShotTimerHandle);
-	}
+	CurrentBloomAngle = 0.f; // 트리거를 놓으면 다음 사격은 다시 최소 탄퍼짐부터 시작
+	ShotsFiredInBurst = 0;
 	Super::EndAbility(bWasCancelled);
 }
 
@@ -258,71 +259,6 @@ void UAbility_Fire::Client_ExecuteFire(AActor* InOwner)
 
 	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
 	//EquippedGun->Setting->Fire(MuzzleLoc);
-
-	// 반동: 로컬(발사한 본인) 카메라만 즉시 튀게 한다. 컨트롤 로테이션이 서버로 복제되므로
-	// 서버 판정에도 자연스럽게 반영된다.
-	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
-	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
-	if (PS_Interface && GS_Interface)
-	{
-		float RecoilPitch = 0.f;
-		float RecoilYaw = 0.f;
-		GS_Interface->GetWeaponRecoil(PS_Interface->GetWeaponID(), RecoilPitch, RecoilYaw);
-
-		if (RecoilPitch != 0.f || RecoilYaw != 0.f)
-		{
-			// 부호는 프로젝트 입력 설정에 따라 다를 수 있음. 반동이 아래로 향하면 부호를 반대로 바꿀 것.
-			ApplyRecoilKick(Character, -RecoilPitch, FMath::FRandRange(-RecoilYaw, RecoilYaw));
-		}
-	}
-}
-
-void UAbility_Fire::ApplyRecoilKick(ACharacter* Character, float TotalPitchDegrees, float TotalYawDegrees)
-{
-	if (!Character) return;
-	if (FMath::IsNearlyZero(TotalPitchDegrees) && FMath::IsNearlyZero(TotalYawDegrees)) return;
-
-	// 발마다 독립된 타이머를 새로 걸면 연사 중 겹칠 때 이전 발의 남은 반동이 유실된다.
-	// 대신 "적용해야 할 반동 총량"에 누적만 하고, 드레인 타이머 하나가 계속 돌면서 조금씩 깎아 나간다.
-	PendingRecoilPitch += TotalPitchDegrees;
-	PendingRecoilYaw += TotalYawDegrees;
-
-	if (Character->GetWorldTimerManager().IsTimerActive(RecoilStepTimerHandle)) return;
-
-	constexpr float StepInterval = 0.016f; // 약 60fps 한 프레임 간격
-	constexpr float DrainRatio = 0.35f;    // 매 스텝마다 남은 반동의 35%를 적용 (지수 감쇠로 부드럽게 잦아듦)
-
-	TWeakObjectPtr<ACharacter> WeakChar(Character);
-
-	FTimerDelegate DrainDelegate;
-	DrainDelegate.BindLambda([this, WeakChar]()
-		{
-			if (!WeakChar.IsValid())
-			{
-				PendingRecoilPitch = 0.f;
-				PendingRecoilYaw = 0.f;
-				return;
-			}
-			ACharacter* Char = WeakChar.Get();
-
-			const float StepPitch = PendingRecoilPitch * DrainRatio;
-			const float StepYaw = PendingRecoilYaw * DrainRatio;
-
-			Char->AddControllerPitchInput(StepPitch);
-			Char->AddControllerYawInput(StepYaw);
-
-			PendingRecoilPitch -= StepPitch;
-			PendingRecoilYaw -= StepYaw;
-
-			if (FMath::Abs(PendingRecoilPitch) < 0.01f && FMath::Abs(PendingRecoilYaw) < 0.01f)
-			{
-				PendingRecoilPitch = 0.f;
-				PendingRecoilYaw = 0.f;
-				Char->GetWorldTimerManager().ClearTimer(RecoilStepTimerHandle);
-			}
-		});
-
-	Character->GetWorldTimerManager().SetTimer(RecoilStepTimerHandle, DrainDelegate, StepInterval, true);
 }
 
 void UAbility_Fire::Server_ExecuteFire()
@@ -385,6 +321,20 @@ void UAbility_Fire::Server_ExecuteFire()
 	int32 PelletCount = 1;
 	float TraceRadius = 0.f;
 	GS_Interface->GetWeaponFireProfile(WeaponID, SpreadAngle, PelletCount, TraceRadius);
+
+	// 블룸: 트리거 홀드 시작 후 BloomStartShotCount발까지는 SpreadAngle 그대로(목표에 정확히 맞음),
+	// 그 이후부터 한 발마다 판정 원뿔이 MaxBloomAngle까지 조금씩 더 벌어진다.
+	float BloomPerShot = 0.f;
+	float MaxBloomAngle = 0.f;
+	int32 BloomStartShotCount = 0;
+	GS_Interface->GetWeaponBloom(WeaponID, BloomPerShot, MaxBloomAngle, BloomStartShotCount);
+
+	SpreadAngle += CurrentBloomAngle;
+	++ShotsFiredInBurst;
+	if (ShotsFiredInBurst > BloomStartShotCount)
+	{
+		CurrentBloomAngle = FMath::Min(CurrentBloomAngle + BloomPerShot, MaxBloomAngle);
+	}
 
 	FVector CamStart = FollowCamera->GetComponentLocation();
 	FRotator CamRot = FollowCamera->GetComponentRotation();

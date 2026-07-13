@@ -60,4 +60,8 @@ public:
 	
 	virtual bool IsShopAvailable() const = 0;
 	virtual void SetShopAvailable(bool bAvailable) = 0;
+
+	// 연사 중 탄퍼짐이 누적되는 블룸 값. BloomStartShotCount발까지는 그대로, 그 이후부터 발당 BloomPerShot만큼
+	// MaxBloomAngle까지 벌어진다. DT_Weapon에 값이 없으면 0/0/0(블룸 없음).
+	virtual void GetWeaponBloom(EWeaponType WeaponID, float& OutBloomPerShot, float& OutMaxBloomAngle, int32& OutBloomStartShotCount) const = 0;
 };

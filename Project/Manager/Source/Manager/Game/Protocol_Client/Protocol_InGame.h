@@ -291,12 +291,16 @@ struct FWeaponDataTable : public FTableRowBase
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
     bool bFullAuto = true;
 
-    // 발사마다 카메라가 위로 튀는 각도(도).
+    // 연사(같은 트리거 홀드) 중 BloomStartShotCount발을 넘긴 다음부터 한 발마다 SpreadAngle에 추가로
+    // 누적되는 각도(도). 실제 탄 판정 원뿔이 벌어짐.
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float RecoilPitch = 0.f;
-    // 발사마다 좌우로 랜덤하게 튀는 최대 각도(도). +-RecoilYaw 범위에서 랜덤.
+    float BloomPerShot = 0.f;
+    // 블룸으로 늘어날 수 있는 최대 추가 각도(도). 손을 떼면(다음 트리거 홀드 시작 시) 0으로 리셋.
     UPROPERTY(EditAnywhere, BlueprintReadWrite)
-    float RecoilYaw = 0.f;
+    float MaxBloomAngle = 0.f;
+    // 이 발수까지는 블룸이 붙지 않고 SpreadAngle 그대로 나간다(예: 3~5).
+    UPROPERTY(EditAnywhere, BlueprintReadWrite)
+    int32 BloomStartShotCount = 0;
 };
 
 USTRUCT(BlueprintType)
