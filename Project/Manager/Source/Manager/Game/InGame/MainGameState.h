@@ -61,6 +61,9 @@ public:
 	virtual void SetRoundWeapon(EWeaponType InWeaponID) override;
 	virtual EWeaponType GetWeaponID() const override;
 	virtual int32 GetWeaponBaseData(EWeaponType WeaponID, EWeaponBaseStatType StatType) const override;
+	virtual void GetWeaponFireProfile(EWeaponType WeaponID, float& OutSpreadAngle, int32& OutPelletCount, float& OutTraceRadius) const override;
+	virtual void GetWeaponFireMode(EWeaponType WeaponID, bool& OutFullAuto) const override;
+	virtual void GetWeaponRecoil(EWeaponType WeaponID, float& OutRecoilPitch, float& OutRecoilYaw) const override;
 	class UDataTable* GetShopRandomCardDataTable() const { return ShopRandomCardDataTableAsset; }
 protected:
 	virtual void BeginPlay() override;

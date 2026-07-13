@@ -48,4 +48,13 @@ public:
 	virtual void SetRoundWeapon(EWeaponType InWeaponID) = 0;
 	virtual EWeaponType GetWeaponID() const = 0;
 	virtual int32 GetWeaponBaseData(EWeaponType WeaponID, EWeaponBaseStatType StatType) const = 0;
+
+	// 무기별 탄퍼짐/펠릿수/히트 판정 두께. DT_Weapon에 값이 없으면 SpreadAngle=0, PelletCount=1, TraceRadius=0(기존 라인 트레이스와 동일).
+	virtual void GetWeaponFireProfile(EWeaponType WeaponID, float& OutSpreadAngle, int32& OutPelletCount, float& OutTraceRadius) const = 0;
+
+	// true면 풀오토(홀드 연사), false면 세미오토(클릭당 1발). DT_Weapon에 값이 없으면 true(기존 동작과 동일).
+	virtual void GetWeaponFireMode(EWeaponType WeaponID, bool& OutFullAuto) const = 0;
+
+	// 무기별 발사 반동(카메라 피치/요 킥, 도). DT_Weapon에 값이 없으면 0(반동 없음).
+	virtual void GetWeaponRecoil(EWeaponType WeaponID, float& OutRecoilPitch, float& OutRecoilYaw) const = 0;
 };

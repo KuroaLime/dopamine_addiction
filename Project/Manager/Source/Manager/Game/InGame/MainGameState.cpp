@@ -77,6 +77,42 @@ int32 AMainGameState::GetWeaponBaseData(EWeaponType WeaponID, EWeaponBaseStatTyp
 	return 0;
 }
 
+void AMainGameState::GetWeaponFireProfile(EWeaponType WeaponID, float& OutSpreadAngle, int32& OutPelletCount, float& OutTraceRadius) const
+{
+	OutSpreadAngle = 0.f;
+	OutPelletCount = 1;
+	OutTraceRadius = 0.f;
+
+	if (const FWeaponDataTable* FoundData = WeaponDataMap.Find(WeaponID))
+	{
+		OutSpreadAngle = FoundData->SpreadAngle;
+		OutPelletCount = FMath::Max(1, FoundData->PelletCount);
+		OutTraceRadius = FoundData->TraceRadius;
+	}
+}
+
+void AMainGameState::GetWeaponFireMode(EWeaponType WeaponID, bool& OutFullAuto) const
+{
+	OutFullAuto = true;
+
+	if (const FWeaponDataTable* FoundData = WeaponDataMap.Find(WeaponID))
+	{
+		OutFullAuto = FoundData->bFullAuto;
+	}
+}
+
+void AMainGameState::GetWeaponRecoil(EWeaponType WeaponID, float& OutRecoilPitch, float& OutRecoilYaw) const
+{
+	OutRecoilPitch = 0.f;
+	OutRecoilYaw = 0.f;
+
+	if (const FWeaponDataTable* FoundData = WeaponDataMap.Find(WeaponID))
+	{
+		OutRecoilPitch = FoundData->RecoilPitch;
+		OutRecoilYaw = FoundData->RecoilYaw;
+	}
+}
+
 void AMainGameState::OnRep_RemainingTime() {
 	if (OnTimeUpdated.IsBound())
 		OnTimeUpdated.Broadcast(RemainingTime);
