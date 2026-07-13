@@ -55,6 +55,7 @@ public:
 	// true면 풀오토(홀드 연사), false면 세미오토(클릭당 1발). DT_Weapon에 값이 없으면 true(기존 동작과 동일).
 	virtual void GetWeaponFireMode(EWeaponType WeaponID, bool& OutFullAuto) const = 0;
 
-	// 무기별 발사 반동(카메라 피치/요 킥, 도). DT_Weapon에 값이 없으면 0(반동 없음).
-	virtual void GetWeaponRecoil(EWeaponType WeaponID, float& OutRecoilPitch, float& OutRecoilYaw) const = 0;
+	// 연사 중 탄퍼짐이 누적되는 블룸 값. BloomStartShotCount발까지는 그대로, 그 이후부터 발당 BloomPerShot만큼
+	// MaxBloomAngle까지 벌어진다. DT_Weapon에 값이 없으면 0/0/0(블룸 없음).
+	virtual void GetWeaponBloom(EWeaponType WeaponID, float& OutBloomPerShot, float& OutMaxBloomAngle, int32& OutBloomStartShotCount) const = 0;
 };

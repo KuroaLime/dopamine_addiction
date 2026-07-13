@@ -101,15 +101,17 @@ void AMainGameState::GetWeaponFireMode(EWeaponType WeaponID, bool& OutFullAuto) 
 	}
 }
 
-void AMainGameState::GetWeaponRecoil(EWeaponType WeaponID, float& OutRecoilPitch, float& OutRecoilYaw) const
+void AMainGameState::GetWeaponBloom(EWeaponType WeaponID, float& OutBloomPerShot, float& OutMaxBloomAngle, int32& OutBloomStartShotCount) const
 {
-	OutRecoilPitch = 0.f;
-	OutRecoilYaw = 0.f;
+	OutBloomPerShot = 0.f;
+	OutMaxBloomAngle = 0.f;
+	OutBloomStartShotCount = 0;
 
 	if (const FWeaponDataTable* FoundData = WeaponDataMap.Find(WeaponID))
 	{
-		OutRecoilPitch = FoundData->RecoilPitch;
-		OutRecoilYaw = FoundData->RecoilYaw;
+		OutBloomPerShot = FoundData->BloomPerShot;
+		OutMaxBloomAngle = FoundData->MaxBloomAngle;
+		OutBloomStartShotCount = FoundData->BloomStartShotCount;
 	}
 }
 
