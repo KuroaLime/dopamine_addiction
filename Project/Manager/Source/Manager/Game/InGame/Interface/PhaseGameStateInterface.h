@@ -55,9 +55,6 @@ public:
 	// true면 풀오토(홀드 연사), false면 세미오토(클릭당 1발). DT_Weapon에 값이 없으면 true(기존 동작과 동일).
 	virtual void GetWeaponFireMode(EWeaponType WeaponID, bool& OutFullAuto) const = 0;
 
-	// 무기별 발사 반동(카메라 피치/요 킥, 도). DT_Weapon에 값이 없으면 0(반동 없음).
-	virtual void GetWeaponRecoil(EWeaponType WeaponID, float& OutRecoilPitch, float& OutRecoilYaw) const = 0;
-	
 	virtual bool IsShopAvailable() const = 0;
 	virtual void SetShopAvailable(bool bAvailable) = 0;
 

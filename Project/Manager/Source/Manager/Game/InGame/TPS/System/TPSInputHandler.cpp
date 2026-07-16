@@ -14,6 +14,7 @@
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
+#include "Kismet/KismetSystemLibrary.h"
 UTPSInputHandler::UTPSInputHandler()
 {
 	PrimaryComponentTick.bCanEverTick = false;
@@ -99,6 +100,10 @@ void UTPSInputHandler::SetupInput(UEnhancedInputComponent* EnhancedInputComponen
 	{
 		EnhancedInputComponent->BindAction(IA_CardDiscard, ETriggerEvent::Started, this, &UTPSInputHandler::Input_CardDiscard);
 		EnhancedInputComponent->BindAction(IA_CardDiscard, ETriggerEvent::Completed, this, &UTPSInputHandler::Input_CardDiscardEnd);
+	}
+	if (IA_Quit)
+	{
+		EnhancedInputComponent->BindAction(IA_Quit, ETriggerEvent::Started, this, &UTPSInputHandler::Input_Quit);
 	}
 }
 
@@ -232,4 +237,10 @@ void UTPSInputHandler::Input_CardDiscardEnd()
 		ASC->CancelAbilitiesWithTag(
 			FGameplayTagContainer(FGameplayTag::RequestGameplayTag(FName("Ability.Action.CardDiscard"))));
 	}
+}
+
+void UTPSInputHandler::Input_Quit()
+{
+	if (!OwnerController) return;
+	UKismetSystemLibrary::QuitGame(OwnerController->GetWorld(), OwnerController, EQuitPreference::Quit, false);
 }
