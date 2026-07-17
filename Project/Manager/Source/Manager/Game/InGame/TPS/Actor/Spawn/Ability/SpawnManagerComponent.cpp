@@ -5,6 +5,7 @@
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/GameModeBase.h"
+#include "Algo/RandomShuffle.h"
 
 USpawnManagerComponent* USpawnManagerComponent::GetActive(const UObject* WorldContextObject)
 {
@@ -116,6 +117,10 @@ AA_Spawn* USpawnManagerComponent::GetUniqueRandomSpawnActor() {
 }
 int32 USpawnManagerComponent::GetAvailableSpawnCount() const {
 	return AvailableSpawns.Num();
+}
+
+void USpawnManagerComponent::ShuffleAvailableSpawns() {
+	Algo::RandomShuffle(AvailableSpawns);
 }
 
 AA_Spawn* USpawnManagerComponent::GetRandomCenterSpawnActor() {

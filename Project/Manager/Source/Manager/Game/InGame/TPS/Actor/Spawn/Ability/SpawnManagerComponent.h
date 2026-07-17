@@ -43,6 +43,10 @@ public:
 	int32 GetRandomSpawnID() const;
 	class AA_Spawn* GetRandomCenterSpawnActor();
 
+	// AvailableSpawns를 제자리에서 섞음(원소 제거 없음). 매 라운드 재배치처럼 반복 호출해도 풀이 고갈되지 않는다.
+	void ShuffleAvailableSpawns();
+	const TArray<class AA_Spawn*>& GetAvailableSpawnsView() const { return AvailableSpawns; }
+
 private:
 	TMap<int32, class AA_Spawn*> SpawnPointMap;
 		

@@ -2088,12 +2088,48 @@ void AMainGameMode::StartTransitionToBattlePhase()
 
     CardGameService->ClearCardDrops();
     CardGameService->ClearRoundCardsForAllPlayers();
+
+    RedeployToSpawnPoint();
+
     SetPlayerPawnGameplayState(true, false, true, TEXT("TransitionToBattle"));
     ClearPlayerPawnMovementBases(TEXT("TransitionToBattle"));
     BroadcastSwitchLevel(TEXT("Card_Game_Stage"), GetPersistentMainWorldLevelName());
     StartTimedServerPhase(EDediServerPhase::TransitionToBattle, GetTransitionDuration());
 }
+void AMainGameMode::RedeployToSpawnPoint() {
+    TArray<AMainPlayerController*> Controllers;
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(It->Get()))
+        {
+            Controllers.Add(MainPC);
+        }
+    }
 
+    USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this);
+    if (!SpawnMgr)
+    {
+        return;
+    }
+
+    // 원본 배열을 제자리에서 섞기만 함(제거 없음) -> 매 라운드 반복 호출해도 풀이 고갈되지 않음.
+    SpawnMgr->ShuffleAvailableSpawns();
+    const TArray<AA_Spawn*>& Pool = SpawnMgr->GetAvailableSpawnsView();
+
+    int32 SpawnIndex = 0;
+    for (AMainPlayerController* aController : Controllers)
+    {
+        if (SpawnIndex >= Pool.Num())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] RedeployToSpawnPoint: spawn pool exhausted Player=%s"),
+                *GetNameSafe(aController->PlayerState));
+            continue;
+        }
+
+        TeleportPlayerAuthoritatively(aController, Pool[SpawnIndex]->GetActorTransform(), TEXT("TransitionToBattleRedeploy"));
+        ++SpawnIndex;
+    }
+}
 void AMainGameMode::StartGameEndPhase()
 {
     if (bGameEndReached)

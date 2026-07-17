@@ -442,6 +442,9 @@ private:
 
     void StartTimedServerPhase(EDediServerPhase NewPhase, int32 DurationSeconds);
     void OnServerPhaseTick();
+
+    void RedeployToSpawnPoint();
+
 public:
     // UCardGameService가 OwnerGM을 통해 호출하는 GameMode 연산(서버 페이즈/카드 배치/설정).
     void SetServerRemainingTime(int32 NewTime);
