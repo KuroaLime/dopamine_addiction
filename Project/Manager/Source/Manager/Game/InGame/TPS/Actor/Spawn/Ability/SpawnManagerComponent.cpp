@@ -62,6 +62,7 @@ void USpawnManagerComponent::InitializeSpawnPoints() {
 	SpawnPointMap.Empty();
 	AvailableSpawns.Empty();
 	CenterSpawns.Empty();
+	UniqueSpawnCursor = 0; // 목록이 다시 채워지므로 이전 커서 위치는 무의미해짐
 
 	for (AActor* Actor : FoundActors) {
 		AA_Spawn* SP = Cast<AA_Spawn>(Actor);
@@ -72,7 +73,7 @@ void USpawnManagerComponent::InitializeSpawnPoints() {
 			} else {
 				SpawnPointMap.Add(SP->SpawnPointID, SP);
 			}
-			
+
 			if (SP->ActorHasTag(TEXT("CenterSpawner"))) {
 				CenterSpawns.Add(SP);
 			} else {
@@ -108,12 +109,15 @@ int32 USpawnManagerComponent::GetRandomSpawnID() const{
 AA_Spawn* USpawnManagerComponent::GetUniqueRandomSpawnActor() {
 	if (AvailableSpawns.Num() == 0) return nullptr;
 
-	int32 RandomIndex = FMath::RandRange(0, AvailableSpawns.Num() - 1);
-	AA_Spawn* SelectedSpawn = AvailableSpawns[RandomIndex];
+	if (UniqueSpawnCursor == 0)
+	{
+		// 새 사이클 시작 시점(최초 호출 포함)마다 매번 재셔플. 원소를 제거하지 않으므로 풀이 고갈되지 않는다.
+		Algo::RandomShuffle(AvailableSpawns);
+	}
 
-	AvailableSpawns.RemoveAt(RandomIndex);
-
-	return SelectedSpawn;
+	AA_Spawn* Picked = AvailableSpawns[UniqueSpawnCursor];
+	UniqueSpawnCursor = (UniqueSpawnCursor + 1) % AvailableSpawns.Num();
+	return Picked;
 }
 int32 USpawnManagerComponent::GetAvailableSpawnCount() const {
 	return AvailableSpawns.Num();
@@ -135,4 +139,24 @@ AA_Spawn* USpawnManagerComponent::GetRandomCenterSpawnActor() {
 
 	int32 RandomIndex = FMath::RandRange(0, CenterSpawns.Num() - 1);
 	return CenterSpawns[RandomIndex];
+}
+
+void USpawnManagerComponent::SetShopBarriersActive(bool bActive) {
+	if (AvailableSpawns.Num() == 0 && CenterSpawns.Num() == 0)
+	{
+		// 첫 라운드 등, BeginPlay 시점엔 스폰 지점 레벨이 아직 스트리밍 안 되어 있었을 수 있음 -> 재스캔.
+		InitializeSpawnPoints();
+	}
+
+	UE_LOG(LogTemp, Warning, TEXT("[SpawnManager] SetShopBarriersActive(%d) Available=%d Center=%d"),
+		bActive ? 1 : 0, AvailableSpawns.Num(), CenterSpawns.Num());
+
+	for (AA_Spawn* SP : AvailableSpawns)
+	{
+		if (SP) SP->SetBarrierActive(bActive);
+	}
+	for (AA_Spawn* SP : CenterSpawns)
+	{
+		if (SP) SP->SetBarrierActive(bActive);
+	}
 }

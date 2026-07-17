@@ -25,7 +25,7 @@ protected:
 
 	UPROPERTY()
 	TArray<class AA_Spawn*> CenterSpawns;
-public:	
+public:
 	// Called every frame
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
@@ -37,6 +37,8 @@ public:
 	void InitializeSpawnPoints();
 	bool GetSpawnLocation(int32 ID, FVector& OutLocation);
 
+	// AvailableSpawns를 셔플 후 커서로 순차 소비(제거 없음). 다 돌면 재셔플하고 처음부터 다시 소비.
+	// -> 라운드가 지나거나 플레이어가 재접속해도 풀이 고갈되지 않음.
 	class AA_Spawn* GetUniqueRandomSpawnActor();
 	int32 GetAvailableSpawnCount() const;
 
@@ -47,7 +49,12 @@ public:
 	void ShuffleAvailableSpawns();
 	const TArray<class AA_Spawn*>& GetAvailableSpawnsView() const { return AvailableSpawns; }
 
+	// 모든 스폰 지점(점유 여부 무관)의 상점 방벽을 일괄 토글.
+	void SetShopBarriersActive(bool bActive);
+
 private:
 	TMap<int32, class AA_Spawn*> SpawnPointMap;
-		
+
+	int32 UniqueSpawnCursor = 0;
+
 };

@@ -1800,6 +1800,10 @@ void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
     {
         GS->SetShopAvailable(true);
     }
+    if (USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this))
+    {
+        SpawnMgr->SetShopBarriersActive(true);
+    }
     //StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
 }
 
@@ -3031,6 +3035,10 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
         if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
         {
             GS->SetShopAvailable(false);
+        }
+        if (USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this))
+        {
+            SpawnMgr->SetShopBarriersActive(false);
         }
         StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
         break;
