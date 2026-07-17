@@ -108,6 +108,8 @@ public:
 
 public:
     bool IsBattleRoyalePhase() const;
+    bool IsPreBattleShopPhase() const;
+
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "GameMode|Setup")

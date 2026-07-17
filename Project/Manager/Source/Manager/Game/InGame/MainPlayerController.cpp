@@ -741,7 +741,7 @@ void AMainPlayerController::Server_PushMode_Implementation(EGamePhase NewPhase)
 	if (NewPhase != EGamePhase::Shop ||
 		CurrentPhase != EGamePhase::TPS ||
 		!GM ||
-		!GM->IsBattleRoyalePhase() ||
+		!GM->IsPreBattleShopPhase() ||
 		!PS ||
 		PS->CurPlayerData.CurrentHP <= 0)
 	{
@@ -806,7 +806,7 @@ void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
 	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
 	if (!GM ||
 		!PS ||
-		!GM->IsBattleRoyalePhase() ||
+		!GM->IsPreBattleShopPhase() ||
 		CurrentPhase != EGamePhase::Shop ||
 		PS->LastRandomUpgradeClaimedRound == GM->GetCurrentRound() ||
 		CurrentUpgradeOptions.Num() > 0)
@@ -886,7 +886,7 @@ void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 Sele
 	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
 	if (!GM ||
 		!PS ||
-		!GM->IsBattleRoyalePhase() ||
+		!GM->IsPreBattleShopPhase() ||
 		CurrentPhase != EGamePhase::Shop ||
 		PS->LastRandomUpgradeClaimedRound == GM->GetCurrentRound())
 	{
@@ -963,7 +963,7 @@ int32 AMainPlayerController::GetCurrentUpgradeLevel(AMainPlayerState* PS, EUpgra
 void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int32 SelectedIndex) {
 
 	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
-	if (CurrentPhase != EGamePhase::Shop || !GM || !GM->IsBattleRoyalePhase())
+	if (CurrentPhase != EGamePhase::Shop || !GM || !GM->IsPreBattleShopPhase())
 	{
 		return;
 	}

@@ -775,7 +775,10 @@ bool AMainGameMode::IsBattleRoyalePhase() const
 {
     return bGameStarted && CurrentServerPhase == EDediServerPhase::BattleRoyale;
 }
-
+bool AMainGameMode::IsPreBattleShopPhase() const
+{
+    return bGameStarted && CurrentServerPhase == EDediServerPhase::PreBattleShop;
+}
 void AMainGameMode::InitStrategy()
 {
     StrategyMap.Empty();
