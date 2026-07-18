@@ -14,6 +14,8 @@
 #include "CollisionShape.h"
 #include "Engine/StaticMesh.h"
 #include "Game/InGame/MainCharacter.h"
+#include "Game/InGame/Handler/UIHandler.h"
+#include "Game/InGame/TPS/UI/TpsPlayerMainHUD.h"
 
 UAbility_Fire::UAbility_Fire()
 {
@@ -25,17 +27,20 @@ UAbility_Fire::UAbility_Fire()
 	ActivationOwnedTags.AddTag(FGameplayTag::RequestGameplayTag(FName("State.Movement.Firing")));
 
 	bIsServerFire = false;
-	bIsClientFire = false;
-	LastClientFireTime = 0.f;
 	LastServerFireTime = 0.f;
 }
 
 void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 {
-	if (bIsClientFire) return;
-
 	ACharacter* Character = Cast<ACharacter>(InOwner);
 	if (!Character) return;
+
+	IAbilityOwnerInterface* OwnerInterface = Cast<IAbilityOwnerInterface>(Character);
+	AWeapon* EquippedGun = OwnerInterface ? Cast<AWeapon>(OwnerInterface->GetEquippedWeapon()) : nullptr;
+	UWeaponComponent* WeaponComp = EquippedGun ? EquippedGun->Setting : nullptr;
+	if (!WeaponComp) return;
+
+	if (WeaponComp->IsClientFiring()) return;
 
 	IAbilityCheckInterface* CheckInterface = Cast<IAbilityCheckInterface>(Character);
 	if (!CheckInterface || !CheckInterface->IsCharacterAiming()) return;
@@ -53,31 +58,32 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 	bool bFullAuto = true;
 	GS_Interface->GetWeaponFireMode(WeaponID, bFullAuto);
 
-	bIsClientFire = true;
+	WeaponComp->SetClientFiring(true);
 
 	float CurrentTime = Character->GetWorld()->GetTimeSeconds();
-	float TimeSinceLastShot = CurrentTime - LastClientFireTime;
+	float TimeSinceLastShot = CurrentTime - WeaponComp->GetLastClientFireTime();
 
 	TWeakObjectPtr<ACharacter> WeakChar(Character);
+	TWeakObjectPtr<UWeaponComponent> WeakWeaponComp(WeaponComp);
 
 	if (TimeSinceLastShot >= FireRate)
 	{
 		Client_ExecuteFire(InOwner);
-		LastClientFireTime = CurrentTime;
+		WeaponComp->SetLastClientFireTime(CurrentTime);
 
 		// 세미오토(샷건/저격 등): 한 발만 나가고 홀드해도 루프를 걸지 않음. 다음 발은 재클릭해야 함.
 		if (!bFullAuto) return;
 
 		FTimerDelegate Delegate;
-		Delegate.BindLambda([this, WeakChar]()
+		Delegate.BindLambda([this, WeakChar, WeakWeaponComp]()
 			{
-				if (!WeakChar.IsValid()) return;
+				if (!WeakChar.IsValid() || !WeakWeaponComp.IsValid()) return;
 				Client_ExecuteFire(WeakChar.Get());
-				LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+				WeakWeaponComp->SetLastClientFireTime(WeakChar->GetWorld()->GetTimeSeconds());
 			});
 
 		Character->GetWorldTimerManager().SetTimer(
-			ClientFireTimerHandle,
+			WeaponComp->GetClientFireTimerHandle(),
 			Delegate,
 			FireRate,
 			true
@@ -86,53 +92,64 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 	else
 	{
 		// 쿨다운이 아직 안 끝났으면, 버튼을 누르고 있는 동안만 짧은 간격으로 재검사해서 쿨다운이 끝나는
-		// 순간 자동 발사한다(상용 게임과 동일). 손을 떼면(bIsClientFire=false) 그 즉시 재검사를 멈춘다.
+		// 순간 자동 발사한다(상용 게임과 동일). 손을 떼면(SetClientFiring(false)) 그 즉시 재검사를 멈춘다.
 		constexpr float RetryInterval = 0.02f;
 
 		FTimerDelegate RetryDelegate;
-		RetryDelegate.BindLambda([this, WeakChar, bFullAuto, FireRate]()
+		RetryDelegate.BindLambda([this, WeakChar, WeakWeaponComp, bFullAuto, FireRate]()
 			{
-				if (!WeakChar.IsValid() || !bIsClientFire)
+				if (!WeakChar.IsValid() || !WeakWeaponComp.IsValid() || !WeakWeaponComp->IsClientFiring())
 				{
-					if (WeakChar.IsValid())
+					if (WeakChar.IsValid() && WeakWeaponComp.IsValid())
 					{
-						WeakChar->GetWorldTimerManager().ClearTimer(ClientFireRetryTimerHandle);
+						WeakChar->GetWorldTimerManager().ClearTimer(WeakWeaponComp->GetClientFireRetryTimerHandle());
 					}
 					return;
 				}
 
 				ACharacter* Char = WeakChar.Get();
+				UWeaponComponent* WComp = WeakWeaponComp.Get();
 				const float Now = Char->GetWorld()->GetTimeSeconds();
-				if (Now - LastClientFireTime < FireRate) return; // 아직 준비 안 됨, 다음 재검사 때 다시 확인
+				if (Now - WComp->GetLastClientFireTime() < FireRate) return; // 아직 준비 안 됨, 다음 재검사 때 다시 확인
 
-				Char->GetWorldTimerManager().ClearTimer(ClientFireRetryTimerHandle);
+				Char->GetWorldTimerManager().ClearTimer(WComp->GetClientFireRetryTimerHandle());
 
 				Client_ExecuteFire(Char);
-				LastClientFireTime = Now;
+				WComp->SetLastClientFireTime(Now);
 
 				if (!bFullAuto) return;
 
 				FTimerDelegate LoopDelegate;
-				LoopDelegate.BindLambda([this, WeakChar]()
+				LoopDelegate.BindLambda([this, WeakChar, WeakWeaponComp]()
 					{
-						if (!WeakChar.IsValid()) return;
+						if (!WeakChar.IsValid() || !WeakWeaponComp.IsValid()) return;
 						Client_ExecuteFire(WeakChar.Get());
-						LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
+						WeakWeaponComp->SetLastClientFireTime(WeakChar->GetWorld()->GetTimeSeconds());
 					});
 
-				Char->GetWorldTimerManager().SetTimer(ClientFireTimerHandle, LoopDelegate, FireRate, true);
+				Char->GetWorldTimerManager().SetTimer(WComp->GetClientFireTimerHandle(), LoopDelegate, FireRate, true);
 			});
 
-		Character->GetWorldTimerManager().SetTimer(ClientFireRetryTimerHandle, RetryDelegate, RetryInterval, true);
+		Character->GetWorldTimerManager().SetTimer(WeaponComp->GetClientFireRetryTimerHandle(), RetryDelegate, RetryInterval, true);
 	}
 }
 
 void UAbility_Fire::LocalCancelWithOwner(AActor* InOwner)
 {
 	if (!InOwner) return;
-	InOwner->GetWorldTimerManager().ClearTimer(ClientFireTimerHandle);
-	InOwner->GetWorldTimerManager().ClearTimer(ClientFireRetryTimerHandle);
-	bIsClientFire = false;
+
+	IAbilityOwnerInterface* OwnerInterface = Cast<IAbilityOwnerInterface>(InOwner);
+	AWeapon* EquippedGun = OwnerInterface ? Cast<AWeapon>(OwnerInterface->GetEquippedWeapon()) : nullptr;
+	UWeaponComponent* WeaponComp = EquippedGun ? EquippedGun->Setting : nullptr;
+	if (!WeaponComp) return;
+
+	InOwner->GetWorldTimerManager().ClearTimer(WeaponComp->GetClientFireTimerHandle());
+	InOwner->GetWorldTimerManager().ClearTimer(WeaponComp->GetClientFireRetryTimerHandle());
+	WeaponComp->SetClientFiring(false);
+
+	// 트리거를 놓으면 조준점 블룸 표시도 리셋.
+	WeaponComp->SetClientShotsFiredInBurst(0);
+	WeaponComp->SetCurrentBloomDegrees(0.f);
 }
 
 void UAbility_Fire::ActivateAbility()
@@ -240,6 +257,27 @@ void UAbility_Fire::EndAbility(bool bWasCancelled)
 	bIsServerFire = false;
 	CurrentBloomAngle = 0.f; // 트리거를 놓으면 다음 사격은 다시 최소 탄퍼짐부터 시작
 	ShotsFiredInBurst = 0;
+
+	// Standalone/리슨서버 호스트(HasAuthority()==true라서 LocalCancelWithOwner가 안 불리는 경우):
+	// 여기서도 조준점 블룸 표시를 리셋해야 트리거를 놓았을 때 크로스헤어가 원래 크기로 돌아온다.
+	if (OwnerCharacter->IsLocallyControlled())
+	{
+		if (IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter))
+		{
+			if (AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon()))
+			{
+				if (EquippedGun->Setting)
+				{
+					EquippedGun->Setting->SetCurrentBloomDegrees(0.f);
+					if (UTpsPlayerMainHUD* HUD = ResolveHUD(OwnerCharacter))
+					{
+						HUD->RefreshAimSpread();
+					}
+				}
+			}
+		}
+	}
+
 	Super::EndAbility(bWasCancelled);
 }
 
@@ -259,6 +297,56 @@ void UAbility_Fire::Client_ExecuteFire(AActor* InOwner)
 
 	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
 	//EquippedGun->Setting->Fire(MuzzleLoc);
+
+	// 조준점 UI용 블룸: 서버의 Server_ExecuteFire와 같은 규칙(BloomStartShotCount발까지는 그대로,
+	// 그 이후 MaxBloomAngle까지 누적)을 로컬에서도 계산해서 크로스헤어를 그 진행도로 키운다.
+	// 누적값은 WeaponComponent(EquippedGun->Setting)에 저장한다 — 캐릭터별로 실제 존재하는 곳이라
+	// 여러 캐릭터/세션이 상태를 공유할 일이 없다.
+	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
+	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
+	if (PS_Interface && GS_Interface)
+	{
+		const EWeaponType WeaponID = PS_Interface->GetWeaponID();
+
+		float BloomPerShot = 0.f;
+		float MaxBloomAngle = 0.f;
+		int32 BloomStartShotCount = 0;
+		GS_Interface->GetWeaponBloom(WeaponID, BloomPerShot, MaxBloomAngle, BloomStartShotCount);
+
+		UWeaponComponent* WeaponComp = EquippedGun->Setting;
+		const int32 NewShotsFired = WeaponComp->GetClientShotsFiredInBurst() + 1;
+		WeaponComp->SetClientShotsFiredInBurst(NewShotsFired);
+
+		float NewBloomDegrees = WeaponComp->GetCurrentBloomDegrees();
+		if (NewShotsFired > BloomStartShotCount)
+		{
+			NewBloomDegrees = FMath::Min(NewBloomDegrees + BloomPerShot, MaxBloomAngle);
+		}
+		WeaponComp->SetCurrentBloomDegrees(NewBloomDegrees);
+
+		UE_LOG(LogTemp, Warning, TEXT("[DS] Bloom: WeaponID=%d Shots=%d BloomPerShot=%.2f MaxBloomAngle=%.2f BloomStartShotCount=%d CurrentBloomAngle=%.2f"),
+			static_cast<int32>(WeaponID), NewShotsFired, BloomPerShot, MaxBloomAngle, BloomStartShotCount, NewBloomDegrees);
+
+		// Tick을 기다리지 않고 발사 즉시 조준점 위젯을 갱신한다.
+		if (UTpsPlayerMainHUD* HUD = ResolveHUD(Character))
+		{
+			HUD->RefreshAimSpread();
+		}
+	}
+}
+
+UTpsPlayerMainHUD* UAbility_Fire::ResolveHUD(AActor* InOwner) const
+{
+	ACharacter* Character = Cast<ACharacter>(InOwner);
+	if (!Character) return nullptr;
+
+	APlayerController* PC = Cast<APlayerController>(Character->GetController());
+	if (!PC) return nullptr;
+
+	UUIHandler* UIHandler = PC->FindComponentByClass<UUIHandler>();
+	if (!UIHandler) return nullptr;
+
+	return Cast<UTpsPlayerMainHUD>(UIHandler->GetWidget());
 }
 
 void UAbility_Fire::Server_ExecuteFire()
@@ -334,6 +422,17 @@ void UAbility_Fire::Server_ExecuteFire()
 	if (ShotsFiredInBurst > BloomStartShotCount)
 	{
 		CurrentBloomAngle = FMath::Min(CurrentBloomAngle + BloomPerShot, MaxBloomAngle);
+	}
+
+	// Standalone/리슨서버 호스트처럼 이 캐릭터를 로컬에서도 직접 조작 중이면(HasAuthority()==true라서
+	// LocalActivateWithOwner/Client_ExecuteFire가 아예 안 불리는 경우), 여기서도 조준점 UI를 갱신해야 한다.
+	if (OwnerCharacter->IsLocallyControlled())
+	{
+		EquippedGun->Setting->SetCurrentBloomDegrees(CurrentBloomAngle);
+		if (UTpsPlayerMainHUD* HUD = ResolveHUD(OwnerCharacter))
+		{
+			HUD->RefreshAimSpread();
+		}
 	}
 
 	FVector CamStart = FollowCamera->GetComponentLocation();

@@ -22,6 +22,9 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "Card")
 	void OnCardFlipMidpoint();
 
+	// 발사 즉시(Tick을 기다리지 않고) 조준점 블룸 표시를 갱신하기 위한 공개 진입점.
+	void RefreshAimSpread() { UpdateAim(0.f); }
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
@@ -33,7 +36,7 @@ protected:
 	void UpdateWeaponIconWidget();
 	void UpdateWeaponCountWidget();
 	void ChangeCompassSize(float ZRotation, class UImage* PSU_Compass);
-	void UpdateAim();
+	void UpdateAim(float DeltaTime);
 	void UpdateLevel();
 	void UpdateLevel(const struct FPlayerData& PlayerData) { UpdateLevel(); }
 	void UpdateLevel(const struct FAccumulatedUpgrades& Upgrades) { UpdateLevel(); }
@@ -75,6 +78,22 @@ private:
 	//Aim
 	UPROPERTY()
 	UImage* Aim_Image = nullptr;
+
+	// 조준점 4방향 대시. Spread(블룸 진행도)에 따라 중심에서 바깥으로 이동시킨다.
+	UPROPERTY()
+	UImage* Aim_Up = nullptr;
+	UPROPERTY()
+	UImage* Aim_Down = nullptr;
+	UPROPERTY()
+	UImage* Aim_Left = nullptr;
+	UPROPERTY()
+	UImage* Aim_Right = nullptr;
+
+	// 현재 화면에 표시 중인 조준점 벌어짐 픽셀 값. 목표치(무기 블룸 각도 기반)를 향해 매 틱 부드럽게 보간된다.
+	float CurrentDisplayedAimOffset = 0.f;
+
+	// 디버그: Character/Weapon 조회 실패를 스팸 없이(0.5초에 한 번) 로그로 남기기 위한 누적 타이머.
+	float AimDebugLogAccumulator = 0.f;
 
 	UPROPERTY()
 	UImage*	Lv_Image[LvTotalNumber];
