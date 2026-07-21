@@ -460,6 +460,39 @@ void AMainPlayerState::ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledS
 	ForceNetUpdate();
 }
 
+void AMainPlayerState::ApplyWeaponUpgradePurchase(EUpgradeType Type)
+{
+	if (!HasAuthority()) return;
+
+	constexpr float WeaponUpgradePurchaseAmount = 0.5f;
+	switch (Type)
+	{
+	case EUpgradeType::Weapon_Damage:
+		AccumulatedUpgrades.LvWeaponDamage += WeaponUpgradePurchaseAmount;
+		break;
+	case EUpgradeType::Weapon_FireRate:
+		AccumulatedUpgrades.LvWeaponFireRate += WeaponUpgradePurchaseAmount;
+		break;
+	case EUpgradeType::Weapon_Range:
+		AccumulatedUpgrades.LvWeaponRange += WeaponUpgradePurchaseAmount;
+		break;
+	case EUpgradeType::Weapon_Magazine:
+		AccumulatedUpgrades.LvWeaponMagazine += WeaponUpgradePurchaseAmount;
+		break;
+	case EUpgradeType::Weapon_Reload:
+		AccumulatedUpgrades.LvWeaponReload += WeaponUpgradePurchaseAmount;
+		break;
+	default:
+		break;
+	}
+
+	if (OnAccumulatedUpgradesChangedNative.IsBound())
+	{
+		OnAccumulatedUpgradesChangedNative.Broadcast(AccumulatedUpgrades);
+	}
+	ForceNetUpdate();
+}
+
 
 float AMainPlayerState::GetFinalMaxHP(float BaseMaxHP) const {
 	return BaseMaxHP + (PlayerData.LvHealth * 20.0f) + AccumulatedUpgrades.LvHealth;

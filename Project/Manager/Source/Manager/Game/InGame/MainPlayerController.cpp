@@ -1441,6 +1441,57 @@ void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int3
 
 }
 
+int32 AMainPlayerController::GetWeaponUpgradePurchaseCost() const
+{
+	// 캐릭터 고정 스탯 강화(기본 100 Gold)보다 조금 더 싸게 책정된 총기 개조 상품 가격.
+	return 70;
+}
+
+bool AMainPlayerController::Server_PurchaseWeaponUpgrade_Validate(int32 SlotIndex)
+{
+	return SlotIndex >= 0 && SlotIndex < 3;
+}
+
+void AMainPlayerController::Server_PurchaseWeaponUpgrade_Implementation(int32 SlotIndex)
+{
+	if (!TryConsumeServerRpcRateLimit(
+		ShopWeaponUpgradeRateLimitState,
+		ShopUpgradeSelectionMinimumIntervalSeconds,
+		TEXT("ShopWeaponUpgrade")))
+	{
+		return;
+	}
+
+	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+	AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	if (CurrentPhase != EGamePhase::Shop ||
+		!GM ||
+		!GM->IsShopRequestAllowed() ||
+		!GS ||
+		!PS ||
+		PS->CurPlayerData.CurrentHP <= 0)
+	{
+		return;
+	}
+
+	if (!GS->ShopWeaponUpgradeOptions.IsValidIndex(SlotIndex))
+	{
+		return;
+	}
+	EUpgradeType UpgradeType = GS->ShopWeaponUpgradeOptions[SlotIndex];
+
+	int32 Cost = GetWeaponUpgradePurchaseCost();
+	if (PS->CurPlayerData.HoldingGold < Cost)
+	{
+		return;
+	}
+
+	PS->AddGold(-Cost);
+	PS->ApplyWeaponUpgradePurchase(UpgradeType);
+	DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("weapon upgrade purchased Slot=%d"), SlotIndex));
+}
+
 bool AMainPlayerController::Server_SetUITimer_Validate(int32 time)
 {
 	return false;

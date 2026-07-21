@@ -135,6 +135,7 @@ public:
 	void Server_ApplyUpgrad_Implementation(EUpgradeType Type);
 
 	void ApplyCardUpgrade(const TMap<EUpgradeType, float>& RolledStats);
+	void ApplyWeaponUpgradePurchase(EUpgradeType Type);
 
 	FAccumulatedUpgrades GetAccumulatedUpgrades() const { return AccumulatedUpgrades; };
 public:

@@ -7,8 +7,10 @@
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "MainGameState.generated.h"
 
+DECLARE_MULTICAST_DELEGATE(FOnShopWeaponUpgradeOptionsChangedNative);
+
 /**
- * 
+ *
  */
 
 
@@ -42,6 +44,14 @@ public:
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Round Data")
 	bool bShopAvailable = false;
+
+	UPROPERTY(ReplicatedUsing = OnRep_ShopWeaponUpgradeOptions, BlueprintReadOnly, Category = "Round Data")
+	TArray<EUpgradeType> ShopWeaponUpgradeOptions;
+
+	UFUNCTION()
+	void OnRep_ShopWeaponUpgradeOptions();
+
+	FOnShopWeaponUpgradeOptionsChangedNative OnShopWeaponUpgradeOptionsChangedNative;
 
 	UPROPERTY(ReplicatedUsing = OnRep_RemainingTime)
 	int32 RemainingTime;

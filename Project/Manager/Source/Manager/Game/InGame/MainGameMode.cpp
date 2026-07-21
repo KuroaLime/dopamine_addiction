@@ -1721,6 +1721,8 @@ void AMainGameMode::StartReadyPhase()
     {
         SpawnMgr->SetShopBarriersActive(true);
     }
+
+    SetPlayerPawnGameplayState(true, false, true, TEXT("Ready"));
 }
 
 void AMainGameMode::EnsureBattleRoyaleStageLoaded()
@@ -2572,6 +2574,23 @@ void AMainGameMode::StartPreBattleShopPhase()
     if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
     {
         GS->SetShopAvailable(true);
+
+        TArray<EUpgradeType> WeaponUpgradePool = {
+            EUpgradeType::Weapon_Damage,
+            EUpgradeType::Weapon_FireRate,
+            EUpgradeType::Weapon_Range,
+            EUpgradeType::Weapon_Magazine,
+            EUpgradeType::Weapon_Reload
+        };
+        GS->ShopWeaponUpgradeOptions.Reset();
+        for (int32 i = 0; i < 3 && WeaponUpgradePool.Num() > 0; ++i)
+        {
+            const int32 PickIndex = FMath::RandRange(0, WeaponUpgradePool.Num() - 1);
+            GS->ShopWeaponUpgradeOptions.Add(WeaponUpgradePool[PickIndex]);
+            WeaponUpgradePool.RemoveAt(PickIndex);
+        }
+        GS->OnShopWeaponUpgradeOptionsChangedNative.Broadcast();
+
         GS->ForceNetUpdate();
     }
 

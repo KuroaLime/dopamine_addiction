@@ -12,9 +12,26 @@
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/TPS/UI/Shop/ShopBanner.h"
 #include "Game/InGame/MainPlayerState.h"
+#include "Game/InGame/MainGameState.h"
 #include "Materials/MaterialInstanceDynamic.h"
 
 const FName UShopWidget::LvLinearWipeParamName(TEXT("Linear_wipe"));
+
+namespace
+{
+	FText GetDefaultWeaponUpgradeName(EUpgradeType Type)
+	{
+		switch (Type)
+		{
+		case EUpgradeType::Weapon_Damage:   return FText::FromString(TEXT("공격력 개조"));
+		case EUpgradeType::Weapon_FireRate: return FText::FromString(TEXT("연사력 개조"));
+		case EUpgradeType::Weapon_Range:    return FText::FromString(TEXT("사거리 개조"));
+		case EUpgradeType::Weapon_Magazine: return FText::FromString(TEXT("탄창 개조"));
+		case EUpgradeType::Weapon_Reload:   return FText::FromString(TEXT("재장전 개조"));
+		default:                            return FText::FromString(TEXT("무기 개조"));
+		}
+	}
+}
 
 void UShopWidget::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
 
@@ -88,6 +105,11 @@ void UShopWidget::NativeConstruct() {
 		}
 	}
 
+	if (Rand_UpgradeBTN00) { Rand_UpgradeBTN00->SetItemID(0); Rand_UpgradeBTN00->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleWeaponUpgradePurchase); }
+	if (Rand_UpgradeBTN01) { Rand_UpgradeBTN01->SetItemID(1); Rand_UpgradeBTN01->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleWeaponUpgradePurchase); }
+	if (Rand_UpgradeBTN02) { Rand_UpgradeBTN02->SetItemID(2); Rand_UpgradeBTN02->OnPurchaseEvent.AddDynamic(this, &UShopWidget::HandleWeaponUpgradePurchase); }
+
+	TryBindGameStateDelegate();
 	TryBindPlayerStateDelegates();
 
 	if (!bBoundDelegates && GetWorld())
@@ -132,6 +154,12 @@ void UShopWidget::Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>&
 	BP_ShopBanner->SetVisibility(ESlateVisibility::Collapsed);
 	StaticUpgradeText->SetVisibility(ESlateVisibility::Collapsed);
 	if (StatLevelPanel) StatLevelPanel->SetVisibility(ESlateVisibility::Collapsed);
+	if (Rand_UpgradeBTN00) Rand_UpgradeBTN00->SetVisibility(ESlateVisibility::Collapsed);
+	if (Rand_UpgradeBTN01) Rand_UpgradeBTN01->SetVisibility(ESlateVisibility::Collapsed);
+	if (Rand_UpgradeBTN02) Rand_UpgradeBTN02->SetVisibility(ESlateVisibility::Collapsed);
+	if (Rand_UpgradeIMG00) Rand_UpgradeIMG00->SetVisibility(ESlateVisibility::Collapsed);
+	if (Rand_UpgradeIMG01) Rand_UpgradeIMG01->SetVisibility(ESlateVisibility::Collapsed);
+	if (Rand_UpgradeIMG02) Rand_UpgradeIMG02->SetVisibility(ESlateVisibility::Collapsed);
 	if (CardSelectionPanel)
 	{
 		CardSelectionPanel->SetCardID(Options);
@@ -158,6 +186,7 @@ void UShopWidget::ReturnToShopButtons()
 	BP_ShopBanner->SetVisibility(ESlateVisibility::Visible);
 	StaticUpgradeText->SetVisibility(ESlateVisibility::Visible);
 	if (StatLevelPanel) StatLevelPanel->SetVisibility(ESlateVisibility::Visible);
+	UpdateWeaponUpgradeButtons();
 }
 
 void UShopWidget::SendToSelectionCardID(int32 CardID)
@@ -169,6 +198,8 @@ void UShopWidget::SendToSelectionCardID(int32 CardID)
 }
 void UShopWidget::TryBindPlayerStateDelegates()
 {
+	TryBindGameStateDelegate();
+
 	if (bBoundDelegates) return;
 	AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
 	if (!PC) return;
@@ -263,4 +294,61 @@ void UShopWidget::UpdateStatLevelWidgets()
 void UShopWidget::OnGoldChanged(float NewGold)
 {
 	UpdateUpgradeButtons();
+}
+void UShopWidget::TryBindGameStateDelegate()
+{
+	if (bBoundGameStateDelegate) return;
+	AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
+	if (!GS) return;
+
+	GS->OnShopWeaponUpgradeOptionsChangedNative.AddUObject(this, &UShopWidget::UpdateWeaponUpgradeButtons);
+	bBoundGameStateDelegate = true;
+	UpdateWeaponUpgradeButtons();
+}
+void UShopWidget::HandleWeaponUpgradePurchase(int32 SlotIndex)
+{
+	AMainPlayerController* PlayerController = Cast<AMainPlayerController>(GetOwningPlayer());
+	if (PlayerController)
+	{
+		PlayerController->Server_PurchaseWeaponUpgrade(SlotIndex);
+	}
+}
+void UShopWidget::UpdateWeaponUpgradeButtons()
+{
+	AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
+	if (!GS) return;
+
+	UShopButton* Buttons[3] = { Rand_UpgradeBTN00, Rand_UpgradeBTN01, Rand_UpgradeBTN02 };
+	UImage* Images[3] = { Rand_UpgradeIMG00, Rand_UpgradeIMG01, Rand_UpgradeIMG02 };
+
+	AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
+	const int32 Cost = PC ? PC->GetWeaponUpgradePurchaseCost() : 0;
+	const FText PriceText = FText::Format(FText::FromString(TEXT("{0} Gold")), FText::AsNumber(Cost));
+
+	for (int32 i = 0; i < 3; ++i)
+	{
+		if (!Buttons[i]) continue;
+
+		if (!GS->ShopWeaponUpgradeOptions.IsValidIndex(i))
+		{
+			Buttons[i]->SetVisibility(ESlateVisibility::Collapsed);
+			if (Images[i]) Images[i]->SetVisibility(ESlateVisibility::Collapsed);
+			continue;
+		}
+
+		Buttons[i]->SetVisibility(ESlateVisibility::Visible);
+		if (Images[i]) Images[i]->SetVisibility(ESlateVisibility::Visible);
+
+		const EUpgradeType Type = GS->ShopWeaponUpgradeOptions[i];
+		const FText* FoundName = WeaponUpgradeNameMap.Find(Type);
+		Buttons[i]->SetButtonText(FoundName ? *FoundName : GetDefaultWeaponUpgradeName(Type), PriceText);
+
+		if (Images[i])
+		{
+			if (UTexture2D* const* FoundIcon = WeaponUpgradeIconMap.Find(Type))
+			{
+				if (*FoundIcon) Images[i]->SetBrushFromTexture(*FoundIcon);
+			}
+		}
+	}
 }
