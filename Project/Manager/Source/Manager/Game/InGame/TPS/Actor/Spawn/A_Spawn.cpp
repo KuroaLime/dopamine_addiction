@@ -87,8 +87,8 @@ void AA_Spawn::ApplyBarrierVisualState()
 	{
 		if (Comp)
 		{
-			// The shop barrier is collision-only and must stay invisible in game.
-			Comp->SetVisibility(false, false);
+			// 콜리전이 켜질 때(방벽이 실제로 막고 있을 때) 메시도 같이 보이도록 한다.
+			Comp->SetVisibility(bBarrierActive, false);
 			Comp->SetCollisionEnabled(bBarrierActive ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
 			UE_LOG(LogTemp, Warning, TEXT("[A_Spawn]   -> %s Visible=%d CollisionEnabled=%d"),
 				*Comp->GetName(), Comp->IsVisible() ? 1 : 0, (int32)Comp->GetCollisionEnabled());

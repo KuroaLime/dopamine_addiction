@@ -1716,6 +1716,11 @@ void AMainGameMode::StartReadyPhase()
 {
     EndPhase();
     StartTimedServerPhase(EDediServerPhase::Ready, GetReadyDuration());
+
+    if (USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this))
+    {
+        SpawnMgr->SetShopBarriersActive(true);
+    }
 }
 
 void AMainGameMode::EnsureBattleRoyaleStageLoaded()
@@ -2509,6 +2514,11 @@ void AMainGameMode::StartBattleRoyalePhase()
     {
         DS_LOG(TEXT("[DS] PhaseGuard Ignore StartBattleRoyale after GameEnd Round=%d"), CurrentRound);
         return;
+    }
+
+    if (USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this))
+    {
+        SpawnMgr->SetShopBarriersActive(false);
     }
 
     ClearGoldDrops(TEXT("BattleRoyaleStart"));

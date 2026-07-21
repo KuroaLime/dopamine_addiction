@@ -12,7 +12,9 @@
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/TPS/UI/Shop/ShopBanner.h"
 #include "Game/InGame/MainPlayerState.h"
+#include "Materials/MaterialInstanceDynamic.h"
 
+const FName UShopWidget::LvLinearWipeParamName(TEXT("Linear_wipe"));
 
 void UShopWidget::BindCharacterState(class UCharacterStateComponent* NewCharacterState) {
 
@@ -67,6 +69,25 @@ void UShopWidget::NativeConstruct() {
 			}
 		}
 	);
+
+	Lv_Image[0] = Cast<UImage>(GetWidgetFromName(TEXT("LvHealth")));
+	Lv_Image[1] = Cast<UImage>(GetWidgetFromName(TEXT("LvHealthRegen")));
+	Lv_Image[2] = Cast<UImage>(GetWidgetFromName(TEXT("LvMoveSpeed")));
+	Lv_Image[3] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponDamage")));
+	Lv_Image[4] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponFireRate")));
+	Lv_Image[5] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponRange")));
+	Lv_Image[6] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponMagazine")));
+	Lv_Image[7] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponReload")));
+	for (int32 i = 0; i < ShopLvTotalNumber; ++i)
+	{
+		if (!Lv_Image[i]) continue;
+		LvLinearMID[i] = Cast<UMaterialInstanceDynamic>(Lv_Image[i]->GetDynamicMaterial());
+		if (LvLinearMID[i])
+		{
+			LvLinearMID[i]->SetScalarParameterValue(LvLinearWipeParamName, 0.f);
+		}
+	}
+
 	TryBindPlayerStateDelegates();
 
 	if (!bBoundDelegates && GetWorld())
@@ -110,6 +131,7 @@ void UShopWidget::Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>&
 	Background->SetVisibility(ESlateVisibility::Collapsed);
 	BP_ShopBanner->SetVisibility(ESlateVisibility::Collapsed);
 	StaticUpgradeText->SetVisibility(ESlateVisibility::Collapsed);
+	if (StatLevelPanel) StatLevelPanel->SetVisibility(ESlateVisibility::Collapsed);
 	if (CardSelectionPanel)
 	{
 		CardSelectionPanel->SetCardID(Options);
@@ -135,6 +157,7 @@ void UShopWidget::ReturnToShopButtons()
 	Background->SetVisibility(ESlateVisibility::Visible);
 	BP_ShopBanner->SetVisibility(ESlateVisibility::Visible);
 	StaticUpgradeText->SetVisibility(ESlateVisibility::Visible);
+	if (StatLevelPanel) StatLevelPanel->SetVisibility(ESlateVisibility::Visible);
 }
 
 void UShopWidget::SendToSelectionCardID(int32 CardID)
@@ -154,12 +177,14 @@ void UShopWidget::TryBindPlayerStateDelegates()
 	{
 		PS->OnPlayerDataChangedNative.AddUObject(this, &UShopWidget::OnPlayerDataChanged);
 		PS->OnGoldChnageNative.AddUObject(this, &UShopWidget::OnGoldChanged);
+		PS->OnAccumulatedUpgradesChangedNative.AddUObject(this, &UShopWidget::OnAccumulatedUpgradesChanged);
 		bBoundDelegates = true;
 		if (GetWorld())
 		{
 			GetWorld()->GetTimerManager().ClearTimer(BindingTimerHandle);
 		}
 		UpdateUpgradeButtons();
+		UpdateStatLevelWidgets();
 	}
 }
 void UShopWidget::UpdateUpgradeButtons()
@@ -210,6 +235,30 @@ void UShopWidget::UpdateUpgradeButtons()
 void UShopWidget::OnPlayerDataChanged(const FPlayerData& NewPlayerData)
 {
 	UpdateUpgradeButtons();
+	UpdateStatLevelWidgets();
+}
+void UShopWidget::OnAccumulatedUpgradesChanged(const FAccumulatedUpgrades& NewUpgrades)
+{
+	UpdateStatLevelWidgets();
+}
+void UShopWidget::UpdateStatLevelWidgets()
+{
+	AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
+	if (!PC) return;
+	AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+	if (!PS) return;
+
+	const FAccumulatedUpgrades& Upgrades = PS->GetAccumulatedUpgrades();
+
+	// 0: Health, 1: HealthRegen, 2: MoveSpeed, 3: WeaponDamage, 4: FireRate, 5: Range, 6: Magazine, 7: Reload
+	if (LvLinearMID[0]) LvLinearMID[0]->SetScalarParameterValue(LvLinearWipeParamName, (PS->PlayerData.LvHealth + Upgrades.LvHealth) * 0.2f);
+	if (LvLinearMID[1]) LvLinearMID[1]->SetScalarParameterValue(LvLinearWipeParamName, (PS->PlayerData.LvHealthRegeneration + Upgrades.LvHealthRegen) * 0.2f);
+	if (LvLinearMID[2]) LvLinearMID[2]->SetScalarParameterValue(LvLinearWipeParamName, (PS->PlayerData.LvMovementSpeed + Upgrades.LvMoveSpeed) * 0.2f);
+	if (LvLinearMID[3]) LvLinearMID[3]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponDamage * 0.2f);
+	if (LvLinearMID[4]) LvLinearMID[4]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponFireRate * 0.2f);
+	if (LvLinearMID[5]) LvLinearMID[5]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponRange * 0.2f);
+	if (LvLinearMID[6]) LvLinearMID[6]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponMagazine * 0.2f);
+	if (LvLinearMID[7]) LvLinearMID[7]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponReload * 0.2f);
 }
 void UShopWidget::OnGoldChanged(float NewGold)
 {
