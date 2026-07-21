@@ -12,8 +12,10 @@
 #include "Engine/World.h"
 #include "EngineUtils.h"
 #include "Kismet/GameplayStatics.h"
+#include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/PlayerState.h"
+#include "TimerManager.h"
 #include "UObject/Package.h"
 
 void UCardGameService::Init(AMainGameMode* InOwner)
@@ -336,21 +338,154 @@ bool UCardGameService::TryPickupCard(AMainPlayerController* RequestingPC, ACardD
 
 
 
-bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC, bool bCard0, bool bCard1, bool bCard2)
+bool UCardGameService::RevealSeotdaCard(
+    AMainPlayerController* RequestingPC,
+    bool bCard0,
+    bool bCard1,
+    bool bCard2,
+    FString& OutFailureReason)
 {
-    if (!OwnerGM->HasAuthority())
+    OutFailureReason.Reset();
+
+    if (!OwnerGM || !OwnerGM->HasAuthority())
     {
+        OutFailureReason = TEXT("NoServerAuthority");
         return false;
     }
 
     if (!RequestingPC)
     {
+        OutFailureReason = TEXT("InvalidRequest");
+        DS_LOG(TEXT("[DS] Seotda RevealReject Reason=InvalidRequest"));
+        return false;
+    }
+
+    if (OwnerGM->GetCurrentServerPhase() != EDediServerPhase::CardGame)
+    {
+        OutFailureReason = TEXT("InvalidPhase");
+        DS_LOG(TEXT("[DS] Seotda RevealReject Reason=InvalidPhase Player=%s Phase=%s"),
+            *RequestingPC->GetName(),
+            OwnerGM->GetServerPhaseName(OwnerGM->GetCurrentServerPhase()));
+        return false;
+    }
+
+    AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
+    if (!PS)
+    {
+        OutFailureReason = TEXT("MissingPlayerState");
+        DS_LOG(TEXT("[DS] Seotda RevealReject Reason=MissingPS Player=%s"), *RequestingPC->GetName());
+        return false;
+    }
+
+    if (PS->OwnedCards.Num() != MaxCardsPerPlayerPerRound)
+    {
+        OutFailureReason = TEXT("InvalidCardCount");
+        DS_LOG(TEXT("[DS] Seotda RevealReject Reason=InvalidCardCount Player=%s Count=%d Required=%d"),
+            *PS->GetPlayerName(),
+            PS->OwnedCards.Num(),
+            MaxCardsPerPlayerPerRound);
+        return false;
+    }
+
+    const int32 SelectedCount = (bCard0 ? 1 : 0) + (bCard1 ? 1 : 0) + (bCard2 ? 1 : 0);
+    if (SelectedCount != 1)
+    {
+        OutFailureReason = TEXT("InvalidSelectionCount");
+        DS_LOG(TEXT("[DS] Seotda RevealReject Reason=InvalidSelectCount Player=%s Count=%d Required=1"),
+            *PS->GetPlayerName(),
+            SelectedCount);
+        return false;
+    }
+
+    FSeotdaPlayerRoundState* ExistingState = SeotdaRoundStates.Find(PS);
+    if (ExistingState && ExistingState->bRevealConfirmed)
+    {
+        OutFailureReason = TEXT("AlreadyRevealed");
+        DS_LOG(TEXT("[DS] Seotda RevealReject Reason=AlreadyRevealed Player=%s"), *PS->GetPlayerName());
+        return false;
+    }
+
+    const bool RevealFlags[3] = { bCard0, bCard1, bCard2 };
+    FOwnedCardInfo RevealedCard;
+
+    for (int32 CardIndex = 0; CardIndex < 3; ++CardIndex)
+    {
+        const FOwnedCardInfo& CardInfo = PS->OwnedCards[CardIndex];
+        FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId);
+        if (!Record ||
+            Record->State != ECardRuntimeState::Owned ||
+            Record->OwnerPlayerState.Get() != PS ||
+            Record->CardID != CardInfo.CardID)
+        {
+            OutFailureReason = TEXT("OwnershipRecordMismatch");
+            UE_LOG(LogManagerCard, Error,
+                TEXT("[DS] Seotda RevealReject Player=%s Instance=%d Reason=OwnershipRecordMismatch"),
+                *PS->GetPlayerName(),
+                CardInfo.CardInstanceId);
+            return false;
+        }
+
+        if (RevealFlags[CardIndex])
+        {
+            RevealedCard = CardInfo;
+        }
+    }
+
+    if (RevealedCard.CardInstanceId <= 0)
+    {
+        OutFailureReason = TEXT("RevealSelectionFailed");
+        UE_LOG(LogManagerCard, Error,
+            TEXT("[DS] Seotda RevealReject Player=%s Reason=RevealSelectionFailed Reveal=%d"),
+            *PS->GetPlayerName(),
+            RevealedCard.CardInstanceId);
+        return false;
+    }
+
+    FSeotdaPlayerRoundState& State = SeotdaRoundStates.FindOrAdd(PS);
+    State.PlayerState = PS;
+    State.RevealedCardInstanceId = RevealedCard.CardInstanceId;
+    State.bRevealConfirmed = true;
+    State.bSubmitted = false;
+    State.SelectedCardInstanceIds.Reset();
+    State.HandResult = FSeotdaHandResult();
+
+    PS->SetRevealedCard(RevealedCard);
+
+    DS_LOG(TEXT("[DS] Seotda RevealOK Player=%s Public=[#%d:%s] WaitingForFinalHand=1"),
+        *PS->GetPlayerName(),
+        RevealedCard.CardInstanceId,
+        *CardDebug::ToString(RevealedCard.CardID));
+
+    BroadcastSeotdaState();
+
+    return true;
+}
+
+bool UCardGameService::SubmitSeotdaSelection(
+    AMainPlayerController* RequestingPC,
+    bool bCard0,
+    bool bCard1,
+    bool bCard2,
+    FString& OutFailureReason)
+{
+    OutFailureReason.Reset();
+
+    if (!OwnerGM || !OwnerGM->HasAuthority())
+    {
+        OutFailureReason = TEXT("NoServerAuthority");
+        return false;
+    }
+
+    if (!RequestingPC)
+    {
+        OutFailureReason = TEXT("InvalidRequest");
         DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=InvalidRequest"));
         return false;
     }
 
     if (OwnerGM->GetCurrentServerPhase() != EDediServerPhase::CardGame)
     {
+        OutFailureReason = TEXT("InvalidPhase");
         DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=InvalidPhase Player=%s Phase=%s"),
             *RequestingPC->GetName(),
             OwnerGM->GetServerPhaseName(OwnerGM->GetCurrentServerPhase()));
@@ -360,12 +495,14 @@ bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC
     AMainPlayerState* PS = RequestingPC->GetPlayerState<AMainPlayerState>();
     if (!PS)
     {
+        OutFailureReason = TEXT("MissingPlayerState");
         DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=MissingPS Player=%s"), *RequestingPC->GetName());
         return false;
     }
 
     if (PS->OwnedCards.Num() != MaxCardsPerPlayerPerRound)
     {
+        OutFailureReason = TEXT("InvalidCardCount");
         DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=InvalidCardCount Player=%s Count=%d Required=%d"),
             *PS->GetPlayerName(),
             PS->OwnedCards.Num(),
@@ -376,48 +513,85 @@ bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC
     const int32 SelectedCount = (bCard0 ? 1 : 0) + (bCard1 ? 1 : 0) + (bCard2 ? 1 : 0);
     if (SelectedCount != 2)
     {
-        DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=InvalidSelectCount Player=%s Count=%d"),
+        OutFailureReason = TEXT("InvalidSelectionCount");
+        DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=InvalidSelectCount Player=%s Count=%d Required=2"),
             *PS->GetPlayerName(),
             SelectedCount);
         return false;
     }
 
-    FSeotdaPlayerRoundState* ExistingState = SeotdaRoundStates.Find(PS);
-    if (ExistingState && ExistingState->bSubmitted)
+    FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
+    if (!State || !State->bRevealConfirmed || State->RevealedCardInstanceId <= 0)
     {
+        OutFailureReason = TEXT("RevealRequired");
+        DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=RevealRequired Player=%s"), *PS->GetPlayerName());
+        return false;
+    }
+    if (State->bSubmitted)
+    {
+        OutFailureReason = TEXT("AlreadySubmitted");
         DS_LOG(TEXT("[DS] Seotda SubmitReject Reason=AlreadySubmitted Player=%s"), *PS->GetPlayerName());
         return false;
     }
 
-    TArray<FOwnedCardInfo> SelectedCards;
-    if (bCard0)
+    const FOwnedCardInfo RevealedCard = PS->GetRevealedCard();
+    if (RevealedCard.CardInstanceId != State->RevealedCardInstanceId ||
+        RevealedCard.CardID == ECardID::None)
     {
-        SelectedCards.Add(PS->OwnedCards[0]);
+        OutFailureReason = TEXT("PublicCardStateMismatch");
+        UE_LOG(LogManagerCard, Error,
+            TEXT("[DS] Seotda SubmitReject Player=%s Reason=PublicCardStateMismatch State=%d Replicated=%d"),
+            *PS->GetPlayerName(),
+            State->RevealedCardInstanceId,
+            RevealedCard.CardInstanceId);
+        return false;
     }
-    if (bCard1)
+
+    const bool SelectionFlags[3] = { bCard0, bCard1, bCard2 };
+    TArray<FOwnedCardInfo> HandCards;
+    HandCards.Reserve(2);
+
+    for (int32 CardIndex = 0; CardIndex < 3; ++CardIndex)
     {
-        SelectedCards.Add(PS->OwnedCards[1]);
+        const FOwnedCardInfo& CardInfo = PS->OwnedCards[CardIndex];
+        FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId);
+        if (!Record ||
+            Record->State != ECardRuntimeState::Owned ||
+            Record->OwnerPlayerState.Get() != PS ||
+            Record->CardID != CardInfo.CardID)
+        {
+            OutFailureReason = TEXT("OwnershipRecordMismatch");
+            UE_LOG(LogManagerCard, Error,
+                TEXT("[DS] Seotda SubmitReject Player=%s Instance=%d Reason=OwnershipRecordMismatch"),
+                *PS->GetPlayerName(),
+                CardInfo.CardInstanceId);
+            return false;
+        }
+
+        if (SelectionFlags[CardIndex])
+        {
+            HandCards.Add(CardInfo);
+        }
     }
-    if (bCard2)
+
+    if (HandCards.Num() != 2)
     {
-        SelectedCards.Add(PS->OwnedCards[2]);
+        OutFailureReason = TEXT("HandSelectionFailed");
+        UE_LOG(LogManagerCard, Error,
+            TEXT("[DS] Seotda SubmitReject Player=%s Reason=HandSelectionFailed HandCount=%d"),
+            *PS->GetPlayerName(),
+            HandCards.Num());
+        return false;
     }
 
-    FSeotdaHandResult HandResult = FSeotdaRuleService::EvaluateSeotdaHand(SelectedCards[0], SelectedCards[1]);
+    const FSeotdaHandResult HandResult = FSeotdaRuleService::EvaluateSeotdaHand(HandCards[0], HandCards[1]);
+    State->HandResult = HandResult;
+    State->SelectedCardInstanceIds = HandResult.UsedCardInstanceIds;
+    State->bSubmitted = true;
 
-    FSeotdaPlayerRoundState NewState;
-    NewState.PlayerState = PS;
-    NewState.bSubmitted = true;
-
-    BroadcastSeotdaState();
-
-    NewState.HandResult = HandResult;
-    NewState.SelectedCardInstanceIds = HandResult.UsedCardInstanceIds;
-    SeotdaRoundStates.Add(PS, NewState);
-
-    for (int32 InstanceId : HandResult.UsedCardInstanceIds)
+    for (const FOwnedCardInfo& CardInfo : PS->OwnedCards)
     {
-        if (FServerCardRecord* Record = ServerCardRecords.Find(InstanceId))
+        if (FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId))
         {
             if (Record->OwnerPlayerState.Get() == PS)
             {
@@ -426,20 +600,17 @@ bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC
         }
     }
 
-    DS_LOG(TEXT("[DS] Seotda SubmitOK Player=%s Selected=[#%d:%s, #%d:%s] Combo=%s Rank=%d SubRank=%d AllCards=[%s]"),
+    DS_LOG(TEXT("[DS] Seotda SubmitOK Player=%s Public=[#%d:%s] Hand=[#%d:%s, #%d:%s] Combo=%s Rank=%d SubRank=%d"),
         *PS->GetPlayerName(),
-
-        SelectedCards[0].CardInstanceId,
-        *CardDebug::ToString(SelectedCards[0].CardID),
-
-        SelectedCards[1].CardInstanceId,
-        *CardDebug::ToString(SelectedCards[1].CardID),
-
+        RevealedCard.CardInstanceId,
+        *CardDebug::ToString(RevealedCard.CardID),
+        HandCards[0].CardInstanceId,
+        *CardDebug::ToString(HandCards[0].CardID),
+        HandCards[1].CardInstanceId,
+        *CardDebug::ToString(HandCards[1].CardID),
         *HandResult.Name,
         HandResult.Rank,
-        HandResult.SubRank,
-
-        *GetOwnedCardsDebugString(PS));
+        HandResult.SubRank);
 
     BroadcastSeotdaState();
 
@@ -449,7 +620,19 @@ bool UCardGameService::SubmitSeotdaSelection(AMainPlayerController* RequestingPC
 
 void UCardGameService::ResetSeotdaRoundStates()
 {
+    ClearSeotdaTimers();
     ClearReconnectSeotdaStateForRound(TEXT("ResetSeotdaRound"));
+
+    if (GetWorld())
+    {
+        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+        {
+            if (AMainPlayerState* PS = It->Get() ? It->Get()->GetPlayerState<AMainPlayerState>() : nullptr)
+            {
+                PS->ClearRevealedCard();
+            }
+        }
+    }
 
     SeotdaRoundStates.Empty();
     SeotdaTurnOrder.Empty();
@@ -466,6 +649,190 @@ void UCardGameService::ResetSeotdaRoundStates()
     LastSeotdaRoundResultSummary = TEXT("Pending");
 
     DS_LOG(TEXT("[DS] Seotda Reset Round=%d"), OwnerGM->GetCurrentRound());
+    BroadcastSeotdaState();
+}
+
+void UCardGameService::StartSeotdaSelectionTimeout()
+{
+    UWorld* World = GetWorld();
+    if (!OwnerGM || !OwnerGM->HasAuthority() || !World ||
+        OwnerGM->GetCurrentServerPhase() != EDediServerPhase::CardGame ||
+        bSeotdaBettingActive || bSeotdaRoundResolved)
+    {
+        return;
+    }
+
+    World->GetTimerManager().ClearTimer(SeotdaSelectionTimeoutTimerHandle);
+
+    const float TimeoutSeconds = OwnerGM->GetSeotdaSelectionTimeoutSeconds();
+    if (TimeoutSeconds <= 0.0f)
+    {
+        DS_LOG(TEXT("[DS] Seotda SelectionTimeout disabled Round=%d"),
+            OwnerGM->GetCurrentRound());
+        return;
+    }
+
+    // Selection is action-driven from here. Prevent the generic CardGame phase
+    // timer from advancing the phase before a slow client or this timeout finishes.
+    OwnerGM->ClearServerPhaseTimer();
+    OwnerGM->SetRemainingPhaseSeconds(0);
+    OwnerGM->SetServerRemainingTime(0);
+
+    World->GetTimerManager().SetTimer(
+        SeotdaSelectionTimeoutTimerHandle,
+        this,
+        &UCardGameService::HandleSeotdaSelectionTimeout,
+        TimeoutSeconds,
+        false);
+
+    DS_LOG(TEXT("[DS] Seotda SelectionTimeout started Round=%d Seconds=%.1f"),
+        OwnerGM->GetCurrentRound(),
+        TimeoutSeconds);
+}
+
+void UCardGameService::HandleSeotdaSelectionTimeout()
+{
+    UWorld* World = GetWorld();
+    if (!OwnerGM || !OwnerGM->HasAuthority() || !World ||
+        OwnerGM->GetCurrentServerPhase() != EDediServerPhase::CardGame ||
+        bSeotdaBettingActive || bSeotdaRoundResolved)
+    {
+        return;
+    }
+
+    TArray<AMainPlayerController*> PendingPlayers;
+    for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+    {
+        AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
+        AMainPlayerState* PS = MPC ? MPC->GetPlayerState<AMainPlayerState>() : nullptr;
+        const FSeotdaPlayerRoundState* State = PS ? SeotdaRoundStates.Find(PS) : nullptr;
+        if (MPC && PS && (!State || !State->bSubmitted))
+        {
+            PendingPlayers.Add(MPC);
+        }
+    }
+
+    DS_LOG(TEXT("[DS] Seotda SelectionTimeout fired Round=%d Pending=%d"),
+        OwnerGM->GetCurrentRound(),
+        PendingPlayers.Num());
+
+    int32 AutoRevealedCount = 0;
+    int32 AutoSubmittedCount = 0;
+
+    // First pass: publish every missing public card before any automatic hand submission.
+    for (AMainPlayerController* MPC : PendingPlayers)
+    {
+        AMainPlayerState* PS = MPC ? MPC->GetPlayerState<AMainPlayerState>() : nullptr;
+        if (!PS || PS->OwnedCards.Num() != MaxCardsPerPlayerPerRound)
+        {
+            UE_LOG(LogManagerCard, Error,
+                TEXT("[DS] Seotda AutoReveal failed Player=%s Reason=InvalidCardCount Count=%d Required=%d"),
+                *GetNameSafe(PS),
+                PS ? PS->OwnedCards.Num() : 0,
+                MaxCardsPerPlayerPerRound);
+            continue;
+        }
+
+        FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
+        if (!State || !State->bRevealConfirmed)
+        {
+            FString RevealFailureReason;
+            const bool bRevealAccepted = RevealSeotdaCard(
+                MPC,
+                true,
+                false,
+                false,
+                RevealFailureReason);
+
+            MPC->Client_ReceiveSeotdaRevealResult(
+                bRevealAccepted,
+                bRevealAccepted ? FString(TEXT("SelectionTimeoutAutoReveal")) : RevealFailureReason);
+
+            if (!bRevealAccepted)
+            {
+                continue;
+            }
+
+            ++AutoRevealedCount;
+            DS_LOG(TEXT("[DS] Seotda AutoReveal Player=%s Instance=%d"),
+                *PS->GetPlayerName(),
+                PS->OwnedCards[0].CardInstanceId);
+        }
+    }
+
+    // Second pass: submit a deterministic two-card hand for every player still pending.
+    for (AMainPlayerController* MPC : PendingPlayers)
+    {
+        AMainPlayerState* PS = MPC ? MPC->GetPlayerState<AMainPlayerState>() : nullptr;
+        if (!PS || PS->OwnedCards.Num() != MaxCardsPerPlayerPerRound)
+        {
+            UE_LOG(LogManagerCard, Error,
+                TEXT("[DS] Seotda AutoSubmit failed Player=%s Reason=InvalidCardCount Count=%d Required=%d"),
+                *GetNameSafe(PS),
+                PS ? PS->OwnedCards.Num() : 0,
+                MaxCardsPerPlayerPerRound);
+            continue;
+        }
+
+        FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS);
+        if (!State || !State->bRevealConfirmed)
+        {
+            UE_LOG(LogManagerCard, Error,
+                TEXT("[DS] Seotda AutoSubmit failed Player=%s Reason=RevealNotConfirmed"),
+                *PS->GetPlayerName());
+            continue;
+        }
+        if (State->bSubmitted)
+        {
+            continue;
+        }
+
+        FString SubmitFailureReason;
+        const bool bSubmitAccepted = SubmitSeotdaSelection(
+            MPC,
+            true,
+            true,
+            false,
+            SubmitFailureReason);
+
+        MPC->Client_ReceiveSeotdaSelectionResult(
+            bSubmitAccepted,
+            bSubmitAccepted ? FString(TEXT("SelectionTimeoutAutoSubmit")) : SubmitFailureReason);
+
+        if (bSubmitAccepted)
+        {
+            ++AutoSubmittedCount;
+            DS_LOG(TEXT("[DS] Seotda AutoSubmit Player=%s HandInstances=%d,%d"),
+                *PS->GetPlayerName(),
+                PS->OwnedCards[0].CardInstanceId,
+                PS->OwnedCards[1].CardInstanceId);
+        }
+    }
+
+    if (OwnerGM->GetCurrentServerPhase() != EDediServerPhase::CardGame ||
+        bSeotdaBettingActive ||
+        bSeotdaRoundResolved)
+    {
+        return;
+    }
+
+    TryResolveSeotdaRoundIfReady();
+    if (!bSeotdaBettingActive && !bSeotdaRoundResolved)
+    {
+        UE_LOG(LogManagerCard, Error,
+            TEXT("[DS] Seotda SelectionTimeout fallback Round=%d Pending=%d AutoRevealed=%d AutoSubmitted=%d Action=ResolveAndAdvance"),
+            OwnerGM->GetCurrentRound(),
+            PendingPlayers.Num(),
+            AutoRevealedCount,
+            AutoSubmittedCount);
+
+        ResolveSeotdaRoundResult(TEXT("SelectionTimeoutFallback"));
+        BroadcastSeotdaState();
+        if (OwnerGM->GetCurrentServerPhase() == EDediServerPhase::CardGame)
+        {
+            OwnerGM->FinishCurrentServerPhase(TEXT("SeotdaSelectionTimeoutFallback"));
+        }
+    }
 }
 
 void UCardGameService::TryResolveSeotdaRoundIfReady()
@@ -520,6 +887,10 @@ void UCardGameService::StartSeotdaBettingRound()
     }
 
     SeotdaTurnOrder.Empty();
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(SeotdaSelectionTimeoutTimerHandle);
+    }
 
     // 湲곕낯 ?먮룉? ?쒕쾭媛 ?ｋ뒗?? ?뚮젅?댁뼱 ?덉뿉?쒕뒗 鍮좎?吏 ?딅뒗??
     SeotdaPot = FMath::Max(0, SeotdaServerSeedPot);
@@ -530,24 +901,18 @@ void UCardGameService::StartSeotdaBettingRound()
     SeotdaCurrentTurnIndex = 0;
 
     for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
-{
-FSeotdaPlayerRoundState& State = Pair.Value;
+    {
+        FSeotdaPlayerRoundState& State = Pair.Value;
+        if (!State.PlayerState.IsValid() || !State.bSubmitted)
+        {
+            continue;
+        }
 
-if (!State.PlayerState.IsValid())
-{
-continue;
-}
+        State.bActedThisBetRound = false;
+        State.BetMoney = 0;
+    }
 
-if (!State.bSubmitted)
-{
-continue;
-}
-
-State.bActedThisBetRound = false;
-State.BetMoney = 0;
-}
-
-bSeotdaBettingActive = true;
+    bSeotdaBettingActive = true;
 
     OwnerGM->ClearServerPhaseTimer();
     OwnerGM->SetRemainingPhaseSeconds(0);
@@ -580,6 +945,7 @@ bSeotdaBettingActive = true;
         }
 
         State->bFolded = false;
+        State->bAllIn = false;
         State->bActedThisBetRound = false;
         State->BetMoney = 0;
         SeotdaTurnOrder.Add(PS);
@@ -594,6 +960,11 @@ bSeotdaBettingActive = true;
     if (SeotdaTurnOrder.Num() <= 1)
     {
         ResolveSeotdaRoundResult(TEXT("SinglePlayer"));
+        BroadcastSeotdaState();
+        if (OwnerGM->GetCurrentServerPhase() == EDediServerPhase::CardGame)
+        {
+            OwnerGM->FinishCurrentServerPhase(TEXT("SeotdaSinglePlayerSettled"));
+        }
         return;
     }
 
@@ -605,7 +976,115 @@ bSeotdaBettingActive = true;
         SeotdaCurrentBet);
 
     BroadcastSeotdaState();
+    StartSeotdaBetTurnTimeout();
 
+}
+
+void UCardGameService::StartSeotdaBetTurnTimeout()
+{
+    UWorld* World = GetWorld();
+    if (!OwnerGM || !OwnerGM->HasAuthority() || !World ||
+        OwnerGM->GetCurrentServerPhase() != EDediServerPhase::CardGame ||
+        !bSeotdaBettingActive || bSeotdaRoundResolved ||
+        !GetCurrentSeotdaTurnPlayer())
+    {
+        return;
+    }
+
+    World->GetTimerManager().ClearTimer(SeotdaBetTurnTimeoutTimerHandle);
+
+    const float TimeoutSeconds = OwnerGM->GetSeotdaBetTurnTimeoutSeconds();
+    if (TimeoutSeconds <= 0.0f)
+    {
+        DS_LOG(TEXT("[DS] Seotda BetTurnTimeout disabled Round=%d"),
+            OwnerGM->GetCurrentRound());
+        return;
+    }
+
+    World->GetTimerManager().SetTimer(
+        SeotdaBetTurnTimeoutTimerHandle,
+        this,
+        &UCardGameService::HandleSeotdaBetTurnTimeout,
+        TimeoutSeconds,
+        false);
+
+    DS_LOG(TEXT("[DS] Seotda BetTurnTimeout started Round=%d Player=%s Seconds=%.1f"),
+        OwnerGM->GetCurrentRound(),
+        *GetCurrentSeotdaTurnPlayer()->GetPlayerName(),
+        TimeoutSeconds);
+}
+
+void UCardGameService::HandleSeotdaBetTurnTimeout()
+{
+    if (!OwnerGM || !OwnerGM->HasAuthority() || !GetWorld() ||
+        OwnerGM->GetCurrentServerPhase() != EDediServerPhase::CardGame ||
+        !bSeotdaBettingActive || bSeotdaRoundResolved)
+    {
+        return;
+    }
+
+    AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
+    FSeotdaPlayerRoundState* State = TurnPS ? SeotdaRoundStates.Find(TurnPS) : nullptr;
+    if (!TurnPS || !State || !State->bSubmitted || State->bFolded || State->bAllIn)
+    {
+        UE_LOG(LogManagerCard, Error,
+            TEXT("[DS] Seotda BetTurnTimeout invalid turn Player=%s Action=Advance"),
+            *GetNameSafe(TurnPS));
+        AdvanceSeotdaBettingTurn();
+        return;
+    }
+
+    AMainPlayerController* TurnPC = nullptr;
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
+        if (MPC && MPC->GetPlayerState<AMainPlayerState>() == TurnPS)
+        {
+            TurnPC = MPC;
+            break;
+        }
+    }
+
+    const int32 NeedCall = FMath::Max(0, SeotdaCurrentBet - State->BetMoney);
+    const EBettingAction AutoAction = NeedCall > 0
+        ? EBettingAction::Die
+        : EBettingAction::Check;
+
+    DS_LOG(TEXT("[DS] Seotda BetTurnTimeout fired Round=%d Player=%s NeedCall=%d AutoAction=%d"),
+        OwnerGM->GetCurrentRound(),
+        *TurnPS->GetPlayerName(),
+        NeedCall,
+        static_cast<int32>(AutoAction));
+
+    if (TurnPC && SubmitSeotdaBetAction(TurnPC, AutoAction))
+    {
+        return;
+    }
+
+    State->bFolded = true;
+    State->bActedThisBetRound = true;
+
+    if (GetActiveSeotdaPlayerCount() <= 1 || AreSeotdaBetsSettled())
+    {
+        ResolveSeotdaRoundResult(TEXT("BetTurnTimeoutFallback"));
+        BroadcastSeotdaState();
+        if (OwnerGM->GetCurrentServerPhase() == EDediServerPhase::CardGame)
+        {
+            OwnerGM->FinishCurrentServerPhase(TEXT("SeotdaBetTimeoutSettled"));
+        }
+        return;
+    }
+
+    AdvanceSeotdaBettingTurn();
+}
+
+void UCardGameService::ClearSeotdaTimers()
+{
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(SeotdaSelectionTimeoutTimerHandle);
+        World->GetTimerManager().ClearTimer(SeotdaBetTurnTimeoutTimerHandle);
+    }
 }
 
 bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, EBettingAction Action)
@@ -709,6 +1188,11 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
         return false;
     }
 
+    if (GetWorld())
+    {
+        GetWorld()->GetTimerManager().ClearTimer(SeotdaBetTurnTimeoutTimerHandle);
+    }
+
     int32 Paid = 0;
     if (bFoldAction)
     {
@@ -719,6 +1203,7 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
     {
         Paid = PaySeotdaBet(PS, RequestedPay);
         State->BetMoney += Paid;
+        State->bAllIn = GetSeotdaPlayerMoney(PS) <= 0;
         if (State->BetMoney > SeotdaCurrentBet)
         {
             SeotdaCurrentBet = State->BetMoney;
@@ -729,7 +1214,10 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
         {
             for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
             {
-                if (Pair.Key != PS && Pair.Value.bSubmitted && !Pair.Value.bFolded)
+                if (Pair.Key != PS &&
+                    Pair.Value.bSubmitted &&
+                    !Pair.Value.bFolded &&
+                    !Pair.Value.bAllIn)
                 {
                     Pair.Value.bActedThisBetRound = false;
                 }
@@ -739,7 +1227,7 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
         State->bActedThisBetRound = true;
     }
 
-    DS_LOG(TEXT("[DS] Seotda BetOK Player=%s Action=%d Paid=%d BetMoney=%d Pot=%d CurrentBet=%d Money=%d Folded=%d"),
+    DS_LOG(TEXT("[DS] Seotda BetOK Player=%s Action=%d Paid=%d BetMoney=%d Pot=%d CurrentBet=%d Money=%d Folded=%d AllIn=%d"),
         *PS->GetPlayerName(),
         static_cast<int32>(Action),
         Paid,
@@ -747,7 +1235,8 @@ bool UCardGameService::SubmitSeotdaBetAction(AMainPlayerController* RequestingPC
         SeotdaPot,
         SeotdaCurrentBet,
         GetSeotdaPlayerMoney(PS),
-        State->bFolded ? 1 : 0);
+        State->bFolded ? 1 : 0,
+        State->bAllIn ? 1 : 0);
 
     if (GetActiveSeotdaPlayerCount() <= 1 || AreSeotdaBetsSettled())
     {
@@ -771,6 +1260,11 @@ void UCardGameService::AdvanceSeotdaBettingTurn()
     if (SeotdaTurnOrder.Num() <= 0)
     {
         ResolveSeotdaRoundResult(TEXT("NoTurnOrder"));
+        BroadcastSeotdaState();
+        if (OwnerGM && OwnerGM->GetCurrentServerPhase() == EDediServerPhase::CardGame)
+        {
+            OwnerGM->FinishCurrentServerPhase(TEXT("SeotdaNoTurnOrderSettled"));
+        }
         return;
     }
 
@@ -779,7 +1273,11 @@ void UCardGameService::AdvanceSeotdaBettingTurn()
         SeotdaCurrentTurnIndex = (SeotdaCurrentTurnIndex + 1) % SeotdaTurnOrder.Num();
         AMainPlayerState* CandidatePS = SeotdaTurnOrder[SeotdaCurrentTurnIndex].Get();
         FSeotdaPlayerRoundState* State = CandidatePS ? SeotdaRoundStates.Find(CandidatePS) : nullptr;
-        if (CandidatePS && State && State->bSubmitted && !State->bFolded)
+        if (CandidatePS &&
+            State &&
+            State->bSubmitted &&
+            !State->bFolded &&
+            !State->bAllIn)
         {
             DS_LOG(TEXT("[DS] Seotda BetTurn Player=%s Index=%d Pot=%d CurrentBet=%d NeedCall=%d"),
                 *CandidatePS->GetPlayerName(),
@@ -788,13 +1286,19 @@ void UCardGameService::AdvanceSeotdaBettingTurn()
                 SeotdaCurrentBet,
                 FMath::Max(0, SeotdaCurrentBet - State->BetMoney));
 
-    BroadcastSeotdaState();
+            BroadcastSeotdaState();
+            StartSeotdaBetTurnTimeout();
 
             return;
         }
     }
 
     ResolveSeotdaRoundResult(TEXT("NoActiveTurn"));
+    BroadcastSeotdaState();
+    if (OwnerGM && OwnerGM->GetCurrentServerPhase() == EDediServerPhase::CardGame)
+    {
+        OwnerGM->FinishCurrentServerPhase(TEXT("SeotdaNoActiveTurnSettled"));
+    }
 }
 
 void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
@@ -803,6 +1307,8 @@ void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
     {
         return;
     }
+
+    ClearSeotdaTimers();
 
     if (bSeotdaRoundResolved)
     {
@@ -820,8 +1326,7 @@ void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
         }
     }
 
-    FSeotdaPlayerRoundState* BestState = nullptr;
-    bool bTie = false;
+    TArray<FSeotdaPlayerRoundState*> WinningStates;
 
     for (TPair<AMainPlayerState*, FSeotdaPlayerRoundState>& Pair : SeotdaRoundStates)
     {
@@ -832,27 +1337,33 @@ void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
             continue;
         }
 
-        if (!BestState)
+        if (WinningStates.IsEmpty())
         {
-            BestState = &State;
-            bTie = false;
+            WinningStates.Add(&State);
             continue;
         }
 
-        const int32 CompareResult = FSeotdaRuleService::CompareSeotdaHands(State.HandResult, BestState->HandResult);
+        const int32 CompareResult = FSeotdaRuleService::CompareSeotdaHands(
+            State.HandResult,
+            WinningStates[0]->HandResult);
 
         if (CompareResult > 0)
         {
-            BestState = &State;
-            bTie = false;
+            WinningStates.Reset();
+            WinningStates.Add(&State);
         }
         else if (CompareResult == 0)
         {
-            bTie = true;
+            WinningStates.Add(&State);
         }
     }
 
-    if (!BestState || !BestState->PlayerState.IsValid())
+    WinningStates.RemoveAll([](const FSeotdaPlayerRoundState* State)
+    {
+        return !State || !State->PlayerState.IsValid();
+    });
+
+    if (WinningStates.IsEmpty())
     {
         LastSeotdaRoundResultSummary = FString::Printf(
             TEXT("Winner=None Combo=None Pot=%d Reason=%s"),
@@ -869,24 +1380,67 @@ void UCardGameService::ResolveSeotdaRoundResult(const TCHAR* Reason)
         return;
     }
 
-    AMainPlayerState* WinnerPS = BestState->PlayerState.Get();
-
-    if (WinnerPS && SeotdaPot > 0)
+    TArray<AMainPlayerState*> WinnerPlayers;
+    WinnerPlayers.Reserve(WinningStates.Num());
+    for (FSeotdaPlayerRoundState* State : WinningStates)
     {
-        WinnerPS->AddGold(SeotdaPot);
+        if (AMainPlayerState* WinnerPS = State ? State->PlayerState.Get() : nullptr)
+        {
+            WinnerPlayers.AddUnique(WinnerPS);
+        }
     }
 
-    LastSeotdaRoundResultSummary = FString::Printf(
-        TEXT("Winner=%s Combo=%s Rank=%d SubRank=%d Pot=%d Tie=%d Reason=%s Money=%d"),
+    WinnerPlayers.Sort([](const AMainPlayerState& Left, const AMainPlayerState& Right)
+    {
+        const int32 NameCompare = Left.GetPlayerName().Compare(
+            Right.GetPlayerName(),
+            ESearchCase::IgnoreCase);
+        if (NameCompare != 0)
+        {
+            return NameCompare < 0;
+        }
+        return Left.GetPlayerId() < Right.GetPlayerId();
+    });
 
-        WinnerPS ? *WinnerPS->GetPlayerName() : TEXT("<NULL>"),
+    const int32 WinnerCount = WinnerPlayers.Num();
+    const int32 BaseShare = WinnerCount > 0 ? SeotdaPot / WinnerCount : 0;
+    const int32 Remainder = WinnerCount > 0 ? SeotdaPot % WinnerCount : 0;
+
+    TArray<FString> WinnerNames;
+    TArray<FString> PayoutParts;
+    for (int32 WinnerIndex = 0; WinnerIndex < WinnerCount; ++WinnerIndex)
+    {
+        AMainPlayerState* WinnerPS = WinnerPlayers[WinnerIndex];
+        const int32 Award = BaseShare + (WinnerIndex < Remainder ? 1 : 0);
+        if (Award > 0)
+        {
+            WinnerPS->AddGold(Award);
+        }
+
+        WinnerNames.Add(WinnerPS->GetPlayerName());
+        PayoutParts.Add(FString::Printf(
+            TEXT("%s:+%d=>%d"),
+            *WinnerPS->GetPlayerName(),
+            Award,
+            GetSeotdaPlayerMoney(WinnerPS)));
+    }
+
+    FSeotdaPlayerRoundState* BestState = WinningStates[0];
+    const bool bTie = WinnerCount > 1;
+    const FString WinnerLabel = bTie
+        ? FString::Printf(TEXT("Tie(%s)"), *FString::Join(WinnerNames, TEXT("/")))
+        : WinnerNames[0];
+
+    LastSeotdaRoundResultSummary = FString::Printf(
+        TEXT("Winner=%s Combo=%s Rank=%d SubRank=%d Pot=%d Tie=%d Payouts=%s Reason=%s"),
+        *WinnerLabel,
         *BestState->HandResult.Name,
         BestState->HandResult.Rank,
         BestState->HandResult.SubRank,
         SeotdaPot,
         bTie ? 1 : 0,
-        Reason ? Reason : TEXT("<NULL>"),
-        WinnerPS ? GetSeotdaPlayerMoney(WinnerPS) : 0
+        *FString::Join(PayoutParts, TEXT(",")),
+        Reason ? Reason : TEXT("<NULL>")
     );
 
     DS_LOG(TEXT("[DS] Seotda Winner %s"), *LastSeotdaRoundResultSummary);
@@ -934,6 +1488,7 @@ continue;
 
 AMainPlayerState* PS = MPC->GetPlayerState<AMainPlayerState>();
 
+bool bMyRevealConfirmed = false;
 bool bMySubmitted = false;
 bool bMyFolded = false;
 int32 MyBetMoney = 0;
@@ -946,6 +1501,7 @@ bMyTurn = (TurnPS == PS);
 
 if (const FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(PS))
 {
+bMyRevealConfirmed = State->bRevealConfirmed;
 bMySubmitted = State->bSubmitted;
 bMyFolded = State->bFolded;
 MyBetMoney = State->BetMoney;
@@ -962,6 +1518,7 @@ SeotdaCurrentBet,
 MyBetMoney,
 NeedCall,
 bMyTurn,
+bMyRevealConfirmed,
 bMySubmitted,
 bMyFolded,
 bSeotdaRoundResolved
@@ -1038,6 +1595,12 @@ continue;
 }
 
 ActiveSubmittedCount++;
+
+if (State.bAllIn)
+{
+ActedCount++;
+continue;
+}
 
 if (!State.bActedThisBetRound)
 {
@@ -1251,20 +1814,35 @@ ACardDropActor* UCardGameService::SpawnCardDrop(ECardID CardID, const FVector& S
     return CardActor;
 }
 
-int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const FVector& BaseDropLocation)
+ACardDropActor* UCardGameService::SpawnExistingOwnedCardDrop(
+    const FServerCardRecord& Record,
+    AActor* SourceActor,
+    const FVector& SourceLocation)
 {
-    const FCardPlacementService CardPlacement = OwnerGM->MakeCardPlacementService();
-    if (!OwnerGM->HasAuthority() || !GetWorld() || !TargetPS)
+    if (!OwnerGM || !OwnerGM->HasAuthority() || !GetWorld() ||
+        Record.CardInstanceId <= 0 || Record.CardID == ECardID::None)
     {
-        return 0;
+        return nullptr;
     }
 
-    const TArray<FOwnedCardInfo> CardsToDrop = TargetPS->GetOwnedCards();
-    if (CardsToDrop.Num() == 0)
+    FVector DropLocation = SourceLocation + FVector(0.0f, 0.0f, 80.0f);
+    FHitResult GroundHit;
+    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CardManualDropGround), false);
+    if (SourceActor)
     {
-        DS_LOG(TEXT("[DS] Card DeathDropSkip Player=%s Reason=NoOwnedCards"),
-            *TargetPS->GetPlayerName());
-        return 0;
+        QueryParams.AddIgnoredActor(SourceActor);
+    }
+
+    const FVector TraceStart = SourceLocation + FVector(0.0f, 0.0f, 250.0f);
+    const FVector TraceEnd = SourceLocation - FVector(0.0f, 0.0f, 2000.0f);
+    if (GetWorld()->LineTraceSingleByChannel(
+        GroundHit,
+        TraceStart,
+        TraceEnd,
+        ECC_Visibility,
+        QueryParams))
+    {
+        DropLocation = GroundHit.ImpactPoint + FVector(0.0f, 0.0f, 80.0f);
     }
 
     TSubclassOf<ACardDropActor> SpawnClass = CardDropActorClass;
@@ -1273,119 +1851,114 @@ int32 UCardGameService::DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, con
         SpawnClass = ACardDropActor::StaticClass();
     }
 
-    int32 SpawnedCount = 0;
-    TArray<FVector> ExistingDropLocations;
-    ExistingDropLocations.Reserve(CardsToDrop.Num());
+    FActorSpawnParameters Params;
+    Params.Owner = SourceActor;
+    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-    for (int32 CardIndex = 0; CardIndex < CardsToDrop.Num(); ++CardIndex)
+    ACardDropActor* CardActor = GetWorld()->SpawnActor<ACardDropActor>(
+        SpawnClass,
+        DropLocation,
+        FRotator::ZeroRotator,
+        Params);
+    if (!CardActor)
     {
-        const FOwnedCardInfo& CardInfo = CardsToDrop[CardIndex];
-        if (CardInfo.CardID == ECardID::None)
-        {
-            DS_LOG(TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Reason=NoneCardID"),
-                *TargetPS->GetPlayerName(),
-                CardInfo.CardInstanceId);
-            continue;
-        }
-
-        FVector DropLocation;
-        if (!CardPlacement.PickDeathCardDropLocation(BaseDropLocation, ExistingDropLocations, CardIndex, DropLocation))
-        {
-            DropLocation = BaseDropLocation;
-            const float Angle = (CardIndex / static_cast<float>(CardsToDrop.Num())) * 2.0f * PI;
-            const float DropRadius = FMath::Max(120.0f, OwnerGM->GetCardDeathDropStartRadius());
-            DropLocation.X += FMath::Cos(Angle) * DropRadius;
-            DropLocation.Y += FMath::Sin(Angle) * DropRadius;
-            DropLocation.Z += FMath::Max(80.0f, OwnerGM->GetCardDeathDropGroundOffsetZ());
-
-            DS_LOG(TEXT("[DS] Card DeathDropLocationFallback Player=%s Index=%d Instance=%d Card=%d Location=%s"),
-                *TargetPS->GetPlayerName(),
-                CardIndex,
-                CardInfo.CardInstanceId,
-                static_cast<int32>(CardInfo.CardID),
-                *DropLocation.ToCompactString());
-        }
-
-        FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId);
-        if (!Record)
-        {
-            ACardDropActor* FallbackActor = SpawnCardDrop(CardInfo.CardID, DropLocation);
-            if (!FallbackActor)
-            {
-                DS_LOG(TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Card=%d Name=%s Reason=MissingRecordFallbackSpawnFail Location=%s"),
-                    *TargetPS->GetPlayerName(),
-                    CardInfo.CardInstanceId,
-                    static_cast<int32>(CardInfo.CardID),
-                    *CardDebug::ToString(CardInfo.CardID),
-                    *DropLocation.ToCompactString());
-                continue;
-            }
-
-            FOwnedCardInfo RemovedCard;
-            TargetPS->RemoveOwnedCardByInstanceId(CardInfo.CardInstanceId, RemovedCard);
-            SpawnedCount++;
-            ExistingDropLocations.Add(DropLocation);
-
-            DS_LOG(TEXT("[DS] Card DeathDropFallback Player=%s OldInstance=%d NewInstance=%d Card=%d Name=%s Location=%s"),
-                *TargetPS->GetPlayerName(),
-                CardInfo.CardInstanceId,
-                FallbackActor->GetCardInstanceId(),
-                static_cast<int32>(CardInfo.CardID),
-                *CardDebug::ToString(CardInfo.CardID),
-                *DropLocation.ToCompactString());
-            continue;
-        }
-
-        if (Record->DropActor.IsValid())
-        {
-            Record->DropActor->Destroy();
-            Record->DropActor.Reset();
-        }
-
-        FActorSpawnParameters Params;
-        Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
-
-        ACardDropActor* CardActor = GetWorld()->SpawnActor<ACardDropActor>(SpawnClass, DropLocation, FRotator::ZeroRotator, Params);
-        if (!CardActor)
-        {
-            DS_LOG(TEXT("[DS] Card DeathDropFail Player=%s Instance=%d Card=%d Name=%s Reason=SpawnNull Location=%s"),
-                *TargetPS->GetPlayerName(),
-                CardInfo.CardInstanceId,
-                static_cast<int32>(CardInfo.CardID),
-                *CardDebug::ToString(CardInfo.CardID),
-                *DropLocation.ToCompactString());
-            continue;
-        }
-
-        CardActor->InitCardDrop(Record->CardInstanceId, Record->CardID);
-        ActiveCardDrops.Add(CardActor);
-
-        Record->State = ECardRuntimeState::WorldDrop;
-        Record->OwnerPlayerState = nullptr;
-        Record->DropActor = CardActor;
-
-        FOwnedCardInfo RemovedCard;
-        TargetPS->RemoveOwnedCardByInstanceId(CardInfo.CardInstanceId, RemovedCard);
-        SpawnedCount++;
-        ExistingDropLocations.Add(DropLocation);
-
-        DS_LOG(TEXT("[DS] Card DeathDrop Player=%s Instance=%d Card=%d Name=%s Actor=%s Location=%s RemainingOwned=%d"),
-            *TargetPS->GetPlayerName(),
-            Record->CardInstanceId,
-            static_cast<int32>(Record->CardID),
-            *CardDebug::ToString(Record->CardID),
-            *CardActor->GetName(),
-            *DropLocation.ToCompactString(),
-            TargetPS->PublicCardCount);
+        UE_LOG(LogManagerCard, Error,
+            TEXT("[DS] Card ManualDropFail Instance=%d Card=%d Source=%s Requested=%s"),
+            Record.CardInstanceId,
+            static_cast<int32>(Record.CardID),
+            *GetNameSafe(SourceActor),
+            *DropLocation.ToCompactString());
+        return nullptr;
     }
 
-    DS_LOG(TEXT("[DS] Card DeathDropComplete Player=%s Requested=%d Spawned=%d RemainingOwned=%d"),
-        *TargetPS->GetPlayerName(),
-        CardsToDrop.Num(),
-        SpawnedCount,
-        TargetPS->PublicCardCount);
+    CardActor->InitCardDrop(Record.CardInstanceId, Record.CardID);
+    return CardActor;
+}
 
-    return SpawnedCount;
+bool UCardGameService::DiscardOwnedCard(
+    AMainPlayerController* RequestingPC,
+    int32 CardInstanceId,
+    bool bDropIntoWorld,
+    const TCHAR* Context)
+{
+    AMainPlayerState* TargetPS = RequestingPC
+        ? RequestingPC->GetPlayerState<AMainPlayerState>()
+        : nullptr;
+    APawn* SourcePawn = RequestingPC ? RequestingPC->GetPawn() : nullptr;
+
+    if (!OwnerGM || !OwnerGM->HasAuthority() || !TargetPS || CardInstanceId <= 0 ||
+        (bDropIntoWorld && !SourcePawn))
+    {
+        return false;
+    }
+
+    const FOwnedCardInfo* OwnedCard = TargetPS->OwnedCards.FindByPredicate(
+        [CardInstanceId](const FOwnedCardInfo& CardInfo)
+        {
+            return CardInfo.CardInstanceId == CardInstanceId;
+        });
+    FServerCardRecord* Record = ServerCardRecords.Find(CardInstanceId);
+
+    if (!OwnedCard ||
+        !Record ||
+        Record->State != ECardRuntimeState::Owned ||
+        Record->OwnerPlayerState.Get() != TargetPS ||
+        Record->CardID != OwnedCard->CardID)
+    {
+        UE_LOG(LogManagerCard, Warning,
+            TEXT("[DS][Security] CardDiscardReject Player=%s Instance=%d Reason=OwnershipRecordMismatch HasOwned=%d HasRecord=%d RecordState=%d RecordOwner=%s"),
+            *TargetPS->GetPlayerName(),
+            CardInstanceId,
+            OwnedCard ? 1 : 0,
+            Record ? 1 : 0,
+            Record ? static_cast<int32>(Record->State) : INDEX_NONE,
+            Record ? *GetNameSafe(Record->OwnerPlayerState.Get()) : TEXT("<NO_RECORD>"));
+        return false;
+    }
+
+    ACardDropActor* SpawnedDrop = nullptr;
+    if (bDropIntoWorld)
+    {
+        SpawnedDrop = SpawnExistingOwnedCardDrop(*Record, SourcePawn, SourcePawn->GetActorLocation());
+        if (!SpawnedDrop)
+        {
+            return false;
+        }
+    }
+
+    FOwnedCardInfo RemovedCard;
+    if (!TargetPS->RemoveOwnedCardByInstanceId(CardInstanceId, RemovedCard))
+    {
+        if (SpawnedDrop)
+        {
+            SpawnedDrop->Destroy();
+        }
+        UE_LOG(LogManagerCard, Error,
+            TEXT("[DS] CardDiscardFail Player=%s Instance=%d Reason=OwnedListMutationFailed"),
+            *TargetPS->GetPlayerName(),
+            CardInstanceId);
+        return false;
+    }
+
+    Record->State = bDropIntoWorld ? ECardRuntimeState::WorldDrop : ECardRuntimeState::Discarded;
+    Record->OwnerPlayerState = nullptr;
+    Record->DropActor = SpawnedDrop;
+    if (SpawnedDrop)
+    {
+        ActiveCardDrops.Add(SpawnedDrop);
+    }
+
+    UE_LOG(LogManagerCard, Display,
+        TEXT("[DS] CardDiscard Player=%s Instance=%d Card=%d Name=%s Context=%s WorldDrop=%d Location=%s RemainingOwned=%d"),
+        *TargetPS->GetPlayerName(),
+        RemovedCard.CardInstanceId,
+        static_cast<int32>(RemovedCard.CardID),
+        *CardDebug::ToString(RemovedCard.CardID),
+        Context ? Context : TEXT("<NULL>"),
+        SpawnedDrop ? 1 : 0,
+        SpawnedDrop ? *SpawnedDrop->GetActorLocation().ToCompactString() : TEXT("<REMOVED>"),
+        TargetPS->PublicCardCount);
+    return true;
 }
 
 bool UCardGameService::SpawnRoundCardBundleForBattleRoyale(TArray<int32>& OutSpawnedCardInstanceIds)
@@ -1723,6 +2296,8 @@ void UCardGameService::ClearRoundCardsForAllPlayers()
         return;
     }
 
+    ClearSeotdaTimers();
+
     int32 TargetCount = 0;
     int32 CardCount = 0;
 
@@ -1758,6 +2333,70 @@ void UCardGameService::ClearRoundCardsForAllPlayers()
     SeotdaRoundStates.Empty();
 
     DS_LOG(TEXT("[DS] Card ClearRoundCards targets=%d cards=%d round=%d"), TargetCount, CardCount, OwnerGM->GetCurrentRound());
+}
+
+int32 UCardGameService::ClearDetachedOwnedCardRecords(
+    const TArray<FOwnedCardInfo>& OwnedCards,
+    const TCHAR* Context)
+{
+    if (!OwnerGM || !OwnerGM->HasAuthority())
+    {
+        return 0;
+    }
+
+    int32 ClearedCount = 0;
+    for (const FOwnedCardInfo& CardInfo : OwnedCards)
+    {
+        FServerCardRecord* Record = ServerCardRecords.Find(CardInfo.CardInstanceId);
+        if (!Record || Record->CardID != CardInfo.CardID)
+        {
+            UE_LOG(LogManagerCard, Error,
+                TEXT("[DS] Card DetachedClearMismatch Instance=%d Card=%d HasRecord=%d RecordCard=%d Context=%s"),
+                CardInfo.CardInstanceId,
+                static_cast<int32>(CardInfo.CardID),
+                Record ? 1 : 0,
+                Record ? static_cast<int32>(Record->CardID) : INDEX_NONE,
+                Context ? Context : TEXT("<NULL>"));
+            continue;
+        }
+
+        if (Record->State != ECardRuntimeState::Owned &&
+            Record->State != ECardRuntimeState::Used &&
+            Record->State != ECardRuntimeState::Removed)
+        {
+            UE_LOG(LogManagerCard, Warning,
+                TEXT("[DS] Card DetachedClearUnexpectedState Instance=%d Card=%d State=%d Context=%s"),
+                CardInfo.CardInstanceId,
+                static_cast<int32>(CardInfo.CardID),
+                static_cast<int32>(Record->State),
+                Context ? Context : TEXT("<NULL>"));
+        }
+
+        if (ACardDropActor* DropActor = Record->DropActor.Get())
+        {
+            ActiveCardDrops.RemoveAll([DropActor](const TObjectPtr<ACardDropActor>& CardActor)
+            {
+                return CardActor.Get() == DropActor;
+            });
+            DropActor->Destroy();
+        }
+
+        Record->State = ECardRuntimeState::Removed;
+        Record->OwnerPlayerState = nullptr;
+        Record->DropActor = nullptr;
+        ++ClearedCount;
+    }
+
+    if (ClearedCount > 0)
+    {
+        UE_LOG(LogManagerCard, Display,
+            TEXT("[DS] Card DetachedRoundCardsCleared Count=%d Requested=%d Round=%d Context=%s"),
+            ClearedCount,
+            OwnedCards.Num(),
+            OwnerGM->GetCurrentRound(),
+            Context ? Context : TEXT("<NULL>"));
+    }
+    return ClearedCount;
 }
 
 bool UCardGameService::GrantCardRecordToPlayer(int32 CardInstanceId, AMainPlayerState* TargetPS, const TCHAR* Context)

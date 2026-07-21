@@ -42,7 +42,18 @@ private:
 	bool bIsClientFire;
 	float LastClientFireTime;
 	float LastServerFireTime;
+	TWeakObjectPtr<ACharacter> ClientFireCharacter;
+	float ActiveClientFireRate = 0.01f;
+	float ActiveServerFireRate = 0.01f;
+	bool bClientFullAuto = false;
+	bool bServerFullAuto = false;
 
+	void HandleClientFireLoop();
+	void HandleClientFireRetry();
+	void HandleServerFireLoop();
+	void HandleServerFireRetry();
+	void ClearClientFireTimers(UWorld* World);
+	void ClearServerFireTimers(UWorld* World);
 	void Server_ExecuteFire();
 	void Client_ExecuteFire(AActor* InOwner);
 	float CalculateDamage(int32 Base, int32 Level) const;

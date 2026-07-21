@@ -9,9 +9,18 @@
 #include "Kismet/GameplayStatics.h"
 #include "Game/Login/LoginPlayerController.h"
 
+namespace
+{
+    constexpr int32 MaxLoginIdLength = 8;
+}
+
 void ULoginWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (IDInput)
+	{
+		IDInput->OnTextChanged.AddDynamic(this, &ULoginWidget::OnIdTextChanged);
+	}
 	if (LoginButton)
 	{
 		LoginButton->OnClicked.AddDynamic(this, &ULoginWidget::OnLoginButtonClick);
@@ -26,6 +35,20 @@ void ULoginWidget::NativeConstruct()
 	if (ImageAnimation)
 	{
 		PlayAnimation(ImageAnimation, 0.0f, 0);
+	}
+}
+
+void ULoginWidget::OnIdTextChanged(const FText& Text)
+{
+	if (!IDInput)
+	{
+		return;
+	}
+
+	const FString ID = Text.ToString();
+	if (ID.Len() > MaxLoginIdLength)
+	{
+		IDInput->SetText(FText::FromString(ID.Left(MaxLoginIdLength)));
 	}
 }
 

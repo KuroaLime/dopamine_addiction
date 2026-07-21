@@ -22,25 +22,108 @@
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
 #include "GameFramework/Pawn.h"
+#include "GameFramework/PlayerState.h"
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Game/InGame/TPS/UI/Shop/ShopWidget.h"
+#include "HAL/PlatformTime.h"
 #include "TimerManager.h"
 
 #include "Game/InGame/MainGameState.h"
 
 namespace
 {
-	const FName& GetPersistentMainWorldLevelName()
+	constexpr double CardPickupMinimumIntervalSeconds = 0.10;
+	constexpr double CardDiscardMinimumIntervalSeconds = 0.15;
+	constexpr double SeotdaRevealMinimumIntervalSeconds = 0.25;
+	constexpr double SeotdaSelectionMinimumIntervalSeconds = 0.25;
+	constexpr double SeotdaBetMinimumIntervalSeconds = 0.25;
+	constexpr double StreamLevelAckMinimumIntervalSeconds = 0.10;
+	constexpr double CardBundleAckMinimumIntervalSeconds = 0.10;
+	constexpr double ShopModeMinimumIntervalSeconds = 0.10;
+	constexpr double ShopRandomRollMinimumIntervalSeconds = 0.50;
+	constexpr double ShopUpgradeSelectionMinimumIntervalSeconds = 0.10;
+	constexpr double ServerRpcRejectedWindowSeconds = 2.0;
+	constexpr double ServerRpcWarningCooldownSeconds = 10.0;
+	constexpr int32 ServerRpcRejectedWarningThreshold = 10;
+	constexpr float ServerPositionCorrectionRetryIntervalSeconds = 0.25f;
+	constexpr int32 ServerPositionCorrectionMaxSends = 3;
+	constexpr float ServerPositionCorrectionDriftWarningDistance = 50.0f;
+	constexpr float ServerPositionCorrectionDriftWarningDegrees = 15.0f;
+
+	float GetControllerRotationErrorDegrees(const FRotator& Left, const FRotator& Right)
+	{
+		const FRotator Delta = (Left - Right).GetNormalized();
+		return FMath::Max3(
+			FMath::Abs(Delta.Pitch),
+			FMath::Abs(Delta.Yaw),
+			FMath::Abs(Delta.Roll));
+	}
+
+	const FName& GetControllerPersistentMainWorldLevelName()
 	{
 		static const FName LevelName(TEXT("Main_Game_World"));
 		return LevelName;
 	}
 
-	bool IsPersistentMainWorldTarget(FName LevelName)
+	bool IsControllerPersistentMainWorldTarget(FName LevelName)
 	{
-		return LevelName == GetPersistentMainWorldLevelName();
+		return LevelName == GetControllerPersistentMainWorldLevelName();
 	}
+}
+
+bool AMainPlayerController::TryConsumeServerRpcRateLimit(
+	FServerRpcRateLimitState& State,
+	double MinimumIntervalSeconds,
+	const TCHAR* RpcName)
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+
+	const double NowSeconds = FPlatformTime::Seconds();
+	if (!State.bHasAcceptedRequest ||
+		NowSeconds - State.LastAcceptedSeconds >= MinimumIntervalSeconds)
+	{
+		State.LastAcceptedSeconds = NowSeconds;
+		State.bHasAcceptedRequest = true;
+		return true;
+	}
+
+	if (State.RejectedWindowStartSeconds <= 0.0 ||
+		NowSeconds - State.RejectedWindowStartSeconds >= ServerRpcRejectedWindowSeconds)
+	{
+		State.RejectedWindowStartSeconds = NowSeconds;
+		State.RejectedInWindow = 0;
+	}
+
+	++State.RejectedInWindow;
+	if (State.RejectedInWindow >= ServerRpcRejectedWarningThreshold &&
+		(State.LastWarningSeconds <= 0.0 ||
+			NowSeconds - State.LastWarningSeconds >= ServerRpcWarningCooldownSeconds))
+	{
+		const FString PlayerLabel = PlayerState ? PlayerState->GetPlayerName() : GetName();
+		UE_LOG(LogManager, Warning,
+			TEXT("[DS][Security] RpcRateLimited Player=%s Controller=%s Rpc=%s Rejected=%d Window=%.1fs MinIntervalMs=%.0f"),
+			*PlayerLabel,
+			*GetName(),
+			RpcName,
+			State.RejectedInWindow,
+			ServerRpcRejectedWindowSeconds,
+			MinimumIntervalSeconds * 1000.0);
+		State.LastWarningSeconds = NowSeconds;
+	}
+
+	return false;
+}
+
+bool AMainPlayerController::TryConsumeCardPickupRequest()
+{
+	return TryConsumeServerRpcRateLimit(
+		CardPickupRateLimitState,
+		CardPickupMinimumIntervalSeconds,
+		TEXT("CardPickup"));
 }
 
 void AMainPlayerController::BeginPlay()
@@ -55,6 +138,8 @@ void AMainPlayerController::BeginPlay()
 
 void AMainPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	ClearPendingServerPositionCorrection();
+
 	if (UWorld* World = GetWorld())
 	{
 		World->GetTimerManager().ClearTimer(PendingClientLevelReadinessTimerHandle);
@@ -195,6 +280,11 @@ void AMainPlayerController::Multicast_SwitchMode_Implementation(EGamePhase NewPh
 	ApplySwitchMode(NewPhase);
 }
 
+bool AMainPlayerController::Server_SwitchMode_Validate(EGamePhase NewPhase)
+{
+	return false;
+}
+
 void AMainPlayerController::Server_SwitchMode_Implementation(EGamePhase NewPhase)
 {
 	UE_LOG(LogTemp, Warning, TEXT("[DS] Rejected client phase switch request Phase=%d Player=%s"),
@@ -248,8 +338,198 @@ void AMainPlayerController::SetGameplayInputLocked(bool bLocked, const TCHAR* Co
 
 	if (HasAuthority())
 	{
+		if (!bLocked && bPendingServerPositionCorrection)
+		{
+			UE_LOG(LogManager, Display,
+				TEXT("[DS] PositionCorrectionComplete Player=%s Sends=%d Reason=InputUnlocked Context=%s"),
+				*GetNameSafe(PlayerState),
+				PendingServerPositionCorrectionSendCount,
+				*PendingServerPositionCorrectionContext);
+			ClearPendingServerPositionCorrection();
+		}
+
 		Client_SetGameplayInputLocked(bLocked, FString(Context ? Context : TEXT("<NULL>")));
 	}
+}
+
+void AMainPlayerController::StartServerAuthoritativePositionCorrection(
+	const FVector& TargetLocation,
+	const FRotator& TargetRotation,
+	const TCHAR* Context)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	APawn* ControlledPawn = GetPawn();
+	if (!ControlledPawn)
+	{
+		UE_LOG(LogManager, Warning,
+			TEXT("[DS] PositionCorrectionSkipped Reason=MissingPawn Player=%s Context=%s"),
+			*GetNameSafe(PlayerState),
+			Context ? Context : TEXT("<NULL>"));
+		return;
+	}
+
+	if (TargetLocation.ContainsNaN() || TargetRotation.ContainsNaN())
+	{
+		UE_LOG(LogManager, Error,
+			TEXT("[DS] PositionCorrectionRejected Reason=InvalidTransform Player=%s Location=%s Rotation=%s Context=%s"),
+			*GetNameSafe(PlayerState),
+			*TargetLocation.ToString(),
+			*TargetRotation.ToString(),
+			Context ? Context : TEXT("<NULL>"));
+		return;
+	}
+
+	ClearPendingServerPositionCorrection();
+	PendingServerPositionCorrectionLocation = TargetLocation;
+	PendingServerPositionCorrectionRotation = TargetRotation.GetNormalized();
+	PendingServerPositionCorrectionContext = Context ? Context : TEXT("<NULL>");
+	PendingServerPositionCorrectionSendCount = 0;
+	bPendingServerPositionCorrection = true;
+
+	SendPendingServerPositionCorrection(TEXT("Initial"));
+	if (!bPendingServerPositionCorrection)
+	{
+		return;
+	}
+
+	if (!bGameplayInputLocked)
+	{
+		UE_LOG(LogManager, Display,
+			TEXT("[DS] PositionCorrectionComplete Player=%s Sends=%d Reason=InputUnlocked Context=%s"),
+			*GetNameSafe(PlayerState),
+			PendingServerPositionCorrectionSendCount,
+			*PendingServerPositionCorrectionContext);
+		ClearPendingServerPositionCorrection();
+		return;
+	}
+
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimer(
+			ServerPositionCorrectionRetryTimerHandle,
+			this,
+			&AMainPlayerController::RetryPendingServerPositionCorrection,
+			ServerPositionCorrectionRetryIntervalSeconds,
+			true);
+	}
+}
+
+void AMainPlayerController::SendPendingServerPositionCorrection(const TCHAR* Reason)
+{
+	if (!bPendingServerPositionCorrection || !HasAuthority())
+	{
+		ClearPendingServerPositionCorrection();
+		return;
+	}
+
+	APawn* ControlledPawn = GetPawn();
+	if (!ControlledPawn)
+	{
+		UE_LOG(LogManager, Warning,
+			TEXT("[DS] PositionCorrectionStopped Reason=MissingPawn Player=%s Sends=%d Context=%s"),
+			*GetNameSafe(PlayerState),
+			PendingServerPositionCorrectionSendCount,
+			*PendingServerPositionCorrectionContext);
+		ClearPendingServerPositionCorrection();
+		return;
+	}
+
+	const FVector CurrentLocation = ControlledPawn->GetActorLocation();
+	const FRotator CurrentRotation = ControlledPawn->GetActorRotation().GetNormalized();
+	if (CurrentLocation.ContainsNaN() || CurrentRotation.ContainsNaN())
+	{
+		UE_LOG(LogManager, Error,
+			TEXT("[DS] PositionCorrectionStopped Reason=InvalidPawnTransform Player=%s Location=%s Rotation=%s Context=%s"),
+			*GetNameSafe(PlayerState),
+			*CurrentLocation.ToString(),
+			*CurrentRotation.ToString(),
+			*PendingServerPositionCorrectionContext);
+		ClearPendingServerPositionCorrection();
+		return;
+	}
+
+	const float LocationDrift = FVector::Dist(
+		CurrentLocation,
+		PendingServerPositionCorrectionLocation);
+	const float RotationDrift = GetControllerRotationErrorDegrees(
+		CurrentRotation,
+		PendingServerPositionCorrectionRotation);
+	if (PendingServerPositionCorrectionSendCount > 0 &&
+		(LocationDrift > ServerPositionCorrectionDriftWarningDistance ||
+			RotationDrift > ServerPositionCorrectionDriftWarningDegrees))
+	{
+		UE_LOG(LogManager, Warning,
+			TEXT("[DS] PositionCorrectionServerDrift Player=%s LocationDrift=%.2f RotationDrift=%.2f Sends=%d Context=%s"),
+			*GetNameSafe(PlayerState),
+			LocationDrift,
+			RotationDrift,
+			PendingServerPositionCorrectionSendCount,
+			*PendingServerPositionCorrectionContext);
+	}
+
+	// A correction always uses the latest transform still owned by the server.
+	PendingServerPositionCorrectionLocation = CurrentLocation;
+	PendingServerPositionCorrectionRotation = CurrentRotation;
+	ClientSetLocation(CurrentLocation, CurrentRotation);
+	ControlledPawn->ForceNetUpdate();
+	++PendingServerPositionCorrectionSendCount;
+
+	DS_LOG(TEXT("[DS] PositionCorrectionSend Player=%s Send=%d/%d Reason=%s Location=%s Rotation=%s Context=%s"),
+		*GetNameSafe(PlayerState),
+		PendingServerPositionCorrectionSendCount,
+		ServerPositionCorrectionMaxSends,
+		Reason ? Reason : TEXT("<NULL>"),
+		*CurrentLocation.ToString(),
+		*CurrentRotation.ToString(),
+		*PendingServerPositionCorrectionContext);
+
+	if (PendingServerPositionCorrectionSendCount >= ServerPositionCorrectionMaxSends)
+	{
+		UE_LOG(LogManager, Display,
+			TEXT("[DS] PositionCorrectionComplete Player=%s Sends=%d Reason=RetryLimit Context=%s"),
+			*GetNameSafe(PlayerState),
+			PendingServerPositionCorrectionSendCount,
+			*PendingServerPositionCorrectionContext);
+		ClearPendingServerPositionCorrection();
+	}
+}
+
+void AMainPlayerController::RetryPendingServerPositionCorrection()
+{
+	if (!bPendingServerPositionCorrection)
+	{
+		ClearPendingServerPositionCorrection();
+		return;
+	}
+
+	if (!bGameplayInputLocked)
+	{
+		UE_LOG(LogManager, Display,
+			TEXT("[DS] PositionCorrectionComplete Player=%s Sends=%d Reason=InputUnlocked Context=%s"),
+			*GetNameSafe(PlayerState),
+			PendingServerPositionCorrectionSendCount,
+			*PendingServerPositionCorrectionContext);
+		ClearPendingServerPositionCorrection();
+		return;
+	}
+
+	SendPendingServerPositionCorrection(TEXT("LockedRetry"));
+}
+
+void AMainPlayerController::ClearPendingServerPositionCorrection()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ServerPositionCorrectionRetryTimerHandle);
+	}
+
+	bPendingServerPositionCorrection = false;
+	PendingServerPositionCorrectionSendCount = 0;
+	PendingServerPositionCorrectionContext.Reset();
 }
 
 void AMainPlayerController::Client_SetGameplayInputLocked_Implementation(bool bLocked, const FString& Context)
@@ -278,6 +558,45 @@ void AMainPlayerController::ApplyGameplayInputLock(bool bLocked, const TCHAR* Co
 		static_cast<int32>(CurrentPhase));
 }
 
+bool AMainPlayerController::ForceCloseShopMode(const TCHAR* Context)
+{
+	if (!HasAuthority())
+	{
+		return false;
+	}
+
+	const bool bWasShopOpen = ApplyForceCloseShopMode(Context);
+	Client_ForceCloseShopMode(FString(Context ? Context : TEXT("<NULL>")));
+	return bWasShopOpen;
+}
+
+void AMainPlayerController::Client_ForceCloseShopMode_Implementation(const FString& Context)
+{
+	ApplyForceCloseShopMode(*Context);
+}
+
+bool AMainPlayerController::ApplyForceCloseShopMode(const TCHAR* Context)
+{
+	const bool bWasShopOpen = CurrentPhase == EGamePhase::Shop;
+	const int32 PendingOptionCount = CurrentUpgradeOptions.Num();
+	CurrentUpgradeOptions.Empty();
+
+	if (!bWasShopOpen)
+	{
+		return false;
+	}
+
+	PhaseStack.Empty();
+	ApplySwitchMode(EGamePhase::TPS);
+
+	UE_LOG(LogTemp, Display, TEXT("[%s] Shop force closed Player=%s PendingOptions=%d Context=%s"),
+		HasAuthority() ? TEXT("SV") : TEXT("CL"),
+		*GetNameSafe(PlayerState),
+		PendingOptionCount,
+		Context ? Context : TEXT("<NULL>"));
+	return true;
+}
+
 bool AMainPlayerController::Server_SwitchToLevel_Validate(FName LevelToUnload, FName LevelToLoad)
 {
 	return false;
@@ -301,7 +620,7 @@ void AMainPlayerController::Client_SwitchToLevel_Implementation(FName LevelToUnl
 	PendingClientLevelReadinessRetryCount = 0;
 	bPendingClientLevelReadyReported = false;
 
-	if (!LevelToUnload.IsNone() && !IsPersistentMainWorldTarget(LevelToUnload))
+	if (!LevelToUnload.IsNone() && !IsControllerPersistentMainWorldTarget(LevelToUnload))
 	{
 		FLatentActionInfo UnloadInfo;
 		UnloadInfo.CallbackTarget = this;
@@ -311,7 +630,7 @@ void AMainPlayerController::Client_SwitchToLevel_Implementation(FName LevelToUnl
 		UGameplayStatics::UnloadStreamLevel(GetWorld(), LevelToUnload, UnloadInfo, false);
 	}
 
-	if (IsPersistentMainWorldTarget(LevelToLoad))
+	if (IsControllerPersistentMainWorldTarget(LevelToLoad))
 	{
 		if (!TryReportPendingClientLevelReady(TEXT("PersistentWorldRequest")))
 		{
@@ -369,7 +688,7 @@ bool AMainPlayerController::TryReportPendingClientLevelReady(const TCHAR* Contex
 		return false;
 	}
 
-	const bool bPersistentTarget = IsPersistentMainWorldTarget(PendingClientStreamLevelToLoad);
+	const bool bPersistentTarget = IsControllerPersistentMainWorldTarget(PendingClientStreamLevelToLoad);
 	ULevelStreaming* TargetStreamingLevel = bPersistentTarget
 		? nullptr
 		: UGameplayStatics::GetStreamingLevel(World, PendingClientStreamLevelToLoad);
@@ -396,7 +715,7 @@ bool AMainPlayerController::TryReportPendingClientLevelReady(const TCHAR* Contex
 	}
 
 	ULevelStreaming* StreamingLevelToUnload = PendingClientStreamLevelToUnload.IsNone()
-		|| IsPersistentMainWorldTarget(PendingClientStreamLevelToUnload)
+		|| IsControllerPersistentMainWorldTarget(PendingClientStreamLevelToUnload)
 		? nullptr
 		: UGameplayStatics::GetStreamingLevel(World, PendingClientStreamLevelToUnload);
 	const bool bUnloadComplete = !StreamingLevelToUnload
@@ -484,6 +803,14 @@ bool AMainPlayerController::Server_ReportStreamLevelLoaded_Validate(FName Loaded
 
 void AMainPlayerController::Server_ReportStreamLevelLoaded_Implementation(FName LoadedLevel, EGamePhase ClientPhase)
 {
+	if (!TryConsumeServerRpcRateLimit(
+		StreamLevelAckRateLimitState,
+		StreamLevelAckMinimumIntervalSeconds,
+		TEXT("StreamLevelAck")))
+	{
+		return;
+	}
+
 	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
 	if (!GM)
 	{
@@ -679,7 +1006,7 @@ bool AMainPlayerController::Server_ReportCardBundleReady_Validate(
 	int32 BundleGeneration,
 	int32 VisibleCount)
 {
-	return Round > 0 && BundleGeneration > 0 && VisibleCount > 0;
+	return Round > 0 && BundleGeneration > 0 && VisibleCount > 0 && VisibleCount <= 64;
 }
 
 void AMainPlayerController::Server_ReportCardBundleReady_Implementation(
@@ -687,6 +1014,14 @@ void AMainPlayerController::Server_ReportCardBundleReady_Implementation(
 	int32 BundleGeneration,
 	int32 VisibleCount)
 {
+	if (!TryConsumeServerRpcRateLimit(
+		CardBundleAckRateLimitState,
+		CardBundleAckMinimumIntervalSeconds,
+		TEXT("CardBundleAck")))
+	{
+		return;
+	}
+
 	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
 	if (!GM)
 	{
@@ -734,14 +1069,27 @@ void AMainPlayerController::Client_SwitchState_Implementation(EGamePhase NewPhas
 	CurrentPhase = NewPhase;
 }
 
+bool AMainPlayerController::Server_PushMode_Validate(EGamePhase NewPhase)
+{
+	return NewPhase == EGamePhase::Shop;
+}
+
 void AMainPlayerController::Server_PushMode_Implementation(EGamePhase NewPhase)
 {
+	if (!TryConsumeServerRpcRateLimit(
+		ShopPushRateLimitState,
+		ShopModeMinimumIntervalSeconds,
+		TEXT("ShopPush")))
+	{
+		return;
+	}
+
 	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
 	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
 	if (NewPhase != EGamePhase::Shop ||
 		CurrentPhase != EGamePhase::TPS ||
 		!GM ||
-		!GM->IsBattleRoyalePhase() ||
+		!GM->IsShopRequestAllowed() ||
 		!PS ||
 		PS->CurPlayerData.CurrentHP <= 0)
 	{
@@ -772,6 +1120,14 @@ void AMainPlayerController::Multicast_PushMode_Implementation(EGamePhase NewPhas
 
 void AMainPlayerController::Server_PopMode_Implementation()
 {
+	if (!TryConsumeServerRpcRateLimit(
+		ShopPopRateLimitState,
+		ShopModeMinimumIntervalSeconds,
+		TEXT("ShopPop")))
+	{
+		return;
+	}
+
 	if (CurrentPhase != EGamePhase::Shop)
 	{
 		UE_LOG(LogTemp, Warning, TEXT("[DS] Shop pop rejected Player=%s Current=%d"),
@@ -802,12 +1158,21 @@ void AMainPlayerController::Multicast_PopMode_Implementation()
 
 void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
 {
+	if (!TryConsumeServerRpcRateLimit(
+		ShopRandomRollRateLimitState,
+		ShopRandomRollMinimumIntervalSeconds,
+		TEXT("ShopRandomRoll")))
+	{
+		return;
+	}
+
 	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
 	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
 	if (!GM ||
 		!PS ||
-		!GM->IsBattleRoyalePhase() ||
+		!GM->IsShopRequestAllowed() ||
 		CurrentPhase != EGamePhase::Shop ||
+		PS->CurPlayerData.CurrentHP <= 0 ||
 		PS->LastRandomUpgradeClaimedRound == GM->GetCurrentRound() ||
 		CurrentUpgradeOptions.Num() > 0)
 	{
@@ -880,14 +1245,28 @@ void AMainPlayerController::Client_ReceiveRandomUpgradeOptions_Implementation(co
 	Shop->Update_UpgradeSelectionWidget(Options);
 }
 
+bool AMainPlayerController::Server_SelectUpgradeOption_Validate(int32 SelectedIndex)
+{
+	return SelectedIndex >= 0 && SelectedIndex < 3;
+}
+
 void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 SelectedIndex)
 {
+	if (!TryConsumeServerRpcRateLimit(
+		ShopRandomSelectionRateLimitState,
+		ShopUpgradeSelectionMinimumIntervalSeconds,
+		TEXT("ShopRandomSelection")))
+	{
+		return;
+	}
+
 	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
 	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
 	if (!GM ||
 		!PS ||
-		!GM->IsBattleRoyalePhase() ||
+		!GM->IsShopRequestAllowed() ||
 		CurrentPhase != EGamePhase::Shop ||
+		PS->CurPlayerData.CurrentHP <= 0 ||
 		PS->LastRandomUpgradeClaimedRound == GM->GetCurrentRound())
 	{
 		return;
@@ -905,16 +1284,53 @@ void AMainPlayerController::Server_SelectUpgradeOption_Implementation(int32 Sele
 
 bool AMainPlayerController::Server_RequestDiscardCard_Validate(int32 CardInstanceId)
 {
-	return true;
+	return CardInstanceId > 0;
 }
 
 void AMainPlayerController::Server_RequestDiscardCard_Implementation(int32 CardInstanceId)
 {
-	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
-	if (PS)
+	if (!TryConsumeServerRpcRateLimit(
+		CardDiscardRateLimitState,
+		CardDiscardMinimumIntervalSeconds,
+		TEXT("CardDiscard")))
 	{
-		FOwnedCardInfo RemovedCard;
-		PS->RemoveOwnedCardByInstanceId(CardInstanceId, RemovedCard);
+		return;
+	}
+
+	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	const bool bAllowedInShop = GM &&
+		GM->IsShopRequestAllowed() &&
+		CurrentPhase == EGamePhase::Shop;
+	const bool bAllowedInBattle = GM &&
+		GM->IsBattleRoyalePhase() &&
+		CurrentPhase == EGamePhase::TPS;
+	if (!PS || PS->CurPlayerData.CurrentHP <= 0 ||
+		(!bAllowedInShop && !bAllowedInBattle))
+	{
+		UE_LOG(LogManager, Warning,
+			TEXT("[DS][Security] CardDiscardRejected Player=%s CardInstanceId=%d ControllerPhase=%d ShopAllowed=%d BattleAllowed=%d Alive=%d"),
+			*GetNameSafe(PlayerState),
+			CardInstanceId,
+			static_cast<int32>(CurrentPhase),
+			bAllowedInShop ? 1 : 0,
+			bAllowedInBattle ? 1 : 0,
+			PS && PS->CurPlayerData.CurrentHP > 0 ? 1 : 0);
+		return;
+	}
+
+	UCardGameService* CardGameService = GM ? GM->GetCardGameService() : nullptr;
+	if (!CardGameService ||
+		!CardGameService->DiscardOwnedCard(
+			this,
+			CardInstanceId,
+			bAllowedInBattle,
+			bAllowedInShop ? TEXT("Shop") : TEXT("BattleRoyale")))
+	{
+		UE_LOG(LogManager, Warning,
+			TEXT("[DS][Security] CardDiscardRejected Player=%s CardInstanceId=%d Reason=ServiceRejected"),
+			*GetNameSafe(PlayerState),
+			CardInstanceId);
 	}
 }
 
@@ -960,15 +1376,30 @@ int32 AMainPlayerController::GetCurrentUpgradeLevel(AMainPlayerState* PS, EUpgra
 	default: return 0;
 	}
 }
-void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int32 SelectedIndex) {
+bool AMainPlayerController::Server_SelectStaticUpgradeOption_Validate(int32 SelectedIndex)
+{
+	return SelectedIndex >= 0 && SelectedIndex < 3;
+}
 
-	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
-	if (CurrentPhase != EGamePhase::Shop || !GM || !GM->IsBattleRoyalePhase())
+void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int32 SelectedIndex) {
+	if (!TryConsumeServerRpcRateLimit(
+		ShopStaticUpgradeRateLimitState,
+		ShopUpgradeSelectionMinimumIntervalSeconds,
+		TEXT("ShopStaticUpgrade")))
 	{
 		return;
 	}
+
+	AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
 	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
-	if (!PS) return;
+	if (CurrentPhase != EGamePhase::Shop ||
+		!GM ||
+		!GM->IsShopRequestAllowed() ||
+		!PS ||
+		PS->CurPlayerData.CurrentHP <= 0)
+	{
+		return;
+	}
 
 	EUpgradeType UpgradeType = GetStaticUpgradeTypeFromIndex(SelectedIndex);
 	if (UpgradeType == EUpgradeType::None)
@@ -992,6 +1423,12 @@ void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int3
 	DS_SCREEN(-1, 8.f, FColor::Cyan, FString::Printf(TEXT("static Status UP")));
 
 }
+
+bool AMainPlayerController::Server_SetUITimer_Validate(int32 time)
+{
+	return false;
+}
+
 void AMainPlayerController::Server_SetUITimer_Implementation(int32 time)
 {
 	UE_LOG(LogTemp, Warning, TEXT("[DS] Rejected client UI timer request Player=%s Value=%d"),
@@ -1014,8 +1451,13 @@ bool AMainPlayerController::Server_RequestPickupCard_Validate(ACardDropActor* Ta
 
 void AMainPlayerController::Server_RequestPickupCard_Implementation(ACardDropActor* TargetCard)
 {
+	if (!TryConsumeCardPickupRequest())
+	{
+		return;
+	}
+
     AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
-    if (!GM)
+    if (!GM || !GM->GetCardGameService())
     {
         return;
     }
@@ -1026,6 +1468,62 @@ void AMainPlayerController::Server_RequestPickupCard_Implementation(ACardDropAct
 
 
 
+bool AMainPlayerController::Server_RevealSeotdaCard_Validate(bool bCard0, bool bCard1, bool bCard2)
+{
+    return true;
+}
+
+void AMainPlayerController::Server_RevealSeotdaCard_Implementation(bool bCard0, bool bCard1, bool bCard2)
+{
+	if (!TryConsumeServerRpcRateLimit(
+		SeotdaRevealRateLimitState,
+		SeotdaRevealMinimumIntervalSeconds,
+		TEXT("SeotdaReveal")))
+	{
+		Client_ReceiveSeotdaRevealResult(false, TEXT("RateLimited"));
+		return;
+	}
+
+    AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
+    if (!GM || !GM->GetCardGameService())
+    {
+		Client_ReceiveSeotdaRevealResult(false, TEXT("ServerUnavailable"));
+        return;
+    }
+
+	FString FailureReason;
+	const bool bAccepted = GM->GetCardGameService()->RevealSeotdaCard(
+		this,
+		bCard0,
+		bCard1,
+		bCard2,
+		FailureReason);
+
+	Client_ReceiveSeotdaRevealResult(
+		bAccepted,
+		bAccepted ? FString(TEXT("Accepted")) : FailureReason);
+}
+
+void AMainPlayerController::Client_ReceiveSeotdaRevealResult_Implementation(
+	bool bAccepted,
+	const FString& Reason)
+{
+	++SeotdaUiRevealResultSerial;
+	bSeotdaUiRevealAccepted = bAccepted;
+	SeotdaUiRevealResultReason = Reason;
+
+	if (bAccepted)
+	{
+		bSeotdaUiMyRevealConfirmed = true;
+	}
+
+	UE_LOG(LogTemp, Display,
+		TEXT("[CL] SeotdaRevealResult Serial=%d Accepted=%d Reason=%s"),
+		SeotdaUiRevealResultSerial,
+		bAccepted ? 1 : 0,
+		*Reason);
+}
+
 bool AMainPlayerController::Server_SubmitSeotdaSelection_Validate(bool bCard0, bool bCard1, bool bCard2)
 {
     return true;
@@ -1033,25 +1531,73 @@ bool AMainPlayerController::Server_SubmitSeotdaSelection_Validate(bool bCard0, b
 
 void AMainPlayerController::Server_SubmitSeotdaSelection_Implementation(bool bCard0, bool bCard1, bool bCard2)
 {
+	if (!TryConsumeServerRpcRateLimit(
+		SeotdaSelectionRateLimitState,
+		SeotdaSelectionMinimumIntervalSeconds,
+		TEXT("SeotdaSelection")))
+	{
+		Client_ReceiveSeotdaSelectionResult(false, TEXT("RateLimited"));
+		return;
+	}
+
     AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
-    if (!GM)
+    if (!GM || !GM->GetCardGameService())
     {
+		Client_ReceiveSeotdaSelectionResult(false, TEXT("ServerUnavailable"));
         return;
     }
 
-    GM->GetCardGameService()->SubmitSeotdaSelection(this, bCard0, bCard1, bCard2);
+	FString FailureReason;
+	const bool bAccepted = GM->GetCardGameService()->SubmitSeotdaSelection(
+		this,
+		bCard0,
+		bCard1,
+		bCard2,
+		FailureReason);
+
+	Client_ReceiveSeotdaSelectionResult(
+		bAccepted,
+		bAccepted ? FString(TEXT("Accepted")) : FailureReason);
+}
+
+void AMainPlayerController::Client_ReceiveSeotdaSelectionResult_Implementation(
+	bool bAccepted,
+	const FString& Reason)
+{
+	++SeotdaUiSelectionResultSerial;
+	bSeotdaUiSelectionAccepted = bAccepted;
+	SeotdaUiSelectionResultReason = Reason;
+
+	if (bAccepted)
+	{
+		bSeotdaUiMySubmitted = true;
+	}
+
+	UE_LOG(LogTemp, Display,
+		TEXT("[CL] SeotdaSelectionResult Serial=%d Accepted=%d Reason=%s"),
+		SeotdaUiSelectionResultSerial,
+		bAccepted ? 1 : 0,
+		*Reason);
 }
 
 
 bool AMainPlayerController::Server_RequestSeotdaBetAction_Validate(EBettingAction Action)
 {
-    return true;
+	return Action > EBettingAction::None && Action <= EBettingAction::AllIn;
 }
 
 void AMainPlayerController::Server_RequestSeotdaBetAction_Implementation(EBettingAction Action)
 {
+	if (!TryConsumeServerRpcRateLimit(
+		SeotdaBetRateLimitState,
+		SeotdaBetMinimumIntervalSeconds,
+		TEXT("SeotdaBet")))
+	{
+		return;
+	}
+
     AMainGameMode* GM = GetWorld() ? GetWorld()->GetAuthGameMode<AMainGameMode>() : nullptr;
-    if (!GM)
+    if (!GM || !GM->GetCardGameService())
     {
         return;
     }
@@ -1085,6 +1631,7 @@ int32 CurrentBet,
 int32 MyBetMoney,
 int32 NeedCall,
 bool bMyTurn,
+bool bMyRevealConfirmed,
 bool bMySubmitted,
 bool bMyFolded,
 bool bRoundResolved
@@ -1098,12 +1645,13 @@ SeotdaUiCurrentBet = CurrentBet;
 SeotdaUiMyBetMoney = MyBetMoney;
 SeotdaUiNeedCall = NeedCall;
 bSeotdaUiMyTurn = bMyTurn;
+bSeotdaUiMyRevealConfirmed = bMyRevealConfirmed;
 bSeotdaUiMySubmitted = bMySubmitted;
 bSeotdaUiMyFolded = bMyFolded;
 bSeotdaUiRoundResolved = bRoundResolved;
 
 UE_LOG(LogTemp, Warning,
-TEXT("[CL] SeotdaState Round=%d Betting=%d Turn=%s Pot=%d CurrentBet=%d MyBet=%d NeedCall=%d MyTurn=%d Submitted=%d Folded=%d Resolved=%d"),
+TEXT("[CL] SeotdaState Round=%d Betting=%d Turn=%s Pot=%d CurrentBet=%d MyBet=%d NeedCall=%d MyTurn=%d Revealed=%d Submitted=%d Folded=%d Resolved=%d"),
 SeotdaUiRound,
 bSeotdaUiBettingActive ? 1 : 0,
 *SeotdaUiCurrentTurnPlayerName,
@@ -1112,6 +1660,7 @@ SeotdaUiCurrentBet,
 SeotdaUiMyBetMoney,
 SeotdaUiNeedCall,
 bSeotdaUiMyTurn ? 1 : 0,
+bSeotdaUiMyRevealConfirmed ? 1 : 0,
 bSeotdaUiMySubmitted ? 1 : 0,
 bSeotdaUiMyFolded ? 1 : 0,
 bSeotdaUiRoundResolved ? 1 : 0

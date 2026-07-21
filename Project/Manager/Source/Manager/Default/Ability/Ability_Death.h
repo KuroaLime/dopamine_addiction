@@ -31,5 +31,5 @@ private:
 	FTimerHandle ServerRespawnTimerHandle;
 
 	void Server_ExecuteCountDown();
-	void DropAllPlayerCards();
+	void DropDeathGold();
 };

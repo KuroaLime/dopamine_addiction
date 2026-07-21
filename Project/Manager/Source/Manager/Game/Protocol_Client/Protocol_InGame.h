@@ -325,6 +325,7 @@ enum class ECardRuntimeState : uint8
     Owned = 2,
     Used = 3,
     Removed = 4,
+    Discarded = 5,
 };
 
 USTRUCT(BlueprintType)

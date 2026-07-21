@@ -110,7 +110,8 @@ static_assert(sizeof(PacketHeader) == 4, "PacketHeader must be 4 bytes");
 // Constants & Enums
 // ===========================================================================
 
-static constexpr uint8_t MAX_ID_LEN = 16;
+static constexpr uint8_t MAX_ID_CHAR_LEN = 8;
+static constexpr uint8_t MAX_ID_LEN = MAX_ID_CHAR_LEN * 4;
 static constexpr uint8_t MAX_PW_LEN = 16;
 
 enum class LoginResult : uint8_t
@@ -296,21 +297,6 @@ namespace
         default:                             return "UNKNOWN_LOGIN_RESULT";
         }
     }
-
-    const FString* LoginResultToFString(LoginResult r)
-    {
-        switch (r)
-        {
-        case LoginResult::OK:                return new FString(TEXT("OK"));
-        case LoginResult::OK_RECONNECT:      return new FString(TEXT("OK_RECONNECT"));
-        case LoginResult::ID_NOT_FOUND:      return new FString(TEXT("ID_NOT_FOUND"));
-        case LoginResult::WRONG_PASSWORD:    return new FString(TEXT("WRONG_PASSWORD"));
-        case LoginResult::ALREADY_LOGGED_IN: return new FString(TEXT("ALREADY_LOGGED_IN"));
-        case LoginResult::ID_ALREADY_EXISTS: return new FString(TEXT("ID_ALREADY_EXISTS"));
-        case LoginResult::INVALID_FORMAT:    return new FString(TEXT("INVALID_FORMAT"));
-        default:                             return new FString(TEXT("UNKNOWN_LOGIN_RESULT"));
-        }
-	}
 
     const char* RoomResultToString(RoomResult r)
     {

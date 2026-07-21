@@ -545,20 +545,26 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
 
 bool UUManagerGameInstance::SendAuth(PacketType type, const FString& id, const FString& pw)
 {
-    if (id.Len() > 255 || pw.Len() > 255)
+    const FTCHARToUTF8 IdUtf8(*id);
+    const FTCHARToUTF8 PwUtf8(*pw);
+    const int32 IdByteLen = IdUtf8.Length();
+    const int32 PwByteLen = PwUtf8.Length();
+
+    if (id.IsEmpty() || id.Len() > MAX_ID_CHAR_LEN ||
+        IdByteLen <= 0 || IdByteLen > MAX_ID_LEN ||
+        PwByteLen <= 0 || PwByteLen > MAX_PW_LEN)
     {
         return false;
     }
 
     std::vector<char> payload;
+    payload.reserve(static_cast<size_t>(2 + IdByteLen + PwByteLen));
 
-    AppendU8(payload, static_cast<uint8_t>(id.Len()));
-    std::string idUtf8 = TCHAR_TO_UTF8(*id);
-    payload.insert(payload.end(), idUtf8.begin(), idUtf8.end());
+    AppendU8(payload, static_cast<uint8_t>(IdByteLen));
+    payload.insert(payload.end(), IdUtf8.Get(), IdUtf8.Get() + IdByteLen);
 
-    AppendU8(payload, static_cast<uint8_t>(pw.Len()));
-    std::string pwUtf8 = TCHAR_TO_UTF8(*pw);
-    payload.insert(payload.end(), pwUtf8.begin(), pwUtf8.end());
+    AppendU8(payload, static_cast<uint8_t>(PwByteLen));
+    payload.insert(payload.end(), PwUtf8.Get(), PwUtf8.Get() + PwByteLen);
 
     return SendPacket(type, payload.data(), static_cast<uint16_t>(payload.size()));
 }

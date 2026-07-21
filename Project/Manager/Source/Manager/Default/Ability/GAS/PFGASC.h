@@ -259,6 +259,17 @@ protected:
 
 protected:
 	bool InternalTryActivateAbilityByTag(FGameplayTag AbilityTag, FPFGPredictionKey PredictionKey);
+	struct FServerRpcRateWindow
+	{
+		double WindowStartSeconds = 0.0;
+		double LastWarningSeconds = 0.0;
+		int32 AcceptedInWindow = 0;
+	};
+
+	bool TryConsumeServerRpcBudget(FServerRpcRateWindow& Window, int32 MaxRequestsPerSecond, const TCHAR* RpcName);
+	FServerRpcRateWindow AbilityActivationRpcWindow;
+	FServerRpcRateWindow AbilityCancelRpcWindow;
+	FServerRpcRateWindow GameplayEventRpcWindow;
 
 	int32 NextAbilityID = 0;
 

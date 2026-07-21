@@ -20,6 +20,7 @@ struct FMainPlayerReconnectSnapshot
 	FPlayerData PlayerData;
 	FCurPlayerData CurPlayerData;
 	TArray<FOwnedCardInfo> OwnedCards;
+	FOwnedCardInfo RevealedCard;
 	FAccumulatedUpgrades AccumulatedUpgrades;
 	TArray<int32> CarriedAmmoList;
 	int32 LastRandomUpgradeClaimedRound = INDEX_NONE;
@@ -70,8 +71,20 @@ public:
 	UPROPERTY(ReplicatedUsing = OnRep_PublicCardCount, BlueprintReadOnly, Category = "Card Data")
 	int32 PublicCardCount = 0;
 
+	UPROPERTY(ReplicatedUsing = OnRep_RevealedCard, BlueprintReadOnly, Category = "Card Data")
+	FOwnedCardInfo RevealedCard;
+
 	UFUNCTION(BlueprintPure, Category = "Card")
 	TArray<FOwnedCardInfo> GetOwnedCards() const;
+
+	UFUNCTION(BlueprintPure, Category = "Card")
+	FOwnedCardInfo GetRevealedCard() const { return RevealedCard; }
+
+	UFUNCTION(BlueprintPure, Category = "Card")
+	bool HasRevealedCard() const
+	{
+		return RevealedCard.CardInstanceId > 0 && RevealedCard.CardID != ECardID::None;
+	}
 
 	FString GetOwnedCardsDebugString() const;
 
@@ -81,6 +94,8 @@ public:
 	void AddOwnedCard(const FOwnedCardInfo& CardInfo);
 	bool RemoveOwnedCardByInstanceId(int32 CardInstanceId, FOwnedCardInfo& OutRemovedCard);
 	void ClearOwnedCards();
+	void SetRevealedCard(const FOwnedCardInfo& CardInfo);
+	void ClearRevealedCard();
 	FOnOwnedCardsChangedNative OnOwnedCardsChangedNative;
 	void AddGold(float Amount);
 
@@ -107,6 +122,9 @@ protected:
 
 	UFUNCTION()
 	void OnRep_PublicCardCount();
+
+	UFUNCTION()
+	void OnRep_RevealedCard();
 
 	UPROPERTY(Replicated, BlueprintReadOnly, Category = "Player | Ammo")
 	TArray<int32> CarriedAmmoList;

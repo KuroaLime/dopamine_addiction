@@ -13,6 +13,7 @@ class AMainGameMode;
 class AMainPlayerState;
 class AMainPlayerController;
 class ACardDropActor;
+class AActor;
 
 // 서버 권위 카드 1장의 런타임 기록. 기존 AMainGameMode 내부 private 구조체에서 이전.
 struct FServerCardRecord
@@ -25,14 +26,19 @@ struct FServerCardRecord
     int32 CreatedRound = 0;
 };
 
-// 섯다 한 라운드에서 플레이어별 상태(선택 카드/패 결과/베팅).
+// 섯다 한 라운드에서 플레이어별 상태(공개 카드/최종 2장 패/베팅).
 struct FSeotdaPlayerRoundState
 {
     TWeakObjectPtr<AMainPlayerState> PlayerState;
+    // 공개 카드는 정보 공개용이다. 최종 2장 패에는 포함될 수도, 제외될 수도 있다.
+    int32 RevealedCardInstanceId = 0;
+    bool bRevealConfirmed = false;
+    // 최종 제출로 확정된 2장만 저장한다.
     TArray<int32> SelectedCardInstanceIds;
     FSeotdaHandResult HandResult;
     bool bSubmitted = false;
     bool bFolded = false;
+    bool bAllIn = false;
     bool bActedThisBetRound = false;
     int32 BetMoney = 0;
 };
@@ -58,15 +64,33 @@ public:
     // ----- 외부(PC RPC)에서 호출되는 진입점 -----
     bool TryPickupCard(AMainPlayerController* RequestingPC, ACardDropActor* TargetCard);
     bool TryPickupNearestCard(AMainPlayerController* RequestingPC);
-    bool SubmitSeotdaSelection(AMainPlayerController* RequestingPC, bool bCard0, bool bCard1, bool bCard2);
+    bool DiscardOwnedCard(
+        AMainPlayerController* RequestingPC,
+        int32 CardInstanceId,
+        bool bDropIntoWorld,
+        const TCHAR* Context);
+    bool RevealSeotdaCard(
+        AMainPlayerController* RequestingPC,
+        bool bCard0,
+        bool bCard1,
+        bool bCard2,
+        FString& OutFailureReason);
+    bool SubmitSeotdaSelection(
+        AMainPlayerController* RequestingPC,
+        bool bCard0,
+        bool bCard1,
+        bool bCard2,
+        FString& OutFailureReason);
     bool SubmitSeotdaBetAction(AMainPlayerController* RequestingPC, EBettingAction Action);
 
     // ----- 페이즈/매치 흐름에서 호출 -----
     bool SpawnRoundCardBundleForBattleRoyale(TArray<int32>& OutSpawnedCardInstanceIds);
     void EnsureThreeCardsForCardGame();
     void ResetSeotdaRoundStates();
+    void StartSeotdaSelectionTimeout();
     void ClearCardDrops();
     void ClearRoundCardsForAllPlayers();
+    int32 ClearDetachedOwnedCardRecords(const TArray<FOwnedCardInfo>& OwnedCards, const TCHAR* Context);
     void ResolveSeotdaRoundResult(const TCHAR* Reason);
     void DetachPlayerForReconnect(int64 Ticket, AMainPlayerState* PlayerState);
     void ReattachPlayerAfterReconnect(int64 Ticket, AMainPlayerState* PlayerState);
@@ -74,7 +98,6 @@ public:
     void HandlePlayerDisconnectedAfterLogout(int64 Ticket, const TCHAR* Reason);
 
     ACardDropActor* SpawnCardDrop(ECardID CardID, const FVector& SpawnLocation);
-    int32 DropOwnedCardsFromPlayer(AMainPlayerState* TargetPS, const FVector& BaseDropLocation);
 
     // ----- GameMode가 결과/상태를 조회 -----
     int32 GetSeotdaPlayerMoney(const AMainPlayerState* TargetPS) const;
@@ -87,12 +110,20 @@ private:
     bool GrantCardRecordToPlayer(int32 CardInstanceId, AMainPlayerState* TargetPS, const TCHAR* Context);
     bool GrantNewCardToPlayer(AMainPlayerState* TargetPS, ECardID CardID, const TCHAR* Context);
     ECardID PickSupplementCardIDForPlayer(const AMainPlayerState* TargetPS) const;
+    ACardDropActor* SpawnExistingOwnedCardDrop(
+        const FServerCardRecord& Record,
+        AActor* SourceActor,
+        const FVector& SourceLocation);
     bool IsCardPickupAllowed() const;
     FString GetOwnedCardsDebugString(const AMainPlayerState* PS) const;
 
     void TryResolveSeotdaRoundIfReady();
     void StartSeotdaBettingRound();
     void AdvanceSeotdaBettingTurn();
+    void StartSeotdaBetTurnTimeout();
+    void HandleSeotdaSelectionTimeout();
+    void HandleSeotdaBetTurnTimeout();
+    void ClearSeotdaTimers();
     void BroadcastSeotdaState() const;
     AMainPlayerState* GetCurrentSeotdaTurnPlayer() const;
     int32 PaySeotdaBet(AMainPlayerState* TargetPS, int32 Amount);
@@ -130,4 +161,6 @@ private:
     bool bSeotdaBettingActive = false;
     bool bSeotdaRoundResolved = false;
     FString LastSeotdaRoundResultSummary = TEXT("Pending");
+    FTimerHandle SeotdaSelectionTimeoutTimerHandle;
+    FTimerHandle SeotdaBetTurnTimeoutTimerHandle;
 };

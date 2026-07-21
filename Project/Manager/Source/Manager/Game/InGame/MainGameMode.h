@@ -13,6 +13,7 @@ class APlayerController;
 class AController;
 class AMainPlayerController;
 class ACardDropActor;
+class AGoldDropActor;
 class USpawnManagerComponent;
 class UCardGameService;
 
@@ -32,13 +33,23 @@ enum class EDediServerPhase : uint8
 struct FDisconnectedPlayerSnapshot
 {
     FMainPlayerReconnectSnapshot PlayerState;
+    FString PlayerName;
     FTransform PawnTransform = FTransform::Identity;
     double DisconnectTimeSeconds = 0.0;
     double ReconnectDeadlineSeconds = 0.0;
+    double TransformRestoreDeadlineSeconds = 0.0;
     int32 DisconnectRound = 0;
+    int32 TransformRestoreAttempts = 0;
     EDediServerPhase DisconnectPhase = EDediServerPhase::None;
+    TWeakObjectPtr<AMainPlayerController> ReconnectedController;
     bool bHasPawnTransform = false;
     bool bPlayerStateRestored = false;
+};
+
+struct FMatchParticipantGoldRecord
+{
+    FString PlayerName;
+    int32 Gold = 0;
 };
 
 UCLASS()
@@ -105,9 +116,13 @@ public:
     TSubclassOf<ACardDropActor> GetCardDropActorClass() const { return CardDropActorClass; }
     int32 GetSeotdaServerSeedPot() const { return SeotdaServerSeedPot; }
     int32 GetSeotdaBaseCallBet() const { return SeotdaBaseCallBet; }
+    float GetSeotdaSelectionTimeoutSeconds() const { return SeotdaSelectionTimeoutSeconds; }
+    float GetSeotdaBetTurnTimeoutSeconds() const { return SeotdaBetTurnTimeoutSeconds; }
 
 public:
     bool IsBattleRoyalePhase() const;
+    bool IsShopRequestAllowed() const;
+    bool DropGoldFromPlayer(AMainPlayerState* TargetPS, AActor* SourceActor);
 
 protected:
     UPROPERTY(EditDefaultsOnly, Category = "GameMode|Setup")
@@ -136,16 +151,36 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server")
     float DediControlRetryDelaySeconds = 0.5f;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server|Recovery")
+    float DediPlayerJoinNoProgressTimeoutSeconds = 600.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server|Recovery")
+    float DediGateNoProgressTimeoutSeconds = 600.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server|Recovery")
+    float DediEmptyServerAbortTimeoutSeconds = 150.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server|Recovery")
+    float DediRecoveryWatchdogIntervalSeconds = 1.0f;
+
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server")
     int32 RequiredPlayerCount = 1;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server")
     float ReconnectGraceSeconds = 120.0f;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server")
+    float ReconnectTransformRestoreTimeoutSeconds = 30.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server")
+    float DediTicketReservationTimeoutSeconds = 30.0f;
+
     TSet<int64> AllowedDediTickets;
     TSet<int64> ActiveDediTickets;
+    TMap<int64, double> PendingDediTicketReservations;
     TMap<APlayerController*, int64> DediTicketByController;
     TMap<int64, FDisconnectedPlayerSnapshot> DisconnectedPlayerSnapshots;
+    TMap<int64, FMatchParticipantGoldRecord> MatchParticipantGoldLedger;
 
     UPROPERTY(BlueprintReadOnly, Category = "Dedicated Server")
     bool bGameStarted = false;
@@ -242,7 +277,7 @@ protected:
     float StreamGateClientAckTimeoutSeconds = 600.0f;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Phase|Streaming")
-    bool bKickStreamGateTimedOutClients = true;
+    bool bKickStreamGateTimedOutClients = false;
 
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|Bundle")
     FVector CardBundleDropCenter = FVector(0.0f, 0.0f, 180.0f);
@@ -329,6 +364,21 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card|DeathDrop")
     float CardDeathDropMaxNavProjectDistance = 180.0f;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gold|DeathDrop")
+    TSubclassOf<AGoldDropActor> GoldDropActorClass;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gold|DeathDrop", meta = (ClampMin = "0"))
+    int32 DeathGoldDropAmount = 1000;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gold|DeathDrop", meta = (ClampMin = "0.0"))
+    float DeathGoldSourcePickupLockSeconds = 1.5f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gold|DeathDrop", meta = (ClampMin = "0.0"))
+    float DeathGoldGroundOffsetZ = 45.0f;
+
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Gold|DeathDrop", meta = (ClampMin = "100.0"))
+    float DeathGoldGroundTraceDepth = 2000.0f;
+
     UPROPERTY()
     TMap<EGamePhase, TObjectPtr<UPhaseStrategy>> StrategyMap;
 
@@ -338,6 +388,8 @@ protected:
 private:
     FTimerHandle PhaseTimerHandle;
     FTimerHandle MatchEndShutdownTimerHandle;
+    FTimerHandle MatchAbortShutdownTimerHandle;
+    FTimerHandle DediRecoveryWatchdogTimerHandle;
     FTimerHandle CardSeatMoveRetryTimerHandle;
     FTimerHandle BattleRoyaleCardSpawnGateTimerHandle;
     FTimerHandle ReconnectGraceTimerHandle;
@@ -371,11 +423,28 @@ private:
 
     EDediServerPhase CurrentServerPhase = EDediServerPhase::None;
     bool bGameEndReached = false;
+    bool bMatchEndControlNotifyComplete = true;
+    bool bMatchEndControlNotifySucceeded = false;
+    bool bMatchEndShutdownWaitLogged = false;
+    double MatchEndControlNotifyStartTimeSeconds = 0.0;
+
+    FName DediRecoveryWatchdogStage = NAME_None;
+    double DediRecoveryLastProgressTimeSeconds = 0.0;
+    double DediEmptySinceSeconds = 0.0;
+    bool bMatchAbortRequested = false;
+    bool bMatchAbortControlNotifyComplete = true;
+    bool bMatchAbortControlNotifySucceeded = false;
+    bool bMatchAbortShutdownWaitLogged = false;
+    double MatchAbortControlNotifyStartTimeSeconds = 0.0;
+    FString MatchAbortReason;
 
     // 카드/섯다 런타임 상태(ServerCardRecords/SeotdaRoundStates 등)와 구조체는
     // UCardGameService(CardGameService.h)로 이전됨. GameMode는 서비스 포인터만 보유한다.
     UPROPERTY()
     UCardGameService* CardGameService = nullptr;
+
+    UPROPERTY()
+    TArray<TObjectPtr<AGoldDropActor>> ActiveGoldDrops;
 
     // ?쒕쾭媛 踰좏똿 ?쒖옉 ??湲곕낯?쇰줈 ?ｌ뼱二쇰뒗 ?먮룉. ?뚮젅?댁뼱 ?덉뿉?쒕뒗 李④컧?섏? ?딆쓬.
     UPROPERTY(EditDefaultsOnly, Category = "Seotda|Betting")
@@ -385,6 +454,12 @@ private:
     UPROPERTY(EditDefaultsOnly, Category = "Seotda|Betting")
     int32 SeotdaBaseCallBet = 2;
 
+    UPROPERTY(EditDefaultsOnly, Category = "Seotda|Timeout")
+    float SeotdaSelectionTimeoutSeconds = 60.0f;
+
+    UPROPERTY(EditDefaultsOnly, Category = "Seotda|Timeout")
+    float SeotdaBetTurnTimeoutSeconds = 30.0f;
+
 
 
 private:
@@ -392,6 +467,8 @@ private:
     void TryStartGameIfReady();
     int32 CountConnectedHumanPlayers() const;
     int64 GetDediTicketForController(const AController* Controller) const;
+    void RecordMatchParticipantGold(int64 Ticket, const FString& PlayerName, int32 Gold);
+    void SweepExpiredDediTicketReservations(const TCHAR* Context);
     void SaveDisconnectedPlayerSnapshot(AController* Exiting, int64 Ticket);
     void RestoreDisconnectedPlayerSnapshot(APlayerController* NewPlayer, int64 Ticket);
     bool IsReconnectGraceExpired(int64 Ticket) const;
@@ -399,6 +476,7 @@ private:
     void StartReconnectGraceTimerIfNeeded();
     void StopReconnectGraceTimerIfIdle();
     void TickReconnectGrace();
+    void ClearDisconnectedPlayerRoundCards(const TCHAR* Context);
     void SynchronizePlayerWithCurrentServerPhase(AMainPlayerController* PlayerController);
     void CorrectPlayerToCurrentServerTransform(AMainPlayerController* PlayerController, const TCHAR* Context);
     bool TeleportPlayerAuthoritatively(AMainPlayerController* PlayerController, const FTransform& TargetTransform, const TCHAR* Context);
@@ -407,14 +485,28 @@ private:
 
     void StartReadyPhase();
     void StartBattleRoyalePhase();
+    void StartPreBattleShopPhase();
+    void FinishPreBattleShopPhase();
+    void CloseShopForAllPlayers(const TCHAR* Context);
     void StartTransitionToCardPhase();
     void StartCardGamePhase();
     void StartResultPhase();
     void StartTransitionToBattlePhase();
     void StartGameEndPhase();
+    void ClearGoldDrops(const TCHAR* Context);
+    void BuildFinalGoldRanking(FString& OutWinnerName, FString& OutRankingSummary) const;
     void ShutdownDedicatedServerAfterMatchEnd();
+    void ShutdownDedicatedServerAfterMatchAbort();
     void NotifyIocpServerReady() const;
-    void NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary) const;
+    void NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary);
+    void HandleIocpMatchEndNotifyComplete(bool bSucceeded);
+    void NotifyIocpMatchAbort(const FString& Reason);
+    void HandleIocpMatchAbortNotifyComplete(bool bSucceeded);
+    void BeginDediRecoveryWatchdogStage(FName Stage, const TCHAR* Context);
+    void MarkDediRecoveryProgress(const TCHAR* Context);
+    void ClearDediRecoveryWatchdogStage(const TCHAR* Context);
+    void TickDediRecoveryWatchdog();
+    void AbortMatchAndShutdown(const FString& Reason);
     void UnloadServerStreamLevelForPhase(FName LevelToUnload, const TCHAR* Context);
     void LoadServerStreamLevelForPhase(FName LevelToLoad, const TCHAR* Context);
     void ResetClientStreamLevelAcks(const TCHAR* Context);

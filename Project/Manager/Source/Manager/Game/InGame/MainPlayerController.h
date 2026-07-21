@@ -56,19 +56,62 @@ protected:
 	TArray<EGamePhase> PhaseStack;
 
 private:
+	struct FServerRpcRateLimitState
+	{
+		double LastAcceptedSeconds = 0.0;
+		double RejectedWindowStartSeconds = 0.0;
+		double LastWarningSeconds = 0.0;
+		int32 RejectedInWindow = 0;
+		bool bHasAcceptedRequest = false;
+	};
+
 	void InitHandler();
 	void SetupHandlerInput();
+	bool TryConsumeServerRpcRateLimit(
+		FServerRpcRateLimitState& State,
+		double MinimumIntervalSeconds,
+		const TCHAR* RpcName);
+	void SendPendingServerPositionCorrection(const TCHAR* Reason);
+	void RetryPendingServerPositionCorrection();
+	void ClearPendingServerPositionCorrection();
+
+	FServerRpcRateLimitState CardPickupRateLimitState;
+	FServerRpcRateLimitState CardDiscardRateLimitState;
+	FServerRpcRateLimitState SeotdaRevealRateLimitState;
+	FServerRpcRateLimitState SeotdaSelectionRateLimitState;
+	FServerRpcRateLimitState SeotdaBetRateLimitState;
+	FServerRpcRateLimitState StreamLevelAckRateLimitState;
+	FServerRpcRateLimitState CardBundleAckRateLimitState;
+	FServerRpcRateLimitState ShopPushRateLimitState;
+	FServerRpcRateLimitState ShopPopRateLimitState;
+	FServerRpcRateLimitState ShopRandomRollRateLimitState;
+	FServerRpcRateLimitState ShopRandomSelectionRateLimitState;
+	FServerRpcRateLimitState ShopStaticUpgradeRateLimitState;
+	FTimerHandle ServerPositionCorrectionRetryTimerHandle;
+	FVector PendingServerPositionCorrectionLocation = FVector::ZeroVector;
+	FRotator PendingServerPositionCorrectionRotation = FRotator::ZeroRotator;
+	FString PendingServerPositionCorrectionContext;
+	int32 PendingServerPositionCorrectionSendCount = 0;
+	bool bPendingServerPositionCorrection = false;
 
 	
 public:
+	// Shared by the direct pickup RPC and Ability.Action.PickUp.
+	bool TryConsumeCardPickupRequest();
+
 	UFUNCTION(NetMulticast, Reliable)
 	void Multicast_SwitchMode(EGamePhase NewPhase);
 
-	UFUNCTION(Server, Reliable)
+	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SwitchMode(EGamePhase NewPhase);
 
 	void ApplySwitchMode(EGamePhase NewPhase);
 	void SetGameplayInputLocked(bool bLocked, const TCHAR* Context);
+	void StartServerAuthoritativePositionCorrection(
+		const FVector& TargetLocation,
+		const FRotator& TargetRotation,
+		const TCHAR* Context);
+	bool ForceCloseShopMode(const TCHAR* Context);
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SwitchToLevel(FName LevelToUnload, FName LevelToLoad);
@@ -101,13 +144,16 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_SetGameplayInputLocked(bool bLocked, const FString& Context);
 
+	UFUNCTION(Client, Reliable)
+	void Client_ForceCloseShopMode(const FString& Context);
+
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SwitchState(EGamePhase NewPhase);
 
 	UFUNCTION(Client, Reliable)
 	void Client_SwitchState(EGamePhase NewPhase);
 
-	UFUNCTION(Server, Reliable)
+	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_PushMode(EGamePhase NewPhase);
 
 	UFUNCTION(NetMulticast, Reliable)
@@ -126,7 +172,16 @@ public:
 	void Server_RequestPickupCard(ACardDropActor* TargetCard);
 
 	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_RevealSeotdaCard(bool bCard0, bool bCard1, bool bCard2);
+
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveSeotdaRevealResult(bool bAccepted, const FString& Reason);
+
+	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SubmitSeotdaSelection(bool bCard0, bool bCard1, bool bCard2);
+
+	UFUNCTION(Client, Reliable)
+	void Client_ReceiveSeotdaSelectionResult(bool bAccepted, const FString& Reason);
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestSeotdaBetAction(EBettingAction Action);
@@ -137,7 +192,7 @@ public:
 	UFUNCTION(Client, Reliable)
 	void Client_ReceiveRandomUpgradeOptions(const TArray<FRandomCardOption>& Options);
 
-	UFUNCTION(Server, Reliable)
+	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SelectUpgradeOption(int32 SelectedIndex);
 
 	UFUNCTION()
@@ -180,14 +235,15 @@ public:
 	bool bGameplayInputLocked = false;
 
 	void ApplyGameplayInputLock(bool bLocked, const TCHAR* Context);
+	bool ApplyForceCloseShopMode(const TCHAR* Context);
 	
-	UFUNCTION(Server, Reliable)
+	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SelectStaticUpgradeOption(int32 SelectedIndex);
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestDiscardCard(int32 CardInstanceId);
 
-	UFUNCTION(Server, Reliable)
+	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SetUITimer(int32 time);
 
 	UFUNCTION(Client, Reliable)
@@ -210,6 +266,7 @@ int32 CurrentBet,
 int32 MyBetMoney,
 int32 NeedCall,
 bool bMyTurn,
+bool bMyRevealConfirmed,
 bool bMySubmitted,
 bool bMyFolded,
 bool bRoundResolved
@@ -240,7 +297,28 @@ UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
 bool bSeotdaUiMyTurn = false;
 
 UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+bool bSeotdaUiMyRevealConfirmed = false;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+int32 SeotdaUiRevealResultSerial = 0;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+bool bSeotdaUiRevealAccepted = false;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+FString SeotdaUiRevealResultReason;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
 bool bSeotdaUiMySubmitted = false;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+int32 SeotdaUiSelectionResultSerial = 0;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+bool bSeotdaUiSelectionAccepted = false;
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+FString SeotdaUiSelectionResultReason;
 
 UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
 bool bSeotdaUiMyFolded = false;

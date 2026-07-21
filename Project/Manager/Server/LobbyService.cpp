@@ -73,6 +73,9 @@ static constexpr size_t MIN_PLAYERS_TO_START = 1;
 static constexpr int DEDI_READY_TIMEOUT_SECONDS = 600;
 static constexpr int IOCP_GHOST_RECONNECT_GRACE_SECONDS = 120;
 static constexpr DWORD DEDI_TERMINATE_WAIT_MS = 5000;
+static constexpr int DEDI_GRACEFUL_SHUTDOWN_SECONDS = 15;
+static constexpr int DEDI_TERMINATE_RETRY_SECONDS = 5;
+static constexpr int DEDI_COMPLETED_CONTROL_TTL_SECONDS = 120;
 
 static std::string TrimCopy(std::string value)
 {
@@ -85,6 +88,28 @@ static std::string TrimCopy(std::string value)
 
     const size_t last = value.find_last_not_of(whitespace);
     return value.substr(first, last - first + 1);
+}
+
+static bool IsUtf8TextWithinCharacterLimit(const std::string& value, int maxCharacters)
+{
+    if (value.empty() || maxCharacters <= 0)
+    {
+        return false;
+    }
+
+#ifdef _WIN32
+    const int utf16Length = MultiByteToWideChar(
+        CP_UTF8,
+        MB_ERR_INVALID_CHARS,
+        value.data(),
+        static_cast<int>(value.size()),
+        nullptr,
+        0
+    );
+    return utf16Length > 0 && utf16Length <= maxCharacters;
+#else
+    return value.size() <= static_cast<size_t>(maxCharacters);
+#endif
 }
 
 static std::string GetEnvStringOrDefault(const char* name, const char* fallback)
@@ -127,6 +152,34 @@ static uint16_t GetEnvPortOrDefault(const char* name, uint16_t fallback)
     }
 
     return static_cast<uint16_t>(parsed);
+}
+
+static int GetEnvIntOrDefault(
+    const char* name,
+    int fallback,
+    int minimum,
+    int maximum)
+{
+    const std::string value = GetEnvStringOrDefault(name, "");
+    if (value.empty())
+    {
+        return fallback;
+    }
+
+    char* end = nullptr;
+    const long parsed = std::strtol(value.c_str(), &end, 10);
+    if (!end || *end != '\0' || parsed < minimum || parsed > maximum)
+    {
+        LOBBY_WARN("[CONFIG][WARN] Invalid %s=%s fallback=%d range=%d..%d\n",
+            name,
+            value.c_str(),
+            fallback,
+            minimum,
+            maximum);
+        return fallback;
+    }
+
+    return static_cast<int>(parsed);
 }
 
 static std::string GetDediAdvertisedHost()
@@ -363,6 +416,7 @@ const char* RoomStateToString(RoomState s)
 
 extern void AddIO(struct ClientContext* c);
 extern void ReleaseIO(struct ClientContext* c);
+extern void MarkClientClosing(struct ClientContext* c, const char* reason);
 
 
 // ===========================================================================
@@ -373,7 +427,43 @@ LobbyService::LobbyService(NetApi& net)
     : m_net(net)
 {
     InitializeSRWLock(&m_lock);
+    m_unauthenticatedIdleTimeoutSeconds = GetEnvIntOrDefault(
+        "MANAGER_IOCP_UNAUTH_IDLE_TIMEOUT_SECONDS",
+        300,
+        5,
+        3600);
     InitPortPool(7777, 15);
+
+    LOBBY_INFO("[ADMISSION] Unauthenticated idle timeout=%d seconds\n",
+        m_unauthenticatedIdleTimeoutSeconds);
+
+    m_dedicatedServerJob = CreateJobObjectW(nullptr, nullptr);
+    if (!m_dedicatedServerJob)
+    {
+        LOBBY_ERR("[DEDI][ERR] CreateJobObject failed gle=%lu\n", GetLastError());
+        return;
+    }
+
+    JOBOBJECT_EXTENDED_LIMIT_INFORMATION jobInfo{};
+    jobInfo.BasicLimitInformation.LimitFlags = JOB_OBJECT_LIMIT_KILL_ON_JOB_CLOSE;
+    if (!SetInformationJobObject(
+        m_dedicatedServerJob,
+        JobObjectExtendedLimitInformation,
+        &jobInfo,
+        sizeof(jobInfo)))
+    {
+        LOBBY_ERR("[DEDI][ERR] SetInformationJobObject failed gle=%lu\n", GetLastError());
+        CloseHandle(m_dedicatedServerJob);
+        m_dedicatedServerJob = NULL;
+        return;
+    }
+
+    LOBBY_INFO("[DEDI] JobObject ready killOnClose=1\n");
+}
+
+LobbyService::~LobbyService()
+{
+    ShutdownDedicatedServers();
 }
 
 
@@ -493,6 +583,7 @@ void LobbyService::CleanupDedicatedServerForRoom_Unsafe(Room& room, const char* 
     const uint16_t oldPort = room.dedicatedPort;
     const HANDLE oldProcessHandle = room.dedicatedProcessHandle;
     const DWORD oldProcessId = room.dedicatedProcessId;
+    const uint32_t oldGeneration = room.dedicatedGeneration;
 
     room.dedicatedPort = 0;
     room.dedicatedProcessHandle = NULL;
@@ -504,108 +595,304 @@ void LobbyService::CleanupDedicatedServerForRoom_Unsafe(Room& room, const char* 
     room.handoverTickets.clear();
     room.ghostDisconnectTimes.clear();
 
-    bool processExitConfirmed = oldProcessHandle == NULL;
-
     if (oldProcessHandle)
     {
-        DWORD exitCode = STILL_ACTIVE;
-        const bool hasExitCode = GetExitCodeProcess(oldProcessHandle, &exitCode) != FALSE;
-        bool stillActive = hasExitCode && exitCode == STILL_ACTIVE;
+        RetiringDedicatedProcess retiring{};
+        retiring.roomId = room.id;
+        retiring.port = oldPort;
+        retiring.processHandle = oldProcessHandle;
+        retiring.processId = oldProcessId;
+        retiring.generation = oldGeneration;
+        retiring.reason = reason ? reason : "Unknown";
+        retiring.terminateAfter = std::chrono::steady_clock::now() +
+            std::chrono::seconds(terminateProcess ? 0 : DEDI_GRACEFUL_SHUTDOWN_SECONDS);
+        m_retiringDedicatedProcesses.push_back(std::move(retiring));
 
-        if (stillActive && terminateProcess)
-        {
-            if (TerminateProcess(oldProcessHandle, 0))
-            {
-                const DWORD waitResult = WaitForSingleObject(oldProcessHandle, DEDI_TERMINATE_WAIT_MS);
-                processExitConfirmed = waitResult == WAIT_OBJECT_0;
-
-                LOBBY_INFO("[DEDI] Cleanup roomId=%u reason=%s port=%u pid=%lu result=%s wait=%lu\n",
-                    room.id,
-                    reason ? reason : "Unknown",
-                    oldPort,
-                    oldProcessId,
-                    processExitConfirmed ? "TERMINATED" : "TERMINATE_WAIT_TIMEOUT",
-                    waitResult);
-            }
-            else
-            {
-                LOBBY_ERR("[DEDI][ERR] Cleanup roomId=%u reason=%s port=%u pid=%lu result=TERMINATE_FAILED gle=%lu\n",
-                    room.id,
-                    reason ? reason : "Unknown",
-                    oldPort,
-                    oldProcessId,
-                    GetLastError());
-            }
-        }
-        else if (!stillActive && hasExitCode)
-        {
-            processExitConfirmed = true;
-            LOBBY_INFO("[DEDI] Cleanup roomId=%u reason=%s port=%u pid=%lu result=PROCESS_EXITED exitCode=%lu\n",
-                room.id, reason ? reason : "Unknown", oldPort, oldProcessId, exitCode);
-        }
-        else
-        {
-            processExitConfirmed = false;
-            LOBBY_WARN("[DEDI][WARN] Cleanup roomId=%u reason=%s port=%u pid=%lu result=EXIT_NOT_CONFIRMED\n",
-                room.id, reason ? reason : "Unknown", oldPort, oldProcessId);
-        }
-
-        CloseHandle(oldProcessHandle);
+        LOBBY_INFO("[DEDI] Retire queued roomId=%u reason=%s port=%u pid=%lu generation=%u terminateNow=%d retiring=%zu\n",
+            room.id,
+            reason ? reason : "Unknown",
+            oldPort,
+            oldProcessId,
+            oldGeneration,
+            terminateProcess ? 1 : 0,
+            m_retiringDedicatedProcesses.size());
+        return;
     }
 
     if (oldPort != 0)
     {
-        if (processExitConfirmed && IsUdpPortAvailable(oldPort))
+        if (IsUdpPortAvailable(oldPort))
         {
             FreePort(oldPort);
         }
         else
         {
-            QuarantinePort_Unsafe(
-                oldPort,
-                processExitConfirmed ? "UdpPortStillBound" : "ProcessExitNotConfirmed");
+            QuarantinePort_Unsafe(oldPort, "MissingProcessHandlePortStillBound");
         }
+    }
+}
+
+bool LobbyService::RecoverRoomToWaiting_Unsafe(
+    Room& room,
+    const char* reason,
+    bool terminateProcess)
+{
+    const size_t oldMemberCount = room.members.size();
+    const uint16_t oldPort = room.dedicatedPort;
+    const DWORD oldProcessId = room.dedicatedProcessId;
+
+    CleanupDedicatedServerForRoom_Unsafe(room, reason, terminateProcess);
+    room.state = RoomState::WAITING;
+
+    size_t removedOfflineMembers = 0;
+    for (auto itMember = room.members.begin(); itMember != room.members.end();)
+    {
+        const uint32_t memberSid = *itMember;
+        const auto itContext = m_ctxBySession.find(memberSid);
+        if (itContext == m_ctxBySession.end() || itContext->second == nullptr)
+        {
+            itMember = room.members.erase(itMember);
+            room.readyStatus.erase(memberSid);
+            room.handoverTickets.erase(memberSid);
+            room.ghostDisconnectTimes.erase(memberSid);
+            m_roomBySession.erase(memberSid);
+            m_accountIdBySid.erase(memberSid);
+            m_nicknameBySid.erase(memberSid);
+            if (room.hostId == memberSid)
+            {
+                room.hostId = 0;
+            }
+            ++removedOfflineMembers;
+            continue;
+        }
+
+        ++itMember;
+    }
+
+    if (room.hostId != 0 &&
+        std::find(room.members.begin(), room.members.end(), room.hostId) == room.members.end())
+    {
+        room.hostId = 0;
+    }
+    if (room.hostId == 0 && !room.members.empty())
+    {
+        room.hostId = room.members.front();
+    }
+
+    room.readyStatus.clear();
+    for (uint32_t memberSid : room.members)
+    {
+        room.readyStatus[memberSid] = (memberSid == room.hostId);
+    }
+
+    LOBBY_INFO("[RECOVERY] ROOM_TO_WAITING rid=%u reason=%s oldPort=%u oldPid=%lu members=%zu->%zu removedOffline=%zu host=%u terminate=%d empty=%d\n",
+        room.id,
+        reason ? reason : "Unknown",
+        oldPort,
+        oldProcessId,
+        oldMemberCount,
+        room.members.size(),
+        removedOfflineMembers,
+        room.hostId,
+        terminateProcess ? 1 : 0,
+        room.members.empty() ? 1 : 0);
+
+    return room.members.empty();
+}
+
+bool LobbyService::WasDediControlCompleted_Unsafe(
+    PacketType notifyType,
+    uint32_t roomId,
+    uint16_t port,
+    uint32_t generation,
+    uint64_t controlToken) const
+{
+    return std::any_of(
+        m_completedDediControls.begin(),
+        m_completedDediControls.end(),
+        [notifyType, roomId, port, generation, controlToken](const CompletedDediControl& completed)
+        {
+            return completed.notifyType == notifyType &&
+                completed.roomId == roomId &&
+                completed.port == port &&
+                completed.generation == generation &&
+                completed.controlToken == controlToken;
+        });
+}
+
+void LobbyService::RememberDediControlCompleted_Unsafe(
+    PacketType notifyType,
+    uint32_t roomId,
+    uint16_t port,
+    uint32_t generation,
+    uint64_t controlToken)
+{
+    m_completedDediControls.erase(
+        std::remove_if(
+            m_completedDediControls.begin(),
+            m_completedDediControls.end(),
+            [notifyType, roomId, port, generation, controlToken](const CompletedDediControl& completed)
+            {
+                return completed.notifyType == notifyType &&
+                    completed.roomId == roomId &&
+                    completed.port == port &&
+                    completed.generation == generation &&
+                    completed.controlToken == controlToken;
+            }),
+        m_completedDediControls.end());
+
+    CompletedDediControl completed{};
+    completed.notifyType = notifyType;
+    completed.roomId = roomId;
+    completed.port = port;
+    completed.generation = generation;
+    completed.controlToken = controlToken;
+    completed.completedAt = std::chrono::steady_clock::now();
+    m_completedDediControls.push_back(std::move(completed));
+}
+
+void LobbyService::SweepCompletedDediControls_Unsafe(
+    const std::chrono::steady_clock::time_point& now)
+{
+    m_completedDediControls.erase(
+        std::remove_if(
+            m_completedDediControls.begin(),
+            m_completedDediControls.end(),
+            [&now](const CompletedDediControl& completed)
+            {
+                return std::chrono::duration_cast<std::chrono::seconds>(
+                    now - completed.completedAt).count() >=
+                    DEDI_COMPLETED_CONTROL_TTL_SECONDS;
+            }),
+        m_completedDediControls.end());
+}
+
+void LobbyService::SweepRetiringDedicatedServers_Unsafe(
+    const std::chrono::steady_clock::time_point& now)
+{
+    for (auto it = m_retiringDedicatedProcesses.begin();
+        it != m_retiringDedicatedProcesses.end();)
+    {
+        RetiringDedicatedProcess& retiring = *it;
+        DWORD exitCode = STILL_ACTIVE;
+        if (!GetExitCodeProcess(retiring.processHandle, &exitCode))
+        {
+            LOBBY_ERR("[DEDI][ERR] Retire handle invalid roomId=%u port=%u pid=%lu generation=%u reason=%s gle=%lu\n",
+                retiring.roomId,
+                retiring.port,
+                retiring.processId,
+                retiring.generation,
+                retiring.reason.c_str(),
+                GetLastError());
+
+            CloseHandle(retiring.processHandle);
+            if (retiring.port != 0)
+            {
+                QuarantinePort_Unsafe(retiring.port, "RetireProcessHandleInvalid");
+            }
+            it = m_retiringDedicatedProcesses.erase(it);
+            continue;
+        }
+
+        if (exitCode != STILL_ACTIVE)
+        {
+            CloseHandle(retiring.processHandle);
+
+            const bool portAvailable = retiring.port == 0 || IsUdpPortAvailable(retiring.port);
+            if (retiring.port != 0)
+            {
+                if (portAvailable)
+                {
+                    FreePort(retiring.port);
+                }
+                else
+                {
+                    QuarantinePort_Unsafe(retiring.port, "RetiredProcessExitedPortStillBound");
+                }
+            }
+
+            LOBBY_INFO("[DEDI] Retire complete roomId=%u port=%u pid=%lu generation=%u exitCode=%lu portAvailable=%d reason=%s remaining=%zu\n",
+                retiring.roomId,
+                retiring.port,
+                retiring.processId,
+                retiring.generation,
+                exitCode,
+                portAvailable ? 1 : 0,
+                retiring.reason.c_str(),
+                m_retiringDedicatedProcesses.size() - 1);
+
+            it = m_retiringDedicatedProcesses.erase(it);
+            continue;
+        }
+
+        if (now < retiring.terminateAfter)
+        {
+            ++it;
+            continue;
+        }
+
+        if (TerminateProcess(retiring.processHandle, 0))
+        {
+            retiring.terminationRequested = true;
+            retiring.terminateAfter = now + std::chrono::seconds(DEDI_TERMINATE_RETRY_SECONDS);
+            LOBBY_WARN("[DEDI][WARN] Retire terminate requested roomId=%u port=%u pid=%lu generation=%u reason=%s\n",
+                retiring.roomId,
+                retiring.port,
+                retiring.processId,
+                retiring.generation,
+                retiring.reason.c_str());
+        }
+        else
+        {
+            const DWORD terminateError = GetLastError();
+            retiring.terminateAfter = now + std::chrono::seconds(DEDI_TERMINATE_RETRY_SECONDS);
+            LOBBY_ERR("[DEDI][ERR] Retire terminate failed roomId=%u port=%u pid=%lu generation=%u requestedBefore=%d reason=%s gle=%lu\n",
+                retiring.roomId,
+                retiring.port,
+                retiring.processId,
+                retiring.generation,
+                retiring.terminationRequested ? 1 : 0,
+                retiring.reason.c_str(),
+                terminateError);
+        }
+
+        ++it;
     }
 }
 
 void LobbyService::SweepDedicatedServerProcesses()
 {
     std::vector<uint32_t> changedRooms;
+    bool shouldBroadcastRoomList = false;
     const auto now = std::chrono::steady_clock::now();
 
     AcquireSRWLockExclusive(&m_lock);
     ReclaimQuarantinedPorts_Unsafe();
+    SweepRetiringDedicatedServers_Unsafe(now);
+    SweepCompletedDediControls_Unsafe(now);
 
-    for (auto& kv : m_rooms)
+    for (auto itRoom = m_rooms.begin(); itRoom != m_rooms.end();)
     {
-        Room& room = kv.second;
+        Room& room = itRoom->second;
         if (!room.dedicatedProcessHandle)
         {
+            ++itRoom;
             continue;
         }
 
+        const char* recoveryReason = nullptr;
+        bool terminateProcess = false;
         DWORD exitCode = STILL_ACTIVE;
         if (!GetExitCodeProcess(room.dedicatedProcessHandle, &exitCode))
         {
-            LOBBY_ERR("[DEDI][ERR] Process handle invalid before cleanup. roomId=%u port=%u pid=%lu gle=%lu\n",
+            LOBBY_ERR("[DEDI][ERR] Process handle invalid before recovery. roomId=%u port=%u pid=%lu gle=%lu\n",
                 room.id,
                 room.dedicatedPort,
                 room.dedicatedProcessId,
                 GetLastError());
-
-            CleanupDedicatedServerForRoom_Unsafe(room, "ProcessHandleInvalid", false);
-            room.state = RoomState::WAITING;
-
-            for (uint32_t sid : room.members)
-            {
-                room.readyStatus[sid] = (sid == room.hostId);
-            }
-
-            changedRooms.push_back(room.id);
-            continue;
+            recoveryReason = "ProcessHandleInvalid";
         }
-
-        if (exitCode == STILL_ACTIVE)
+        else if (exitCode == STILL_ACTIVE)
         {
             if (!room.dedicatedReadyReceived &&
                 room.dedicatedLaunchTime.time_since_epoch().count() != 0)
@@ -613,7 +900,6 @@ void LobbyService::SweepDedicatedServerProcesses()
                 const auto elapsedSeconds =
                     std::chrono::duration_cast<std::chrono::seconds>(
                         now - room.dedicatedLaunchTime).count();
-
                 if (elapsedSeconds >= DEDI_READY_TIMEOUT_SECONDS)
                 {
                     LOBBY_ERR("[DEDI][ERR] Ready timeout roomId=%u port=%u pid=%lu elapsed=%lld timeout=%d\n",
@@ -622,41 +908,58 @@ void LobbyService::SweepDedicatedServerProcesses()
                         room.dedicatedProcessId,
                         static_cast<long long>(elapsedSeconds),
                         DEDI_READY_TIMEOUT_SECONDS);
-
-                    CleanupDedicatedServerForRoom_Unsafe(room, "ReadyTimeout", true);
-                    room.state = RoomState::WAITING;
-                    for (uint32_t sid : room.members)
-                    {
-                        room.readyStatus[sid] = (sid == room.hostId);
-                    }
-                    changedRooms.push_back(room.id);
+                    recoveryReason = "ReadyTimeout";
+                    terminateProcess = true;
                 }
             }
+
+            if (!recoveryReason)
+            {
+                ++itRoom;
+                continue;
+            }
+        }
+        else
+        {
+            LOBBY_ERR("[DEDI][ERR] Process exited before control cleanup. roomId=%u port=%u pid=%lu exitCode=%lu\n",
+                room.id,
+                room.dedicatedPort,
+                room.dedicatedProcessId,
+                exitCode);
+            recoveryReason = "ProcessExited";
+        }
+
+        const uint32_t roomId = room.id;
+        const bool roomEmpty = RecoverRoomToWaiting_Unsafe(
+            room,
+            recoveryReason,
+            terminateProcess);
+        shouldBroadcastRoomList = true;
+
+        if (roomEmpty)
+        {
+            m_roomOrder.erase(
+                std::remove(m_roomOrder.begin(), m_roomOrder.end(), roomId),
+                m_roomOrder.end());
+            itRoom = m_rooms.erase(itRoom);
+            LOBBY_INFO("[RECOVERY] EMPTY_ROOM_DELETED rid=%u reason=%s\n",
+                roomId,
+                recoveryReason);
             continue;
         }
 
-        LOBBY_ERR("[DEDI][ERR] Process exited before cleanup. roomId=%u port=%u pid=%lu exitCode=%lu\n",
-            room.id,
-            room.dedicatedPort,
-            room.dedicatedProcessId,
-            exitCode);
-
-        CleanupDedicatedServerForRoom_Unsafe(room, "ProcessExited", false);
-        room.state = RoomState::WAITING;
-
-        for (uint32_t sid : room.members)
-        {
-            room.readyStatus[sid] = (sid == room.hostId);
-        }
-
-        changedRooms.push_back(room.id);
+        changedRooms.push_back(roomId);
+        ++itRoom;
     }
 
     ReleaseSRWLockExclusive(&m_lock);
 
-    for (uint32_t roomId : changedRooms)
+    if (shouldBroadcastRoomList)
     {
         BroadcastRoomList();
+    }
+    for (uint32_t roomId : changedRooms)
+    {
         BroadcastRoomMemberList(roomId);
     }
 }
@@ -776,10 +1079,155 @@ void LobbyService::SweepGhostSessions()
     }
 }
 
+void LobbyService::SweepUnauthenticatedClients()
+{
+    struct TimedOutClient
+    {
+        ClientContext* context = nullptr;
+        uint32_t sessionId = 0;
+        long long idleSeconds = 0;
+    };
+
+    std::vector<TimedOutClient> timedOutClients;
+    const auto now = std::chrono::steady_clock::now();
+
+    AcquireSRWLockExclusive(&m_lock);
+
+    for (auto& activityEntry : m_clientActivityByCtx)
+    {
+        ClientContext* context = activityEntry.first;
+        auto itSession = m_sessionByCtx.find(context);
+        if (!context || itSession == m_sessionByCtx.end())
+        {
+            continue;
+        }
+
+        const uint32_t sessionId = itSession->second;
+        if (m_accountIdBySid.find(sessionId) != m_accountIdBySid.end())
+        {
+            continue;
+        }
+
+        const long long idleSeconds = std::chrono::duration_cast<std::chrono::seconds>(
+            now - activityEntry.second.lastPacketAt).count();
+        if (idleSeconds < m_unauthenticatedIdleTimeoutSeconds)
+        {
+            continue;
+        }
+
+        AddIO(context);
+        timedOutClients.push_back({ context, sessionId, idleSeconds });
+        activityEntry.second.lastPacketAt = now;
+    }
+
+    ReleaseSRWLockExclusive(&m_lock);
+
+    for (const TimedOutClient& timedOut : timedOutClients)
+    {
+        LOBBY_WARN("[ADMISSION][WARN] Closing unauthenticated idle client sid=%u idle=%lld timeout=%d\n",
+            timedOut.sessionId,
+            timedOut.idleSeconds,
+            m_unauthenticatedIdleTimeoutSeconds);
+        MarkClientClosing(timedOut.context, "UnauthenticatedIdleTimeout");
+        ReleaseIO(timedOut.context);
+    }
+}
+
 void LobbyService::TickMaintenance()
 {
     SweepDedicatedServerProcesses();
     SweepGhostSessions();
+    SweepUnauthenticatedClients();
+}
+
+void LobbyService::ShutdownDedicatedServers()
+{
+    std::vector<HANDLE> processHandles;
+    HANDLE jobHandle = NULL;
+
+    AcquireSRWLockExclusive(&m_lock);
+    if (m_dedicatedServerShutdown)
+    {
+        ReleaseSRWLockExclusive(&m_lock);
+        return;
+    }
+
+    m_dedicatedServerShutdown = true;
+
+    for (auto& entry : m_rooms)
+    {
+        Room& room = entry.second;
+        if (room.dedicatedProcessHandle)
+        {
+            processHandles.push_back(room.dedicatedProcessHandle);
+            room.dedicatedProcessHandle = NULL;
+        }
+        room.dedicatedProcessId = 0;
+        room.dedicatedPort = 0;
+        room.dedicatedControlToken = 0;
+        room.dedicatedReadyReceived = false;
+        room.dedicatedLaunchTime = {};
+        room.gameStartSent = false;
+        room.handoverTickets.clear();
+        room.ghostDisconnectTimes.clear();
+    }
+
+    for (RetiringDedicatedProcess& retiring : m_retiringDedicatedProcesses)
+    {
+        if (retiring.processHandle)
+        {
+            processHandles.push_back(retiring.processHandle);
+            retiring.processHandle = NULL;
+        }
+    }
+    m_retiringDedicatedProcesses.clear();
+
+    jobHandle = m_dedicatedServerJob;
+    m_dedicatedServerJob = NULL;
+    ReleaseSRWLockExclusive(&m_lock);
+
+    if (jobHandle)
+    {
+        if (!TerminateJobObject(jobHandle, 0))
+        {
+            LOBBY_ERR("[DEDI][ERR] TerminateJobObject during shutdown failed gle=%lu\n", GetLastError());
+        }
+    }
+
+    size_t exitedCount = 0;
+    for (HANDLE processHandle : processHandles)
+    {
+        if (!processHandle)
+        {
+            continue;
+        }
+
+        if (!jobHandle)
+        {
+            TerminateProcess(processHandle, 0);
+        }
+
+        const DWORD waitResult = WaitForSingleObject(processHandle, DEDI_TERMINATE_WAIT_MS);
+        if (waitResult == WAIT_OBJECT_0)
+        {
+            ++exitedCount;
+        }
+        else
+        {
+            LOBBY_WARN("[DEDI][WARN] Shutdown wait incomplete wait=%lu\n", waitResult);
+        }
+        CloseHandle(processHandle);
+    }
+
+    if (jobHandle)
+    {
+        CloseHandle(jobHandle);
+    }
+
+    LOBBY_INFO("[DEDI] Shutdown complete tracked=%zu exited=%zu job=%d\n",
+        processHandles.size(),
+        exitedCount,
+        jobHandle ? 1 : 0);
 }
 
 uint32_t LobbyService::GenerateHandoverTicket_Unsafe(const Room& room) const
@@ -932,13 +1380,21 @@ bool LobbyService::LaunchDedicatedServer(
 
     PROCESS_INFORMATION pi{};
 
+    if (!m_dedicatedServerJob)
+    {
+        LOBBY_ERR("[DEDI][ERR] Launch failed. roomId=%u port=%u result=JOB_OBJECT_NOT_READY\n",
+            roomId,
+            port);
+        return false;
+    }
+
     BOOL ok = CreateProcessA(
         nullptr,
         cmdLine,
         nullptr,
         nullptr,
         FALSE,
-        CREATE_NEW_CONSOLE,
+        CREATE_NEW_CONSOLE | CREATE_SUSPENDED,
         nullptr,
         workingDir.c_str(),
         &si,
@@ -959,7 +1415,39 @@ bool LobbyService::LaunchDedicatedServer(
         return false;
     }
 
-    LOBBY_INFO("[DEDI] Launch success. roomId=%u requiredPlayers=%u port=%u pid=%lu usePackaged=%d\n",
+    if (!AssignProcessToJobObject(m_dedicatedServerJob, pi.hProcess))
+    {
+        const DWORD assignError = GetLastError();
+        TerminateProcess(pi.hProcess, 0);
+        WaitForSingleObject(pi.hProcess, DEDI_TERMINATE_WAIT_MS);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+
+        LOBBY_ERR("[DEDI][ERR] Launch failed. roomId=%u port=%u pid=%lu result=JOB_ASSIGN_FAILED gle=%lu\n",
+            roomId,
+            port,
+            pi.dwProcessId,
+            assignError);
+        return false;
+    }
+
+    if (ResumeThread(pi.hThread) == static_cast<DWORD>(-1))
+    {
+        const DWORD resumeError = GetLastError();
+        TerminateProcess(pi.hProcess, 0);
+        WaitForSingleObject(pi.hProcess, DEDI_TERMINATE_WAIT_MS);
+        CloseHandle(pi.hThread);
+        CloseHandle(pi.hProcess);
+
+        LOBBY_ERR("[DEDI][ERR] Launch failed. roomId=%u port=%u pid=%lu result=RESUME_FAILED gle=%lu\n",
+            roomId,
+            port,
+            pi.dwProcessId,
+            resumeError);
+        return false;
+    }
+
+    LOBBY_INFO("[DEDI] Launch success. roomId=%u requiredPlayers=%u port=%u pid=%lu usePackaged=%d jobAssigned=1\n",
         roomId,
         static_cast<unsigned>(requiredPlayers),
         port,
@@ -987,6 +1475,7 @@ void LobbyService::OnClientAccepted(ClientContext* c)
     m_sessionByCtx[c] = sid;
     m_ctxBySession[sid] = c;
     m_roomBySession[sid] = 0;
+    m_clientActivityByCtx[c].lastPacketAt = std::chrono::steady_clock::now();
 
     LOBBY_TRACE("[LOBBY] ACCEPT sid=%u\n", sid);
 
@@ -1033,9 +1522,10 @@ void LobbyService::OnClientDisconnected(ClientContext* c)
 
         m_ctxBySession.erase(sid);
         m_sessionByCtx.erase(it);
-
         // m_accountIdBySid, m_nicknameBySid are intentionally kept for reconnect.
     }
+
+    m_clientActivityByCtx.erase(c);
 
     ReleaseSRWLockExclusive(&m_lock);
 
@@ -1064,21 +1554,28 @@ void LobbyService::OnPacket(ClientContext* c, uint16_t type, const char* payload
         (pktType == PacketType::C2S_REGISTER_REQ) ||
         (pktType == PacketType::C2S_PING) ||
         (pktType == PacketType::D2L_MATCH_END_NOTIFY) ||
-        (pktType == PacketType::D2L_SERVER_READY_NOTIFY);
+        (pktType == PacketType::D2L_SERVER_READY_NOTIFY) ||
+        (pktType == PacketType::D2L_MATCH_ABORT_NOTIFY);
 
     bool isLoggedIn = false;
 
     {
-        AcquireSRWLockShared(&m_lock);
+        AcquireSRWLockExclusive(&m_lock);
 
         auto itSession = m_sessionByCtx.find(c);
         if (itSession != m_sessionByCtx.end())
         {
             uint32_t sid = itSession->second;
             isLoggedIn = (m_accountIdBySid.find(sid) != m_accountIdBySid.end());
+
+            auto itActivity = m_clientActivityByCtx.find(c);
+            if (itActivity != m_clientActivityByCtx.end())
+            {
+                itActivity->second.lastPacketAt = std::chrono::steady_clock::now();
+            }
         }
 
-        ReleaseSRWLockShared(&m_lock);
+        ReleaseSRWLockExclusive(&m_lock);
     }
 
     if (!isLoggedIn && !allowedWithoutLogin)
@@ -1094,6 +1591,10 @@ void LobbyService::OnPacket(ClientContext* c, uint16_t type, const char* payload
 
     case PacketType::D2L_SERVER_READY_NOTIFY:
         HandleDediServerReadyNotify(c, payload, payloadLen);
+        break;
+
+    case PacketType::D2L_MATCH_ABORT_NOTIFY:
+        HandleDediMatchAbortNotify(c, payload, payloadLen);
         break;
 
     case PacketType::C2S_LOGIN_REQ:
@@ -1167,6 +1668,10 @@ bool LobbyService::ParseAuthPayload(
     }
 
     outId.assign(payload + 1, idLen);
+    if (!IsUtf8TextWithinCharacterLimit(outId, MAX_ID_CHAR_LEN))
+    {
+        return false;
+    }
 
     uint8_t pwLen = static_cast<uint8_t>(payload[1 + idLen]);
 
@@ -1182,37 +1687,40 @@ bool LobbyService::ParseAuthPayload(
 
     outPw.assign(payload + 1 + idLen + 1, pwLen);
 
-    if (outNickname)
+    const size_t authEnd = static_cast<size_t>(1 + idLen + 1 + pwLen);
+
+    if (!outNickname)
     {
-        size_t nickOffset = static_cast<size_t>(1 + idLen + 1 + pwLen);
-
-        if (payloadLen > nickOffset)
-        {
-            if (payloadLen < nickOffset + 1)
-            {
-                return false;
-            }
-
-            uint8_t nickLen = static_cast<uint8_t>(payload[nickOffset]);
-
-            if (nickLen == 0 || nickLen > MAX_NICKNAME_LEN)
-            {
-                return false;
-            }
-
-            if (payloadLen < nickOffset + 1 + nickLen)
-            {
-                return false;
-            }
-
-            outNickname->assign(payload + nickOffset + 1, nickLen);
-        }
-        else
-        {
-            *outNickname = outId;
-        }
+        return payloadLen == authEnd;
     }
 
+    if (payloadLen == authEnd)
+    {
+        *outNickname = outId;
+        return true;
+    }
+
+    if (payloadLen < authEnd + 1)
+    {
+        return false;
+    }
+
+    const uint8_t nickLen = static_cast<uint8_t>(payload[authEnd]);
+    if (nickLen == 0 || nickLen > MAX_NICKNAME_LEN)
+    {
+        return false;
+    }
+
+    if (payloadLen != authEnd + 1 + nickLen)
+    {
+        return false;
+    }
+
+    outNickname->assign(payload + authEnd + 1, nickLen);
+    if (!IsUtf8TextWithinCharacterLimit(*outNickname, MAX_NICKNAME_CHAR_LEN))
+    {
+        return false;
+    }
     return true;
 }
 
@@ -1467,7 +1975,9 @@ RoomResult LobbyService::HandleRoomCreateReq(ClientContext* c, const char* paylo
 
     uint8_t titleLen = static_cast<uint8_t>(payload[0]);
 
-    if (titleLen > ROOM_TITLE_MAX || payloadLen < static_cast<uint16_t>(1 + titleLen))
+    if (titleLen == 0 ||
+        titleLen > ROOM_TITLE_MAX ||
+        payloadLen != static_cast<uint16_t>(1 + titleLen))
     {
         printf("[ROOM] CREATE result=%s\n",
             RoomResultToString(RoomResult::BAD_PAYLOAD));
@@ -1502,6 +2012,20 @@ RoomResult LobbyService::HandleRoomCreateReq(ClientContext* c, const char* paylo
 
         m_net.SendRoomCreateRes(c, RoomResult::ALREADY_IN_ROOM, nullptr);
         return RoomResult::ALREADY_IN_ROOM;
+    }
+
+    if (m_rooms.size() >= static_cast<std::size_t>(ROOM_LIST_MAX_ROOMS))
+    {
+        const std::size_t roomCount = m_rooms.size();
+        ReleaseSRWLockExclusive(&m_lock);
+
+        LOBBY_WARN("[ROOM][WARN] CREATE rejected. room capacity reached rooms=%zu max=%u sid=%u\n",
+            roomCount,
+            static_cast<unsigned>(ROOM_LIST_MAX_ROOMS),
+            sid);
+
+        m_net.SendRoomCreateRes(c, RoomResult::FULL, nullptr);
+        return RoomResult::FULL;
     }
 
     Room r;
@@ -1697,7 +2221,7 @@ RoomResult LobbyService::HandleRoomLeaveReq(ClientContext* c)
 
 void LobbyService::HandleRoomReadyReq(ClientContext* c, const char* payload, uint16_t payloadLen)
 {
-    if (!payload || payloadLen < 1)
+    if (!payload || payloadLen != 1 || (payload[0] != 0 && payload[0] != 1))
     {
         return;
     }
@@ -1706,7 +2230,8 @@ void LobbyService::HandleRoomReadyReq(ClientContext* c, const char* payload, uin
 
     uint32_t sid = 0;
     uint32_t rid = 0;
-    std::vector<uint32_t> membersCopy;
+    size_t memberCount = 0;
+    std::vector<ClientContext*> targets;
 
     AcquireSRWLockExclusive(&m_lock);
 
@@ -1752,7 +2277,21 @@ void LobbyService::HandleRoomReadyReq(ClientContext* c, const char* payload, uin
     }
 
     r.readyStatus[sid] = isReady;
-    membersCopy = r.members;
+    memberCount = r.members.size();
+    targets.reserve(memberCount);
+
+    for (uint32_t memberSid : r.members)
+    {
+        auto itCtx = m_ctxBySession.find(memberSid);
+        if (itCtx == m_ctxBySession.end() || itCtx->second == nullptr)
+        {
+            continue;
+        }
+
+        ClientContext* target = itCtx->second;
+        AddIO(target);
+        targets.push_back(target);
+    }
 
     printf("[ROOM] READY sid=%u rid=%u value=%d\n",
         sid,
@@ -1761,24 +2300,18 @@ void LobbyService::HandleRoomReadyReq(ClientContext* c, const char* payload, uin
 
     ReleaseSRWLockExclusive(&m_lock);
 
-    printf("[ROOM] READY_BROADCAST rid=%u members=%zu fromSid=%u value=%d\n",
+    printf("[ROOM] READY_BROADCAST rid=%u members=%zu targets=%zu fromSid=%u value=%d\n",
         rid,
-        membersCopy.size(),
+        memberCount,
+        targets.size(),
         sid,
         isReady ? 1 : 0);
 
-    AcquireSRWLockShared(&m_lock);
-
-    for (uint32_t mSid : membersCopy)
+    for (ClientContext* target : targets)
     {
-        auto itCtx = m_ctxBySession.find(mSid);
-        if (itCtx != m_ctxBySession.end())
-        {
-            m_net.SendRoomReadyBrd(itCtx->second, sid, isReady);
-        }
+        m_net.SendRoomReadyBrd(target, sid, isReady);
+        ReleaseIO(target);
     }
-
-    ReleaseSRWLockShared(&m_lock);
 
     BroadcastRoomMemberList(rid);
 }
@@ -2021,8 +2554,20 @@ void LobbyService::HandleRoomStartReq(ClientContext* c)
         if (dediProcessHandle)
         {
             TerminateProcess(dediProcessHandle, 0);
+            WaitForSingleObject(dediProcessHandle, DEDI_TERMINATE_WAIT_MS);
             CloseHandle(dediProcessHandle);
         }
+
+        AcquireSRWLockExclusive(&m_lock);
+        if (IsUdpPortAvailable(port))
+        {
+            FreePort(port);
+        }
+        else
+        {
+            QuarantinePort_Unsafe(port, "RoomReleasedDuringLaunch");
+        }
+        ReleaseSRWLockExclusive(&m_lock);
 
         LOBBY_WARN("[ROOM][WARN] START sid=%u rid=%u result=ROOM_RELEASED_DURING_LAUNCH port=%u\n",
             sid,
@@ -2054,15 +2599,24 @@ void LobbyService::HandleRoomStartReq(ClientContext* c)
     BroadcastRoomMemberList(rid);
 }
 
-void LobbyService::SendGameStartForRoom_Unsafe(uint32_t roomId, const char* reason)
+bool LobbyService::PrepareGameStartForRoom_Unsafe(
+    uint32_t roomId,
+    const char* reason,
+    uint16_t& outPort,
+    std::string& outHost,
+    std::vector<GameStartTarget>& outTargets)
 {
+    outPort = 0;
+    outHost.clear();
+    outTargets.clear();
+
     auto itRoom = m_rooms.find(roomId);
     if (itRoom == m_rooms.end())
     {
         LOBBY_WARN("[ROOM][WARN] GAME_START_SKIP rid=%u reason=%s result=ROOM_NOT_FOUND\n",
             roomId,
             reason ? reason : "Unknown");
-        return;
+        return false;
     }
 
     Room& room = itRoom->second;
@@ -2073,7 +2627,7 @@ void LobbyService::SendGameStartForRoom_Unsafe(uint32_t roomId, const char* reas
             reason ? reason : "Unknown",
             RoomStateToString(room.state),
             room.dedicatedPort);
-        return;
+        return false;
     }
 
     if (room.gameStartSent)
@@ -2082,15 +2636,15 @@ void LobbyService::SendGameStartForRoom_Unsafe(uint32_t roomId, const char* reas
             roomId,
             reason ? reason : "Unknown",
             room.dedicatedPort);
-        return;
+        return false;
     }
 
     room.gameStartSent = true;
-    const uint16_t port = room.dedicatedPort;
-    std::vector<uint32_t> membersCopy = room.members;
-    const std::string dedicatedHost = GetDediAdvertisedHost();
+    outPort = room.dedicatedPort;
+    outHost = GetDediAdvertisedHost();
+    outTargets.reserve(room.members.size());
 
-    for (uint32_t mSid : membersCopy)
+    for (uint32_t mSid : room.members)
     {
         auto itCtx = m_ctxBySession.find(mSid);
         if (itCtx == m_ctxBySession.end() || itCtx->second == nullptr)
@@ -2112,15 +2666,15 @@ void LobbyService::SendGameStartForRoom_Unsafe(uint32_t roomId, const char* reas
             continue;
         }
 
-        LOBBY_INFO("[ROOM] GAME_START rid=%u sid=%u ip=%s port=%u reason=%s ticketIssued=1\n",
-            roomId,
-            mSid,
-            dedicatedHost.c_str(),
-            port,
-            reason ? reason : "Unknown");
-
-        m_net.SendGameStart(itCtx->second, dedicatedHost.c_str(), port, itTicket->second);
+        AddIO(itCtx->second);
+        GameStartTarget target{};
+        target.context = itCtx->second;
+        target.sessionId = mSid;
+        target.ticket = itTicket->second;
+        outTargets.push_back(target);
     }
+
+    return true;
 }
 
 
@@ -2154,9 +2708,17 @@ RoomInfoView LobbyService::BuildRoomView_Unsafe(const Room& room) const
 std::vector<RoomInfoView> LobbyService::BuildRoomListView_Unsafe() const
 {
     std::vector<RoomInfoView> views;
+    views.reserve((std::min)(
+        m_roomOrder.size(),
+        static_cast<std::size_t>(ROOM_LIST_MAX_ROOMS)));
 
     for (uint32_t rid : m_roomOrder)
     {
+        if (views.size() >= static_cast<std::size_t>(ROOM_LIST_MAX_ROOMS))
+        {
+            break;
+        }
+
         auto itRoom = m_rooms.find(rid);
         if (itRoom != m_rooms.end())
         {
@@ -2387,7 +2949,7 @@ void LobbyService::BroadcastRoomMemberList(uint32_t roomId)
 
 bool LobbyService::ReadU32(const char* payload, uint16_t payloadLen, uint32_t& outHost)
 {
-    if (!payload || payloadLen < 4)
+    if (!payload || payloadLen != 4)
     {
         return false;
     }
@@ -2428,6 +2990,8 @@ static uint64_t ReadControlU64BE(const uint8_t* data)
 void LobbyService::HandleDediMatchEndNotify(ClientContext* c, const char* payload, uint16_t payloadLen)
 {
     static constexpr uint16_t ControlHeaderSize = 18;
+    static constexpr uint8_t MaxWinnerLength = 96;
+    static constexpr uint8_t MaxSummaryLength = 180;
     if (!payload || payloadLen < ControlHeaderSize + 1)
     {
         LOBBY_WARN("[DEDI][WARN] MATCH_END_NOTIFY bad payload len=%u\n", payloadLen);
@@ -2441,8 +3005,8 @@ void LobbyService::HandleDediMatchEndNotify(ClientContext* c, const char* payloa
     const uint64_t controlToken = ReadControlU64BE(p + 10);
     uint16_t offset = ControlHeaderSize;
 
-    uint8_t winnerLen = p[offset++];
-    if (offset + winnerLen > payloadLen)
+    const uint8_t winnerLen = p[offset++];
+    if (winnerLen > MaxWinnerLength || offset + winnerLen > payloadLen)
     {
         LOBBY_WARN("[DEDI][WARN] MATCH_END_NOTIFY bad winner roomId=%u len=%u payloadLen=%u\n",
             roomId, winnerLen, payloadLen);
@@ -2456,11 +3020,10 @@ void LobbyService::HandleDediMatchEndNotify(ClientContext* c, const char* payloa
     std::string summary;
     if (offset < payloadLen)
     {
-        uint8_t summaryLen = p[offset++];
-
-        if (offset + summaryLen > payloadLen)
+        const uint8_t summaryLen = p[offset++];
+        if (summaryLen > MaxSummaryLength || offset + summaryLen != payloadLen)
         {
-            LOBBY_WARN("[DEDI][WARN] MATCH_END_NOTIFY bad summary roomId=%u len=%u payloadLen=%u\\n",
+            LOBBY_WARN("[DEDI][WARN] MATCH_END_NOTIFY bad summary roomId=%u len=%u payloadLen=%u\n",
                 roomId, summaryLen, payloadLen);
             m_net.SendDediControlAck(c, PacketType::L2D_MATCH_END_ACK, roomId, notifyPort, generation, controlToken, false);
             return;
@@ -2470,120 +3033,247 @@ void LobbyService::HandleDediMatchEndNotify(ClientContext* c, const char* payloa
         offset += summaryLen;
     }
 
-    bool shouldBroadcast = false;
-    uint16_t oldPort = 0;
+    if (offset != payloadLen)
+    {
+        LOBBY_WARN("[DEDI][WARN] MATCH_END_NOTIFY trailing payload roomId=%u payloadLen=%u parsed=%u\n",
+            roomId, payloadLen, offset);
+        m_net.SendDediControlAck(c, PacketType::L2D_MATCH_END_ACK, roomId, notifyPort, generation, controlToken, false);
+        return;
+    }
+
+    bool accepted = false;
+    bool recovered = false;
+    bool duplicate = false;
+    bool roomDeleted = false;
     size_t memberCount = 0;
 
     AcquireSRWLockExclusive(&m_lock);
 
-    auto itRoom = m_rooms.find(roomId);
-    if (itRoom != m_rooms.end())
+    if (WasDediControlCompleted_Unsafe(
+        PacketType::D2L_MATCH_END_NOTIFY,
+        roomId,
+        notifyPort,
+        generation,
+        controlToken))
     {
-        Room& r = itRoom->second;
-
-        if (r.state != RoomState::IN_GAME ||
-            r.dedicatedPort != notifyPort ||
-            r.dedicatedGeneration != generation ||
-            r.dedicatedControlToken == 0 ||
-            r.dedicatedControlToken != controlToken)
+        accepted = true;
+        duplicate = true;
+    }
+    else
+    {
+        auto itRoom = m_rooms.find(roomId);
+        if (itRoom != m_rooms.end())
         {
-            LOBBY_WARN("[DEDI][WARN] MATCH_END_NOTIFY rejected roomId=%u port=%u generation=%u state=%s expectedPort=%u expectedGeneration=%u\n",
-                roomId,
-                notifyPort,
-                generation,
-                RoomStateToString(r.state),
-                r.dedicatedPort,
-                r.dedicatedGeneration);
-            ReleaseSRWLockExclusive(&m_lock);
-            m_net.SendDediControlAck(c, PacketType::L2D_MATCH_END_ACK, roomId, notifyPort, generation, controlToken, false);
-            return;
-        }
-
-        oldPort = r.dedicatedPort;
-        memberCount = r.members.size();
-
-        if (r.dedicatedPort != 0 || r.dedicatedProcessHandle)
-        {
-            CleanupDedicatedServerForRoom_Unsafe(r, "MatchEnd", false);
-        }
-
-        r.state = RoomState::WAITING;
-
-        for (auto itMember = r.members.begin(); itMember != r.members.end();)
-        {
-            const uint32_t memberSid = *itMember;
-            if (m_ctxBySession.find(memberSid) == m_ctxBySession.end())
+            Room& room = itRoom->second;
+            if (room.state == RoomState::IN_GAME &&
+                room.dedicatedPort == notifyPort &&
+                room.dedicatedGeneration == generation &&
+                room.dedicatedControlToken != 0 &&
+                room.dedicatedControlToken == controlToken)
             {
-                itMember = r.members.erase(itMember);
-                r.readyStatus.erase(memberSid);
-                r.handoverTickets.erase(memberSid);
-                r.ghostDisconnectTimes.erase(memberSid);
-                m_roomBySession.erase(memberSid);
-                m_accountIdBySid.erase(memberSid);
-                m_nicknameBySid.erase(memberSid);
-                if (r.hostId == memberSid)
+                memberCount = room.members.size();
+                RememberDediControlCompleted_Unsafe(
+                    PacketType::D2L_MATCH_END_NOTIFY,
+                    roomId,
+                    notifyPort,
+                    generation,
+                    controlToken);
+
+                roomDeleted = RecoverRoomToWaiting_Unsafe(room, "MatchEnd", false);
+                if (roomDeleted)
                 {
-                    r.hostId = 0;
+                    m_roomOrder.erase(
+                        std::remove(m_roomOrder.begin(), m_roomOrder.end(), roomId),
+                        m_roomOrder.end());
+                    m_rooms.erase(itRoom);
                 }
-                continue;
+
+                accepted = true;
+                recovered = true;
             }
-
-            ++itMember;
-        }
-
-        if (r.hostId != 0 &&
-            std::find(r.members.begin(), r.members.end(), r.hostId) == r.members.end())
-        {
-            r.hostId = 0;
-        }
-
-        if (r.hostId == 0 && !r.members.empty())
-        {
-            r.hostId = r.members.front();
-        }
-
-        if (r.members.empty())
-        {
-            m_roomOrder.erase(
-                std::remove(m_roomOrder.begin(), m_roomOrder.end(), roomId),
-                m_roomOrder.end());
-            m_rooms.erase(itRoom);
-            shouldBroadcast = true;
-        }
-        else
-        {
-            for (uint32_t sid : r.members)
+            else
             {
-                r.readyStatus[sid] = (sid == r.hostId);
+                LOBBY_WARN("[DEDI][WARN] MATCH_END_NOTIFY rejected roomId=%u port=%u generation=%u state=%s expectedPort=%u expectedGeneration=%u\n",
+                    roomId,
+                    notifyPort,
+                    generation,
+                    RoomStateToString(room.state),
+                    room.dedicatedPort,
+                    room.dedicatedGeneration);
             }
-
-            shouldBroadcast = true;
         }
     }
 
     ReleaseSRWLockExclusive(&m_lock);
 
-    m_net.SendDediControlAck(c, PacketType::L2D_MATCH_END_ACK, roomId, notifyPort, generation, controlToken, shouldBroadcast);
+    m_net.SendDediControlAck(
+        c,
+        PacketType::L2D_MATCH_END_ACK,
+        roomId,
+        notifyPort,
+        generation,
+        controlToken,
+        accepted);
 
-    LOBBY_INFO("[DEDI] MATCH_END_NOTIFY roomId=%u winner=%s summary=%s oldPort=%u members=%zu result=%s\n",
+    LOBBY_INFO("[DEDI] MATCH_END_NOTIFY roomId=%u winner=%s summary=%s port=%u members=%zu result=%s\n",
         roomId,
         winner.c_str(),
         summary.c_str(),
-        oldPort,
+        notifyPort,
         memberCount,
-        shouldBroadcast ? "OK" : "ROOM_NOT_FOUND");
+        duplicate ? "DUPLICATE_ACK" : (recovered ? "RECOVERED" : "REJECTED"));
 
-    if (shouldBroadcast)
+    if (recovered)
     {
         BroadcastRoomList();
-        BroadcastRoomMemberList(roomId);
+        if (!roomDeleted)
+        {
+            BroadcastRoomMemberList(roomId);
+        }
+    }
+}
+
+void LobbyService::HandleDediMatchAbortNotify(ClientContext* c, const char* payload, uint16_t payloadLen)
+{
+    static constexpr uint16_t ControlHeaderSize = 18;
+    static constexpr uint8_t MaxReasonLength = 180;
+    if (!payload || payloadLen < ControlHeaderSize + 1)
+    {
+        LOBBY_WARN("[DEDI][WARN] MATCH_ABORT_NOTIFY bad payload len=%u\n", payloadLen);
+        return;
+    }
+
+    const uint8_t* p = reinterpret_cast<const uint8_t*>(payload);
+    const uint32_t roomId = ReadControlU32BE(p);
+    const uint16_t notifyPort = ReadControlU16BE(p + 4);
+    const uint32_t generation = ReadControlU32BE(p + 6);
+    const uint64_t controlToken = ReadControlU64BE(p + 10);
+    const uint8_t reasonLen = p[ControlHeaderSize];
+    const uint16_t expectedPayloadLen = static_cast<uint16_t>(
+        ControlHeaderSize + 1 + reasonLen);
+
+    if (reasonLen > MaxReasonLength || payloadLen != expectedPayloadLen)
+    {
+        LOBBY_WARN("[DEDI][WARN] MATCH_ABORT_NOTIFY bad reason roomId=%u len=%u payloadLen=%u expected=%u\n",
+            roomId,
+            reasonLen,
+            payloadLen,
+            expectedPayloadLen);
+        m_net.SendDediControlAck(c, PacketType::L2D_MATCH_ABORT_ACK, roomId, notifyPort, generation, controlToken, false);
+        return;
+    }
+
+    std::string reason(
+        payload + ControlHeaderSize + 1,
+        payload + ControlHeaderSize + 1 + reasonLen);
+    std::replace(reason.begin(), reason.end(), '\r', ' ');
+    std::replace(reason.begin(), reason.end(), '\n', ' ');
+    if (reason.empty())
+    {
+        reason = "Unspecified";
+    }
+
+    bool accepted = false;
+    bool recovered = false;
+    bool duplicate = false;
+    bool roomDeleted = false;
+    size_t memberCount = 0;
+
+    AcquireSRWLockExclusive(&m_lock);
+
+    if (WasDediControlCompleted_Unsafe(
+        PacketType::D2L_MATCH_ABORT_NOTIFY,
+        roomId,
+        notifyPort,
+        generation,
+        controlToken))
+    {
+        accepted = true;
+        duplicate = true;
+    }
+    else
+    {
+        auto itRoom = m_rooms.find(roomId);
+        if (itRoom != m_rooms.end())
+        {
+            Room& room = itRoom->second;
+            if (room.state == RoomState::IN_GAME &&
+                room.dedicatedPort == notifyPort &&
+                room.dedicatedGeneration == generation &&
+                room.dedicatedControlToken != 0 &&
+                room.dedicatedControlToken == controlToken)
+            {
+                memberCount = room.members.size();
+                RememberDediControlCompleted_Unsafe(
+                    PacketType::D2L_MATCH_ABORT_NOTIFY,
+                    roomId,
+                    notifyPort,
+                    generation,
+                    controlToken);
+
+                roomDeleted = RecoverRoomToWaiting_Unsafe(
+                    room,
+                    reason.c_str(),
+                    false);
+                if (roomDeleted)
+                {
+                    m_roomOrder.erase(
+                        std::remove(m_roomOrder.begin(), m_roomOrder.end(), roomId),
+                        m_roomOrder.end());
+                    m_rooms.erase(itRoom);
+                }
+
+                accepted = true;
+                recovered = true;
+            }
+            else
+            {
+                LOBBY_WARN("[DEDI][WARN] MATCH_ABORT_NOTIFY rejected roomId=%u port=%u generation=%u state=%s expectedPort=%u expectedGeneration=%u reason=%s\n",
+                    roomId,
+                    notifyPort,
+                    generation,
+                    RoomStateToString(room.state),
+                    room.dedicatedPort,
+                    room.dedicatedGeneration,
+                    reason.c_str());
+            }
+        }
+    }
+
+    ReleaseSRWLockExclusive(&m_lock);
+
+    m_net.SendDediControlAck(
+        c,
+        PacketType::L2D_MATCH_ABORT_ACK,
+        roomId,
+        notifyPort,
+        generation,
+        controlToken,
+        accepted);
+
+    LOBBY_WARN("[RECOVERY] MATCH_ABORT_NOTIFY roomId=%u port=%u generation=%u members=%zu reason=%s result=%s roomDeleted=%d\n",
+        roomId,
+        notifyPort,
+        generation,
+        memberCount,
+        reason.c_str(),
+        duplicate ? "DUPLICATE_ACK" : (recovered ? "RECOVERED" : "REJECTED"),
+        roomDeleted ? 1 : 0);
+
+    if (recovered)
+    {
+        BroadcastRoomList();
+        if (!roomDeleted)
+        {
+            BroadcastRoomMemberList(roomId);
+        }
     }
 }
 
 void LobbyService::HandleDediServerReadyNotify(ClientContext* c, const char* payload, uint16_t payloadLen)
 {
     static constexpr uint16_t ControlPayloadSize = 18;
-    if (!payload || payloadLen < ControlPayloadSize)
+    if (!payload || payloadLen != ControlPayloadSize)
     {
         LOBBY_WARN("[DEDI][WARN] SERVER_READY_NOTIFY bad payload len=%u\n", payloadLen);
         return;
@@ -2594,6 +3284,10 @@ void LobbyService::HandleDediServerReadyNotify(ClientContext* c, const char* pay
     const uint16_t readyPort = ReadControlU16BE(p + 4);
     const uint32_t generation = ReadControlU32BE(p + 6);
     const uint64_t controlToken = ReadControlU64BE(p + 10);
+    uint16_t gameStartPort = 0;
+    std::string gameStartHost;
+    std::vector<GameStartTarget> gameStartTargets;
+    bool gameStartPrepared = false;
 
     AcquireSRWLockExclusive(&m_lock);
 
@@ -2636,8 +3330,33 @@ void LobbyService::HandleDediServerReadyNotify(ClientContext* c, const char* pay
         roomPort,
         generation);
 
-    m_net.SendDediControlAck(c, PacketType::L2D_SERVER_READY_ACK, roomId, readyPort, generation, controlToken, true);
-    SendGameStartForRoom_Unsafe(roomId, "DediReady");
+    gameStartPrepared = PrepareGameStartForRoom_Unsafe(
+        roomId,
+        "DediReady",
+        gameStartPort,
+        gameStartHost,
+        gameStartTargets);
 
     ReleaseSRWLockExclusive(&m_lock);
+
+    m_net.SendDediControlAck(c, PacketType::L2D_SERVER_READY_ACK, roomId, readyPort, generation, controlToken, true);
+
+    if (gameStartPrepared)
+    {
+        for (const GameStartTarget& target : gameStartTargets)
+        {
+            LOBBY_INFO("[ROOM] GAME_START rid=%u sid=%u ip=%s port=%u reason=DediReady ticketIssued=1\n",
+                roomId,
+                target.sessionId,
+                gameStartHost.c_str(),
+                gameStartPort);
+
+            m_net.SendGameStart(
+                target.context,
+                gameStartHost.c_str(),
+                gameStartPort,
+                target.ticket);
+            ReleaseIO(target.context);
+        }
+    }
 }

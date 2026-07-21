@@ -82,28 +82,33 @@ void NetApi::SendRegisterRes(ClientContext* c, LoginResult result)
 
 void NetApi::SendRoomListRes(ClientContext* c, const std::vector<RoomInfoView>& rooms)
 {
+    const std::size_t roomCount = (std::min)(
+        rooms.size(),
+        static_cast<std::size_t>(ROOM_LIST_MAX_ROOMS));
+
     std::vector<char> payload;
+    payload.reserve(
+        2 + roomCount * (ROOM_INFO_WIRE_FIXED_SIZE + ROOM_TITLE_MAX));
 
-    // roomCount(2) + room data
-    payload.reserve(2 + rooms.size() * 64);
+    AppendU16(payload, htons(static_cast<uint16_t>(roomCount)));
 
-    // 1. roomCount
-    AppendU16(payload, htons(static_cast<uint16_t>(rooms.size())));
-
-    // 2. rooms
-    for (const RoomInfoView& r : rooms)
+    for (std::size_t index = 0; index < roomCount; ++index)
     {
+        const RoomInfoView& r = rooms[index];
+        const uint8_t titleLen = static_cast<uint8_t>((std::min)(
+            static_cast<std::size_t>(r.titleLen),
+            static_cast<std::size_t>(ROOM_TITLE_MAX)));
+
         AppendU32(payload, htonl(r.roomId));
         AppendU8(payload, static_cast<uint8_t>(r.state));
         AppendU8(payload, r.curPlayers);
         AppendU8(payload, r.maxPlayers);
-
         AppendU32(payload, htonl(r.hostId));
+        AppendU8(payload, titleLen);
 
-        AppendU8(payload, r.titleLen);
-        if (r.titleLen > 0)
+        if (titleLen > 0)
         {
-            payload.insert(payload.end(), r.title, r.title + r.titleLen);
+            payload.insert(payload.end(), r.title, r.title + titleLen);
         }
     }
 
@@ -111,7 +116,7 @@ void NetApi::SendRoomListRes(ClientContext* c, const std::vector<RoomInfoView>& 
         c,
         static_cast<uint16_t>(PacketType::S2C_ROOM_LIST_RES),
         payload.data(),
-        static_cast<uint16_t>(payload.size())
+        payload.size()
     );
 }
 
@@ -152,7 +157,7 @@ void NetApi::SendRoomCreateRes(ClientContext* c, RoomResult result, const RoomIn
         c,
         static_cast<uint16_t>(PacketType::S2C_ROOM_CREATE_RES),
         payload.data(),
-        static_cast<uint16_t>(payload.size())
+        payload.size()
     );
 }
 
@@ -193,7 +198,7 @@ void NetApi::SendRoomJoinRes(ClientContext* c, RoomResult result, const RoomInfo
         c,
         static_cast<uint16_t>(PacketType::S2C_ROOM_JOIN_RES),
         payload.data(),
-        static_cast<uint16_t>(payload.size())
+        payload.size()
     );
 }
 
@@ -273,7 +278,7 @@ void NetApi::SendRoomMemberList(
         c,
         static_cast<uint16_t>(PacketType::S2C_ROOM_MEMBER_LIST),
         payload.data(),
-        static_cast<uint16_t>(payload.size())
+        payload.size()
     );
 }
 
@@ -293,7 +298,7 @@ void NetApi::SendRoomReadyBrd(ClientContext* c, uint32_t sessionId, bool isReady
         c,
         static_cast<uint16_t>(PacketType::S2C_ROOM_READY_BRD),
         payload.data(),
-        static_cast<uint16_t>(payload.size())
+        payload.size()
     );
 }
 
@@ -348,7 +353,7 @@ void NetApi::SendGameStart(ClientContext* c, const char* ip, uint16_t port, uint
         c,
         static_cast<uint16_t>(PacketType::S2C_GAME_START),
         payload.data(),
-        static_cast<uint16_t>(payload.size())
+        payload.size()
     );
 }
 
@@ -374,6 +379,6 @@ void NetApi::SendDediControlAck(
         c,
         static_cast<uint16_t>(ackType),
         payload.data(),
-        static_cast<uint16_t>(payload.size())
+        payload.size()
     );
 }

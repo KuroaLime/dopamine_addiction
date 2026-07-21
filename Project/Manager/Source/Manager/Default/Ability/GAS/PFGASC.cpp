@@ -9,7 +9,17 @@
 #include "GameFramework/GameStateBase.h"
 #include "Net/UnrealNetwork.h"
 #include "Engine/ActorChannel.h"
+#include "HAL/PlatformTime.h"
 #include "TimerManager.h"
+
+namespace
+{
+	constexpr double AbilityRpcRateWindowSeconds = 1.0;
+	constexpr double AbilityRpcWarningCooldownSeconds = 10.0;
+	constexpr int32 AbilityActivationRequestsPerSecond = 60;
+	constexpr int32 AbilityCancelRequestsPerSecond = 30;
+	constexpr int32 GameplayEventRequestsPerSecond = 30;
+}
 
 // Sets default values for this component's properties
 UPFGASC::UPFGASC()
@@ -485,8 +495,55 @@ bool UPFGASC::InternalTryActivateAbilityByTag(FGameplayTag AbilityTag, FPFGPredi
 	return bActivated;
 }
 
+bool UPFGASC::TryConsumeServerRpcBudget(
+	FServerRpcRateWindow& Window,
+	int32 MaxRequestsPerSecond,
+	const TCHAR* RpcName)
+{
+	AActor* OwnerActor = GetOwner();
+	if (!OwnerActor || !OwnerActor->HasAuthority())
+	{
+		return false;
+	}
+
+	const double NowSeconds = FPlatformTime::Seconds();
+	if (Window.WindowStartSeconds <= 0.0 ||
+		NowSeconds - Window.WindowStartSeconds >= AbilityRpcRateWindowSeconds)
+	{
+		Window.WindowStartSeconds = NowSeconds;
+		Window.AcceptedInWindow = 0;
+	}
+
+	if (Window.AcceptedInWindow >= MaxRequestsPerSecond)
+	{
+		if (Window.LastWarningSeconds <= 0.0 ||
+			NowSeconds - Window.LastWarningSeconds >= AbilityRpcWarningCooldownSeconds)
+		{
+			UE_LOG(LogTemp, Warning,
+				TEXT("[DS][Security] AbilityRpcRateLimited Owner=%s Rpc=%s Limit=%d Window=%.1fs"),
+				*GetNameSafe(OwnerActor),
+				RpcName,
+				MaxRequestsPerSecond,
+				AbilityRpcRateWindowSeconds);
+			Window.LastWarningSeconds = NowSeconds;
+		}
+		return false;
+	}
+
+	++Window.AcceptedInWindow;
+	return true;
+}
+
 void UPFGASC::ServerRPC_TryActivateAbilityByTag_Implementation(FGameplayTag AbilityTag, FPFGPredictionKey PredictionKey)
 {
+	if (!TryConsumeServerRpcBudget(
+		AbilityActivationRpcWindow,
+		AbilityActivationRequestsPerSecond,
+		TEXT("TryActivateAbility")))
+	{
+		return;
+	}
+
 	const bool bSuccess = InternalTryActivateAbilityByTag(AbilityTag, PredictionKey);
 
 	if (PredictionKey.IsValidKey())
@@ -497,7 +554,7 @@ void UPFGASC::ServerRPC_TryActivateAbilityByTag_Implementation(FGameplayTag Abil
 
 bool UPFGASC::ServerRPC_TryActivateAbilityByTag_Validate(FGameplayTag AbilityTag, FPFGPredictionKey PredictionKey)
 {
-	if (!AbilityTag.IsValid())
+	if (!AbilityTag.IsValid() || PredictionKey.KeyValue <= 0)
 	{
 		return false;
 	}
@@ -512,12 +569,20 @@ void UPFGASC::ClientRPC_AbilityActivationConfirmed_Implementation(FPFGPrediction
 
 void UPFGASC::ServerRPC_CancelAbilitiesWithTag_Implementation(FGameplayTagContainer TagsToCancel)
 {
+	if (!TryConsumeServerRpcBudget(
+		AbilityCancelRpcWindow,
+		AbilityCancelRequestsPerSecond,
+		TEXT("CancelAbilities")))
+	{
+		return;
+	}
+
 	CancelAbilitiesWithTag(TagsToCancel);
 }
 
 bool UPFGASC::ServerRPC_CancelAbilitiesWithTag_Validate(FGameplayTagContainer TagsToCancel)
 {
-	return !TagsToCancel.IsEmpty();
+	return !TagsToCancel.IsEmpty() && TagsToCancel.Num() <= 8;
 }
 
 FPFGPredictionKey UPFGASC::GenerateNewPredictionKey()
@@ -547,7 +612,7 @@ bool UPFGASC::HandleGameplayEvent(FGameplayTag EventTag, const FPFGGameplayEvent
 	// Spec 배열을 직접 변형하지 않으므로 range-for로 충분하다.
 	for (FPFGAbilitySpec& Spec : AbilitySpecContainer.Items)
 	{
-		if (Spec.AbilityInstance && Spec.TriggerTags.HasTag(EventTag))
+		if (Spec.AbilityInstance && Spec.TriggerTags.HasTagExact(EventTag))
 		{
 			if (IsAbilityOnCooldown(Spec))
 			{
@@ -572,6 +637,14 @@ bool UPFGASC::HandleGameplayEvent(FGameplayTag EventTag, const FPFGGameplayEvent
 
 void UPFGASC::ServerRPC_SendGameplayEvent_Implementation(FGameplayTag EventTag, const FPFGGameplayEventData& Payload)
 {
+	if (!TryConsumeServerRpcBudget(
+		GameplayEventRpcWindow,
+		GameplayEventRequestsPerSecond,
+		TEXT("SendGameplayEvent")))
+	{
+		return;
+	}
+
 	const bool bHandled = HandleGameplayEvent(EventTag, Payload);
 
 	if (bHandled)
@@ -604,6 +677,16 @@ bool UPFGASC::ServerRPC_SendGameplayEvent_Validate(FGameplayTag EventTag, const 
 	}
 
 	if (Payload.TargetObject && !IsValid(Payload.TargetObject))
+	{
+		return false;
+	}
+
+	const bool bHasExactTrigger = AbilitySpecContainer.Items.ContainsByPredicate(
+		[EventTag](const FPFGAbilitySpec& Spec)
+		{
+			return Spec.AbilityInstance && Spec.TriggerTags.HasTagExact(EventTag);
+		});
+	if (!bHasExactTrigger)
 	{
 		return false;
 	}

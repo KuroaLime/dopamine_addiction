@@ -1,5 +1,6 @@
 #pragma once
 
+#include <cstddef>
 #include <cstdint>
 #include <vector>
 #include <algorithm>
@@ -18,7 +19,7 @@ typedef void (*SendPacketFn)(
     ClientContext* c,
     uint16_t type,
     const void* payload,
-    uint16_t payloadLen
+    std::size_t payloadLen
     );
 
 

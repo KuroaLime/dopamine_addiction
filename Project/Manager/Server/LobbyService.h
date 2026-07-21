@@ -24,15 +24,18 @@ public:
     // Public Interface
     // =======================================================================
     explicit LobbyService(NetApi& net);
+    ~LobbyService();
 
     void OnClientAccepted(ClientContext* c);
     void OnClientDisconnected(ClientContext* c);
 
     void OnPacket(ClientContext* c, uint16_t type, const char* payload, uint16_t payloadLen);
     void TickMaintenance();
+    void ShutdownDedicatedServers();
 
     void HandleDediMatchEndNotify(ClientContext* c, const char* payload, uint16_t payloadLen);
     void HandleDediServerReadyNotify(ClientContext* c, const char* payload, uint16_t payloadLen);
+    void HandleDediMatchAbortNotify(ClientContext* c, const char* payload, uint16_t payloadLen);
 
 
 private:
@@ -69,6 +72,40 @@ private:
         std::string nickname;
     };
 
+    struct RetiringDedicatedProcess
+    {
+        uint32_t roomId = 0;
+        uint16_t port = 0;
+        HANDLE processHandle = NULL;
+        DWORD processId = 0;
+        uint32_t generation = 0;
+        std::string reason;
+        bool terminationRequested = false;
+        std::chrono::steady_clock::time_point terminateAfter{};
+    };
+
+    struct CompletedDediControl
+    {
+        PacketType notifyType = PacketType::D2L_MATCH_END_NOTIFY;
+        uint32_t roomId = 0;
+        uint16_t port = 0;
+        uint32_t generation = 0;
+        uint64_t controlToken = 0;
+        std::chrono::steady_clock::time_point completedAt{};
+    };
+
+    struct GameStartTarget
+    {
+        ClientContext* context = nullptr;
+        uint32_t sessionId = 0;
+        uint32_t ticket = 0;
+    };
+
+    struct ClientActivity
+    {
+        std::chrono::steady_clock::time_point lastPacketAt{};
+    };
+
 
     // =======================================================================
     // Member Variables
@@ -82,9 +119,15 @@ private:
 
     std::vector<uint16_t> m_freePorts;
     std::vector<uint16_t> m_quarantinedPorts;
+    std::vector<RetiringDedicatedProcess> m_retiringDedicatedProcesses;
+    std::vector<CompletedDediControl> m_completedDediControls;
+    HANDLE m_dedicatedServerJob = NULL;
+    bool m_dedicatedServerShutdown = false;
 
     std::unordered_map<ClientContext*, uint32_t> m_sessionByCtx;
     std::unordered_map<uint32_t, ClientContext*> m_ctxBySession;
+    std::unordered_map<ClientContext*, ClientActivity> m_clientActivityByCtx;
+    int m_unauthenticatedIdleTimeoutSeconds = 300;
 
     std::unordered_map<uint32_t, uint32_t> m_roomBySession;
     std::unordered_map<uint32_t, Room>     m_rooms;
@@ -111,9 +154,20 @@ private:
 
     bool     LaunchDedicatedServer(uint16_t port, uint32_t roomId, uint16_t requiredPlayers, const std::string& allowedTickets, uint64_t controlToken, uint32_t generation, HANDLE& outProcessHandle, DWORD& outProcessId);
     void     CleanupDedicatedServerForRoom_Unsafe(Room& room, const char* reason, bool terminateProcess);
+    bool     RecoverRoomToWaiting_Unsafe(Room& room, const char* reason, bool terminateProcess);
+    bool     WasDediControlCompleted_Unsafe(PacketType notifyType, uint32_t roomId, uint16_t port, uint32_t generation, uint64_t controlToken) const;
+    void     RememberDediControlCompleted_Unsafe(PacketType notifyType, uint32_t roomId, uint16_t port, uint32_t generation, uint64_t controlToken);
+    void     SweepCompletedDediControls_Unsafe(const std::chrono::steady_clock::time_point& now);
+    void     SweepRetiringDedicatedServers_Unsafe(const std::chrono::steady_clock::time_point& now);
     void     SweepDedicatedServerProcesses();
     void     SweepGhostSessions();
-    void     SendGameStartForRoom_Unsafe(uint32_t roomId, const char* reason);
+    void     SweepUnauthenticatedClients();
+    bool     PrepareGameStartForRoom_Unsafe(
+        uint32_t roomId,
+        const char* reason,
+        uint16_t& outPort,
+        std::string& outHost,
+        std::vector<GameStartTarget>& outTargets);
     uint32_t GenerateHandoverTicket_Unsafe(const Room& room) const;
     uint64_t GenerateDedicatedControlToken_Unsafe() const;
     std::string BuildHandoverTicketList_Unsafe(const Room& room) const;

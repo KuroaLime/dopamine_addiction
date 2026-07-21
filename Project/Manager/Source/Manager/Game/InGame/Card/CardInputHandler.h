@@ -74,4 +74,7 @@ protected:
 	void Input_SelectCard2();
 	void Input_SelectCard3();
 	void Input_ConfirmSelection();
+	void ToggleCardSelectionForCurrentStage(int32 CardIndex);
+	void ResetSelectedCards();
+	int32 GetSelectedCardCount() const;
 };

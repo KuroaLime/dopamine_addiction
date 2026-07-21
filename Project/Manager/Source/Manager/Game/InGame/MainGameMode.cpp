@@ -12,6 +12,7 @@
 #include "Game/InGame/MainCharacter.h"
 #include "Game/InGame/Card/Actor/CardDropActor.h"
 #include "Game/InGame/Card/CardGameService.h"
+#include "Game/InGame/TPS/Actor/GoldDropActor.h"
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "GameFramework/PlayerController.h"
@@ -25,6 +26,7 @@
 #include "TimerManager.h"
 #include "Engine/LevelStreaming.h"
 #include "Engine/World.h"
+#include "Async/Async.h"
 #include "HAL/PlatformMisc.h"
 #include "HAL/PlatformProcess.h"
 #include "HAL/PlatformTime.h"
@@ -149,6 +151,18 @@ namespace
     bool IsPersistentMainWorldTarget(FName LevelName)
     {
         return LevelName == GetPersistentMainWorldLevelName();
+    }
+
+    constexpr float PositionTeleportMaxLocationError = 50.0f;
+    constexpr float PositionTeleportMaxRotationError = 15.0f;
+
+    float GetRotationErrorDegrees(const FRotator& Left, const FRotator& Right)
+    {
+        const FRotator Delta = (Left - Right).GetNormalized();
+        return FMath::Max3(
+            FMath::Abs(Delta.Pitch),
+            FMath::Abs(Delta.Yaw),
+            FMath::Abs(Delta.Roll));
     }
 
     struct FServerLevelGateState
@@ -285,8 +299,10 @@ void AMainGameMode::InitGame(const FString& MapName, const FString& Options, FSt
 
     AllowedDediTickets.Empty();
     ActiveDediTickets.Empty();
+    PendingDediTicketReservations.Empty();
     DediTicketByController.Empty();
     DisconnectedPlayerSnapshots.Empty();
+    MatchParticipantGoldLedger.Empty();
     if (GetWorld())
     {
         GetWorld()->GetTimerManager().ClearTimer(ReconnectGraceTimerHandle);
@@ -350,6 +366,8 @@ void AMainGameMode::PreLogin(
         return;
     }
 
+    SweepExpiredDediTicketReservations(TEXT("PreLogin"));
+
     const bool bRequireTicket = DediRoomId > 0;
     if (bRequireTicket && Ticket.IsEmpty())
     {
@@ -400,7 +418,8 @@ void AMainGameMode::PreLogin(
         return;
     }
 
-    if (bRequireTicket && ActiveDediTickets.Contains(TicketValue))
+    if (bRequireTicket &&
+        (ActiveDediTickets.Contains(TicketValue) || PendingDediTicketReservations.Contains(TicketValue)))
     {
         ErrorMessage = TEXT("TicketAlreadyActive");
         DS_LOG(TEXT("[DS] Main PreLogin rejected. Error=%s Address=%s RoomId=%d"),
@@ -424,7 +443,9 @@ void AMainGameMode::PreLogin(
 
     if (bRequireTicket)
     {
-        ActiveDediTickets.Add(TicketValue);
+        PendingDediTicketReservations.Add(
+            TicketValue,
+            FPlatformTime::Seconds() + FMath::Max(5.0f, DediTicketReservationTimeoutSeconds));
     }
 }
 
@@ -439,17 +460,35 @@ FString AMainGameMode::InitNewPlayer(
     const int64 TicketValue = TicketText.IsNumeric() ? FCString::Atoi64(*TicketText) : 0;
 
     const FString Result = Super::InitNewPlayer(NewPlayerController, UniqueId, Options, Portal);
+    SweepExpiredDediTicketReservations(TEXT("InitNewPlayer"));
     if (!Result.IsEmpty())
     {
         if (TicketValue > 0)
         {
+            PendingDediTicketReservations.Remove(TicketValue);
             ActiveDediTickets.Remove(TicketValue);
         }
         return Result;
     }
 
+    if (DediRoomId > 0 &&
+        (!NewPlayerController ||
+            TicketValue <= 0 ||
+            !PendingDediTicketReservations.Contains(TicketValue)))
+    {
+        PendingDediTicketReservations.Remove(TicketValue);
+        ActiveDediTickets.Remove(TicketValue);
+        UE_LOG(LogManager, Error,
+            TEXT("[DS] Main InitNewPlayer rejected. Error=TicketReservationMissing Controller=%s Ticket=%lld"),
+            *GetNameSafe(NewPlayerController),
+            TicketValue);
+        return TEXT("TicketReservationMissing");
+    }
+
     if (NewPlayerController && TicketValue > 0)
     {
+        PendingDediTicketReservations.Remove(TicketValue);
+        ActiveDediTickets.Add(TicketValue);
         DediTicketByController.Add(NewPlayerController, TicketValue);
     }
 
@@ -503,6 +542,20 @@ void AMainGameMode::BeginPlay()
         DebugResultDuration);
 
     NotifyIocpServerReady();
+
+    if (DediRoomId > 0 && DediPort > 0 && DediMatchGeneration != 0 && DediControlToken != 0)
+    {
+        BeginDediRecoveryWatchdogStage(TEXT("WaitingPlayers"), TEXT("BeginPlay"));
+        if (UWorld* World = GetWorld())
+        {
+            World->GetTimerManager().SetTimer(
+                DediRecoveryWatchdogTimerHandle,
+                this,
+                &AMainGameMode::TickDediRecoveryWatchdog,
+                FMath::Max(0.1f, DediRecoveryWatchdogIntervalSeconds),
+                true);
+        }
+    }
 }
 
 void AMainGameMode::PostLogin(APlayerController* NewPlayer)
@@ -514,6 +567,15 @@ void AMainGameMode::PostLogin(APlayerController* NewPlayer)
 
     if (bGameStarted)
     {
+        if (const AMainPlayerState* PS = NewPlayer
+            ? NewPlayer->GetPlayerState<AMainPlayerState>()
+            : nullptr)
+        {
+            RecordMatchParticipantGold(
+                Ticket,
+                PS->GetPlayerName(),
+                PS->CurPlayerData.HoldingGold);
+        }
         SynchronizePlayerWithCurrentServerPhase(Cast<AMainPlayerController>(NewPlayer));
     }
 
@@ -523,6 +585,7 @@ void AMainGameMode::PostLogin(APlayerController* NewPlayer)
         CountConnectedHumanPlayers(),
         RequiredPlayerCount);
 
+    MarkDediRecoveryProgress(TEXT("PostLogin"));
     TryStartGameIfReady();
 }
 
@@ -584,13 +647,18 @@ void AMainGameMode::HandleStartingNewPlayer_Implementation(APlayerController* Ne
     if (Snapshot &&
         Snapshot->bPlayerStateRestored &&
         Snapshot->bHasPawnTransform &&
-        MainPC &&
-        MainPC->GetPawn())
+        MainPC)
     {
-        if (TeleportPlayerAuthoritatively(MainPC, Snapshot->PawnTransform, TEXT("ReconnectStart")))
+        Snapshot->ReconnectedController = MainPC;
+        if (MainPC->GetPawn() &&
+            TeleportPlayerAuthoritatively(MainPC, Snapshot->PawnTransform, TEXT("ReconnectStart")))
         {
             DisconnectedPlayerSnapshots.Remove(Ticket);
             StopReconnectGraceTimerIfIdle();
+        }
+        else
+        {
+            StartReconnectGraceTimerIfNeeded();
         }
     }
 }
@@ -773,7 +841,101 @@ void AMainGameMode::LoadServerStreamLevelForPhase(FName LevelToLoad, const TCHAR
 
 bool AMainGameMode::IsBattleRoyalePhase() const
 {
-    return bGameStarted && CurrentServerPhase == EDediServerPhase::BattleRoyale;
+    return bGameStarted
+        && CurrentServerPhase == EDediServerPhase::BattleRoyale
+        && bBattleRoyaleCardsSpawnedThisPhase;
+}
+
+bool AMainGameMode::IsShopRequestAllowed() const
+{
+    if (!bGameStarted || CurrentServerPhase != EDediServerPhase::PreBattleShop)
+    {
+        return false;
+    }
+
+    const AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
+    return GS && GS->IsShopAvailable();
+}
+
+bool AMainGameMode::DropGoldFromPlayer(AMainPlayerState* TargetPS, AActor* SourceActor)
+{
+    if (!HasAuthority() || !GetWorld() || !TargetPS || !SourceActor || !IsBattleRoyalePhase())
+    {
+        return false;
+    }
+
+    const int32 AvailableGold = FMath::Max(0, TargetPS->CurPlayerData.HoldingGold);
+    const int32 DropAmount = FMath::Min(AvailableGold, FMath::Max(0, DeathGoldDropAmount));
+    if (DropAmount <= 0)
+    {
+        DS_LOG(TEXT("[DS] GoldDrop Skip Player=%s Reason=NoGold Available=%d Configured=%d"),
+            *TargetPS->GetPlayerName(),
+            AvailableGold,
+            DeathGoldDropAmount);
+        return false;
+    }
+
+    const FVector SourceLocation = SourceActor->GetActorLocation();
+    FVector DropLocation = SourceLocation + FVector(0.0f, 0.0f, DeathGoldGroundOffsetZ);
+
+    FHitResult GroundHit;
+    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(DeathGoldGround), false);
+    QueryParams.AddIgnoredActor(SourceActor);
+    if (GetWorld()->LineTraceSingleByChannel(
+        GroundHit,
+        SourceLocation + FVector(0.0f, 0.0f, 200.0f),
+        SourceLocation - FVector(0.0f, 0.0f, FMath::Max(100.0f, DeathGoldGroundTraceDepth)),
+        ECC_Visibility,
+        QueryParams))
+    {
+        DropLocation = GroundHit.ImpactPoint + FVector(0.0f, 0.0f, DeathGoldGroundOffsetZ);
+    }
+
+    TSubclassOf<AGoldDropActor> SpawnClass = GoldDropActorClass;
+    if (!SpawnClass)
+    {
+        SpawnClass = AGoldDropActor::StaticClass();
+    }
+
+    FActorSpawnParameters Params;
+    Params.Owner = SourceActor;
+    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    AGoldDropActor* GoldDrop = GetWorld()->SpawnActor<AGoldDropActor>(
+        SpawnClass,
+        DropLocation,
+        FRotator::ZeroRotator,
+        Params);
+    if (!GoldDrop)
+    {
+        UE_LOG(LogManager, Error,
+            TEXT("[DS] GoldDrop SpawnFail Player=%s Amount=%d Requested=%s"),
+            *TargetPS->GetPlayerName(),
+            DropAmount,
+            *DropLocation.ToCompactString());
+        return false;
+    }
+
+    TargetPS->AddGold(-DropAmount);
+    ActiveGoldDrops.RemoveAll([](const TObjectPtr<AGoldDropActor>& ExistingDrop)
+    {
+        return !IsValid(ExistingDrop);
+    });
+    ActiveGoldDrops.Add(GoldDrop);
+    GoldDrop->InitGoldDrop(
+        DropAmount,
+        TargetPS,
+        DeathGoldSourcePickupLockSeconds);
+
+    UE_LOG(LogManager, Display,
+        TEXT("[DS] GoldDrop Spawned Player=%s Amount=%d Gold=%d->%d Requested=%s Actual=%s"),
+        *TargetPS->GetPlayerName(),
+        DropAmount,
+        AvailableGold,
+        TargetPS->CurPlayerData.HoldingGold,
+        *DropLocation.ToCompactString(),
+        *GoldDrop->GetActorLocation().ToCompactString());
+    return true;
 }
 
 void AMainGameMode::InitStrategy()
@@ -823,7 +985,28 @@ void AMainGameMode::TryStartGameIfReady()
         return;
     }
 
+    ClearDediRecoveryWatchdogStage(TEXT("RequiredPlayersReady"));
+    DediEmptySinceSeconds = 0.0;
     bGameStarted = true;
+
+    if (GetWorld())
+    {
+        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+        {
+            APlayerController* PlayerController = It->Get();
+            const AMainPlayerState* PS = PlayerController
+                ? PlayerController->GetPlayerState<AMainPlayerState>()
+                : nullptr;
+            if (PlayerController && PS)
+            {
+                RecordMatchParticipantGold(
+                    GetDediTicketForController(PlayerController),
+                    PS->GetPlayerName(),
+                    PS->CurPlayerData.HoldingGold);
+            }
+        }
+    }
+
     CurrentRound = 1;
     AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr;
     if (GS)
@@ -872,6 +1055,45 @@ int64 AMainGameMode::GetDediTicketForController(const AController* Controller) c
     return Ticket ? *Ticket : 0;
 }
 
+void AMainGameMode::RecordMatchParticipantGold(
+    int64 Ticket,
+    const FString& PlayerName,
+    int32 Gold)
+{
+    if (Ticket <= 0)
+    {
+        return;
+    }
+
+    FMatchParticipantGoldRecord& Record = MatchParticipantGoldLedger.FindOrAdd(Ticket);
+    Record.PlayerName = PlayerName.IsEmpty()
+        ? FString::Printf(TEXT("Player_%lld"), Ticket)
+        : PlayerName;
+    Record.Gold = FMath::Max(0, Gold);
+}
+
+void AMainGameMode::SweepExpiredDediTicketReservations(const TCHAR* Context)
+{
+    const double NowSeconds = FPlatformTime::Seconds();
+    TArray<int64> ExpiredTickets;
+    for (const TPair<int64, double>& Pair : PendingDediTicketReservations)
+    {
+        if (Pair.Value > 0.0 && NowSeconds >= Pair.Value)
+        {
+            ExpiredTickets.Add(Pair.Key);
+        }
+    }
+
+    for (int64 Ticket : ExpiredTickets)
+    {
+        PendingDediTicketReservations.Remove(Ticket);
+        UE_LOG(LogManager, Warning,
+            TEXT("[DS] DediTicket ReservationExpired Ticket=%lld Context=%s"),
+            Ticket,
+            Context ? Context : TEXT("<NULL>"));
+    }
+}
+
 void AMainGameMode::SaveDisconnectedPlayerSnapshot(AController* Exiting, int64 Ticket)
 {
     if (!Exiting || Ticket <= 0)
@@ -887,10 +1109,19 @@ void AMainGameMode::SaveDisconnectedPlayerSnapshot(AController* Exiting, int64 T
 
     FDisconnectedPlayerSnapshot Snapshot;
     PlayerState->CaptureReconnectSnapshot(Snapshot.PlayerState);
+    Snapshot.PlayerName = PlayerState->GetPlayerName();
     Snapshot.DisconnectTimeSeconds = FPlatformTime::Seconds();
     Snapshot.ReconnectDeadlineSeconds = Snapshot.DisconnectTimeSeconds + FMath::Max(0.0f, ReconnectGraceSeconds);
     Snapshot.DisconnectRound = CurrentRound;
     Snapshot.DisconnectPhase = CurrentServerPhase;
+
+    if (bGameStarted)
+    {
+        RecordMatchParticipantGold(
+            Ticket,
+            PlayerState->GetPlayerName(),
+            PlayerState->CurPlayerData.HoldingGold);
+    }
 
     if (APawn* Pawn = Exiting->GetPawn())
     {
@@ -933,6 +1164,8 @@ void AMainGameMode::RestoreDisconnectedPlayerSnapshot(APlayerController* NewPlay
 
     PlayerState->RestoreReconnectSnapshot(Snapshot->PlayerState);
     Snapshot->bPlayerStateRestored = true;
+    Snapshot->TransformRestoreDeadlineSeconds = FPlatformTime::Seconds() +
+        FMath::Max(5.0f, ReconnectTransformRestoreTimeoutSeconds);
 
     if (CardGameService)
     {
@@ -944,8 +1177,10 @@ void AMainGameMode::RestoreDisconnectedPlayerSnapshot(APlayerController* NewPlay
     {
         if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(NewPlayer))
         {
+            Snapshot->ReconnectedController = MainPC;
             if (MainPC->GetPawn())
             {
+                ++Snapshot->TransformRestoreAttempts;
                 bTransformRestored = TeleportPlayerAuthoritatively(
                     MainPC,
                     Snapshot->PawnTransform,
@@ -964,6 +1199,10 @@ void AMainGameMode::RestoreDisconnectedPlayerSnapshot(APlayerController* NewPlay
     if (bTransformRestored)
     {
         DisconnectedPlayerSnapshots.Remove(Ticket);
+    }
+    else
+    {
+        StartReconnectGraceTimerIfNeeded();
     }
     StopReconnectGraceTimerIfIdle();
 }
@@ -985,6 +1224,14 @@ void AMainGameMode::ExpireDisconnectedPlayerSnapshot(int64 Ticket, const TCHAR* 
     FDisconnectedPlayerSnapshot RemovedSnapshot;
     const bool bHadSnapshot = DisconnectedPlayerSnapshots.RemoveAndCopyValue(Ticket, RemovedSnapshot);
 
+    if (bGameStarted && bHadSnapshot)
+    {
+        RecordMatchParticipantGold(
+            Ticket,
+            RemovedSnapshot.PlayerName,
+            RemovedSnapshot.PlayerState.CurPlayerData.HoldingGold);
+    }
+
     if (CardGameService)
     {
         CardGameService->ExpireReconnectState(Ticket, Reason);
@@ -992,6 +1239,7 @@ void AMainGameMode::ExpireDisconnectedPlayerSnapshot(int64 Ticket, const TCHAR* 
 
     AllowedDediTickets.Remove(Ticket);
     ActiveDediTickets.Remove(Ticket);
+    PendingDediTicketReservations.Remove(Ticket);
 
     DS_LOG(TEXT("[DS] Reconnect GraceExpired Ticket=%lld HadSnapshot=%d DisconnectPhase=%s DisconnectRound=%d Reason=%s"),
         Ticket,
@@ -1005,24 +1253,19 @@ void AMainGameMode::ExpireDisconnectedPlayerSnapshot(int64 Ticket, const TCHAR* 
 
 void AMainGameMode::StartReconnectGraceTimerIfNeeded()
 {
-    if (!GetWorld() || GetWorld()->GetTimerManager().IsTimerActive(ReconnectGraceTimerHandle))
+    if (!GetWorld() ||
+        DisconnectedPlayerSnapshots.IsEmpty() ||
+        GetWorld()->GetTimerManager().IsTimerActive(ReconnectGraceTimerHandle))
     {
         return;
     }
 
-    for (const TPair<int64, FDisconnectedPlayerSnapshot>& Pair : DisconnectedPlayerSnapshots)
-    {
-        if (!Pair.Value.bPlayerStateRestored)
-        {
-            GetWorld()->GetTimerManager().SetTimer(
-                ReconnectGraceTimerHandle,
-                this,
-                &AMainGameMode::TickReconnectGrace,
-                1.0f,
-                true);
-            return;
-        }
-    }
+    GetWorld()->GetTimerManager().SetTimer(
+        ReconnectGraceTimerHandle,
+        this,
+        &AMainGameMode::TickReconnectGrace,
+        1.0f,
+        true);
 }
 
 void AMainGameMode::StopReconnectGraceTimerIfIdle()
@@ -1032,12 +1275,9 @@ void AMainGameMode::StopReconnectGraceTimerIfIdle()
         return;
     }
 
-    for (const TPair<int64, FDisconnectedPlayerSnapshot>& Pair : DisconnectedPlayerSnapshots)
+    if (!DisconnectedPlayerSnapshots.IsEmpty())
     {
-        if (!Pair.Value.bPlayerStateRestored)
-        {
-            return;
-        }
+        return;
     }
 
     GetWorld()->GetTimerManager().ClearTimer(ReconnectGraceTimerHandle);
@@ -1046,12 +1286,66 @@ void AMainGameMode::StopReconnectGraceTimerIfIdle()
 void AMainGameMode::TickReconnectGrace()
 {
     TArray<int64> ExpiredTickets;
-    for (const TPair<int64, FDisconnectedPlayerSnapshot>& Pair : DisconnectedPlayerSnapshots)
+    TArray<int64> CompletedTickets;
+    const double NowSeconds = FPlatformTime::Seconds();
+
+    for (TPair<int64, FDisconnectedPlayerSnapshot>& Pair : DisconnectedPlayerSnapshots)
     {
-        if (IsReconnectGraceExpired(Pair.Key))
+        FDisconnectedPlayerSnapshot& Snapshot = Pair.Value;
+        if (!Snapshot.bPlayerStateRestored)
         {
-            ExpiredTickets.Add(Pair.Key);
+            if (IsReconnectGraceExpired(Pair.Key))
+            {
+                ExpiredTickets.Add(Pair.Key);
+            }
+            continue;
         }
+
+        if (!Snapshot.bHasPawnTransform)
+        {
+            CompletedTickets.Add(Pair.Key);
+            continue;
+        }
+
+        AMainPlayerController* ReconnectedPC = Snapshot.ReconnectedController.Get();
+        if (ReconnectedPC && ReconnectedPC->GetPawn())
+        {
+            ++Snapshot.TransformRestoreAttempts;
+            if (TeleportPlayerAuthoritatively(
+                ReconnectedPC,
+                Snapshot.PawnTransform,
+                TEXT("ReconnectTransformRetry")))
+            {
+                DS_LOG(TEXT("[DS] Reconnect TransformRetryComplete Ticket=%lld Attempts=%d Player=%s"),
+                    Pair.Key,
+                    Snapshot.TransformRestoreAttempts,
+                    *GetNameSafe(ReconnectedPC->PlayerState));
+                CompletedTickets.Add(Pair.Key);
+                continue;
+            }
+        }
+
+        if (Snapshot.TransformRestoreDeadlineSeconds > 0.0 &&
+            NowSeconds >= Snapshot.TransformRestoreDeadlineSeconds)
+        {
+            UE_LOG(LogManager, Error,
+                TEXT("[DS] Reconnect TransformRestoreAbandoned Ticket=%lld Attempts=%d Player=%s HasController=%d HasPawn=%d Action=KeepCurrentServerTransform"),
+                Pair.Key,
+                Snapshot.TransformRestoreAttempts,
+                *GetNameSafe(ReconnectedPC ? ReconnectedPC->PlayerState : nullptr),
+                ReconnectedPC ? 1 : 0,
+                ReconnectedPC && ReconnectedPC->GetPawn() ? 1 : 0);
+            if (ReconnectedPC && ReconnectedPC->GetPawn())
+            {
+                CorrectPlayerToCurrentServerTransform(ReconnectedPC, TEXT("ReconnectTransformFallback"));
+            }
+            CompletedTickets.Add(Pair.Key);
+        }
+    }
+
+    for (int64 Ticket : CompletedTickets)
+    {
+        DisconnectedPlayerSnapshots.Remove(Ticket);
     }
 
     for (int64 Ticket : ExpiredTickets)
@@ -1060,6 +1354,40 @@ void AMainGameMode::TickReconnectGrace()
     }
 
     StopReconnectGraceTimerIfIdle();
+}
+
+void AMainGameMode::ClearDisconnectedPlayerRoundCards(const TCHAR* Context)
+{
+    int32 SnapshotCount = 0;
+    int32 CardCount = 0;
+
+    for (TPair<int64, FDisconnectedPlayerSnapshot>& Pair : DisconnectedPlayerSnapshots)
+    {
+        TArray<FOwnedCardInfo>& OwnedCards = Pair.Value.PlayerState.OwnedCards;
+        Pair.Value.PlayerState.RevealedCard = FOwnedCardInfo();
+        if (OwnedCards.IsEmpty())
+        {
+            continue;
+        }
+
+        ++SnapshotCount;
+        CardCount += OwnedCards.Num();
+        if (CardGameService)
+        {
+            CardGameService->ClearDetachedOwnedCardRecords(OwnedCards, Context);
+        }
+        OwnedCards.Reset();
+    }
+
+    if (CardCount > 0)
+    {
+        UE_LOG(LogManagerCard, Display,
+            TEXT("[DS] Reconnect DetachedRoundCardsCleared Snapshots=%d Cards=%d Round=%d Context=%s"),
+            SnapshotCount,
+            CardCount,
+            CurrentRound,
+            Context ? Context : TEXT("<NULL>"));
+    }
 }
 
 EGamePhase AMainGameMode::GetClientPhaseForCurrentServerPhase() const
@@ -1081,6 +1409,7 @@ FName AMainGameMode::GetStreamLevelForCurrentServerPhase() const
     switch (CurrentServerPhase)
     {
     case EDediServerPhase::BattleRoyale:
+    case EDediServerPhase::PreBattleShop:
     case EDediServerPhase::TransitionToBattle:
         return GetPersistentMainWorldLevelName();
 
@@ -1150,13 +1479,17 @@ void AMainGameMode::CorrectPlayerToCurrentServerTransform(AMainPlayerController*
         }
     }
 
-    PlayerController->ClientSetLocation(Pawn->GetActorLocation(), Pawn->GetActorRotation());
-    Pawn->ForceNetUpdate();
+    const FVector ServerLocation = Pawn->GetActorLocation();
+    const FRotator ServerRotation = Pawn->GetActorRotation().GetNormalized();
+    PlayerController->StartServerAuthoritativePositionCorrection(
+        ServerLocation,
+        ServerRotation,
+        Context);
 
     DS_LOG(TEXT("[DS] Position AuthorityCorrect Player=%s Location=%s Rotation=%s Context=%s"),
         *GetNameSafe(PlayerController->PlayerState),
-        *Pawn->GetActorLocation().ToString(),
-        *Pawn->GetActorRotation().ToString(),
+        *ServerLocation.ToString(),
+        *ServerRotation.ToString(),
         Context ? Context : TEXT("<NULL>"));
 }
 
@@ -1181,11 +1514,25 @@ bool AMainGameMode::TeleportPlayerAuthoritatively(
     }
 
     const FVector TargetLocation = TargetTransform.GetLocation();
-    const FRotator TargetRotation = TargetTransform.GetRotation().Rotator();
-    const bool bTeleported = Pawn->TeleportTo(TargetLocation, TargetRotation, false, true);
-    if (!bTeleported)
+    const FRotator TargetRotation = TargetTransform.GetRotation().Rotator().GetNormalized();
+    if (TargetLocation.ContainsNaN() || TargetRotation.ContainsNaN())
     {
-        Pawn->SetActorLocationAndRotation(
+        UE_LOG(LogManager, Error,
+            TEXT("[DS] Position AuthorityTeleportFailed Reason=InvalidTarget Player=%s Requested=%s Rotation=%s Context=%s"),
+            *GetNameSafe(PlayerController->PlayerState),
+            *TargetLocation.ToString(),
+            *TargetRotation.ToString(),
+            Context ? Context : TEXT("<NULL>"));
+        return false;
+    }
+
+    const bool bTeleported = Pawn->TeleportTo(TargetLocation, TargetRotation, false, true);
+    bool bApplied = bTeleported;
+    bool bUsedFallback = false;
+    if (!bApplied)
+    {
+        bUsedFallback = true;
+        bApplied = Pawn->SetActorLocationAndRotation(
             TargetLocation,
             TargetRotation,
             false,
@@ -1193,15 +1540,54 @@ bool AMainGameMode::TeleportPlayerAuthoritatively(
             ETeleportType::TeleportPhysics);
     }
 
-    PlayerController->SetControlRotation(TargetRotation);
-    PlayerController->ClientSetLocation(Pawn->GetActorLocation(), TargetRotation);
-    Pawn->ForceNetUpdate();
+    if (!bApplied)
+    {
+        UE_LOG(LogManager, Error,
+            TEXT("[DS] Position AuthorityTeleportFailed Reason=ApplyFailed Player=%s Requested=%s Rotation=%s Fallback=%d Context=%s"),
+            *GetNameSafe(PlayerController->PlayerState),
+            *TargetLocation.ToString(),
+            *TargetRotation.ToString(),
+            bUsedFallback ? 1 : 0,
+            Context ? Context : TEXT("<NULL>"));
+        return false;
+    }
 
-    DS_LOG(TEXT("[DS] Position AuthorityTeleport Player=%s Requested=%s Applied=%s Teleport=%d Context=%s"),
+    const FVector AppliedLocation = Pawn->GetActorLocation();
+    const FRotator AppliedRotation = Pawn->GetActorRotation().GetNormalized();
+    const float LocationError = FVector::Dist(TargetLocation, AppliedLocation);
+    const float RotationError = GetRotationErrorDegrees(TargetRotation, AppliedRotation);
+    const bool bWithinTolerance =
+        LocationError <= PositionTeleportMaxLocationError &&
+        RotationError <= PositionTeleportMaxRotationError;
+
+    PlayerController->SetControlRotation(AppliedRotation);
+    PlayerController->StartServerAuthoritativePositionCorrection(
+        AppliedLocation,
+        AppliedRotation,
+        Context);
+
+    if (!bWithinTolerance)
+    {
+        UE_LOG(LogManager, Error,
+            TEXT("[DS] Position AuthorityTeleportFailed Reason=OutsideTolerance Player=%s Requested=%s Applied=%s LocationError=%.2f RotationError=%.2f Fallback=%d Context=%s"),
+            *GetNameSafe(PlayerController->PlayerState),
+            *TargetLocation.ToString(),
+            *AppliedLocation.ToString(),
+            LocationError,
+            RotationError,
+            bUsedFallback ? 1 : 0,
+            Context ? Context : TEXT("<NULL>"));
+        return false;
+    }
+
+    DS_LOG(TEXT("[DS] Position AuthorityTeleport Player=%s Requested=%s Applied=%s LocationError=%.2f RotationError=%.2f Teleport=%d Fallback=%d Context=%s"),
         *GetNameSafe(PlayerController->PlayerState),
         *TargetLocation.ToString(),
-        *Pawn->GetActorLocation().ToString(),
+        *AppliedLocation.ToString(),
+        LocationError,
+        RotationError,
         bTeleported ? 1 : 0,
+        bUsedFallback ? 1 : 0,
         Context ? Context : TEXT("<NULL>"));
 
     return true;
@@ -1258,6 +1644,7 @@ void AMainGameMode::HandleClientStreamLevelLoaded(AMainPlayerController* PlayerC
     ClientStreamGateExcludedReasons.Remove(PlayerKey);
     ClientLoadedStreamLevels.FindOrAdd(PlayerKey) = LoadedLevel;
     ClientLoadedStreamPhases.FindOrAdd(PlayerKey) = ClientPhase;
+    MarkDediRecoveryProgress(TEXT("ClientStreamLevelLoaded"));
 
     DS_LOG(TEXT("[DS] Main ClientStreamLevelLoaded Player=%s Level=%s ClientPhase=%d Round=%d ServerPhase=%s LoadedClients=%d/%d"),
         *GetNameSafe(PlayerController->PlayerState),
@@ -1318,6 +1705,7 @@ void AMainGameMode::HandleClientCardBundleReady(
 
     const TWeakObjectPtr<AMainPlayerController> PlayerKey(PlayerController);
     ClientReadyCardBundleGenerations.FindOrAdd(PlayerKey) = BundleGeneration;
+    MarkDediRecoveryProgress(TEXT("ClientCardBundleReady"));
 
     int32 ReadyClients = 0;
     int32 TargetClients = 0;
@@ -1341,6 +1729,7 @@ void AMainGameMode::RequestBattleRoyaleCardSpawnAfterStreamReady(const TCHAR* Co
     {
         UE_LOG(LogTemp, Error, TEXT("[DS] Card SpawnGate request failed. Reason=NoCardGameService Context=%s"),
             Context ? Context : TEXT("<NULL>"));
+        AbortMatchAndShutdown(TEXT("NoCardGameService"));
         return;
     }
 
@@ -1354,6 +1743,7 @@ void AMainGameMode::RequestBattleRoyaleCardSpawnAfterStreamReady(const TCHAR* Co
     }
 
     bPendingBattleRoyaleCardSpawn = true;
+    BeginDediRecoveryWatchdogStage(TEXT("CardSpawnGate"), Context);
     PendingBattleRoyaleCardSpawnLevel = GetPersistentMainWorldLevelName();
     PendingBattleRoyaleCardSpawnRound = CurrentRound;
     PendingBattleRoyaleCardSpawnContext = Context ? Context : TEXT("<NULL>");
@@ -1638,6 +2028,14 @@ void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
         LoadedClients,
         TargetClients);
     const int32 ExcludedTotal = ClientStreamGateExcludedReasons.Num();
+    if (ExcludedClients > 0 || ExcludedTotal > 0)
+    {
+        AbortMatchAndShutdown(FString::Printf(
+            TEXT("CardStreamGateTimeout:Excluded=%d"),
+            ExcludedTotal));
+        return;
+    }
+
     const bool bClientsReady = bConfiguredMinimumClientsLoaded
         && ExcludedTotal == 0
         && TargetClients >= FMath::Max(1, RequiredPlayerCount)
@@ -1679,6 +2077,11 @@ void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
 
     if (bGateStateChanged || bPeriodicGateSnapshot)
     {
+        if (bGateStateChanged)
+        {
+            MarkDediRecoveryProgress(TEXT("CardGateStateChanged"));
+        }
+
         UE_LOG(LogManagerCard, Display,
             TEXT("[DS] CardGateStatus Level=%s Mode=%s WorldBegunPlay=%d ServerLevelFound=%d ServerLoaded=%d ServerVisible=%d PendingUnload=%s UnloadComplete=%d NavSystem=%d NavBuilding=%d NavDiagnosticOnly=1 ServerReady=%d ClientLoaded=%d/%d ClientsReady=%d ExcludedNow=%d ExcludedTotal=%d BundleCommitted=%d BundleCards=%d BundleReady=%d/%d BundleClientsReady=%d Retry=%d Round=%d Phase=%s"),
             *PendingBattleRoyaleCardSpawnLevel.ToString(),
@@ -1730,7 +2133,7 @@ void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
     if (!CardGameService)
     {
         UE_LOG(LogManagerCard, Error, TEXT("[DS] Card SpawnGate failed. Reason=NoCardGameService"));
-        ClearBattleRoyaleCardSpawnGate(TEXT("NoCardGameService"));
+        AbortMatchAndShutdown(TEXT("NoCardGameService"));
         return;
     }
 
@@ -1751,6 +2154,7 @@ void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
         PendingBattleRoyaleCardInstanceIds = MoveTemp(SpawnedCardInstanceIds);
         ClientReadyCardBundleGenerations.Empty();
         bBattleRoyaleCardBundleCommitted = true;
+        MarkDediRecoveryProgress(TEXT("CardBundleCommitted"));
 
         UE_LOG(LogManagerCard, Display,
             TEXT("[DS] CardBundleCommitted Round=%d Generation=%d Cards=%d Result=WaitingForAllClientVisibilityAcks"),
@@ -1776,7 +2180,6 @@ void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
 
     bPendingBattleRoyaleCardSpawn = false;
     bBattleRoyaleCardsSpawnedThisPhase = true;
-    SetPlayerPawnGameplayEnabled(true, TEXT("BattleRoyaleCardsReady"));
 
     UE_LOG(LogManagerCard, Display,
         TEXT("[DS] CardGateReady Level=%s Mode=%s StreamClients=%d/%d BundleClients=%d/%d Cards=%d Generation=%d Context=%s Round=%d Phase=%s"),
@@ -1792,12 +2195,8 @@ void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));
 
-    StartTimedServerPhase(EDediServerPhase::PreBattleShop, GetPreBattleShopDuration());
-    if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
-    {
-        GS->SetShopAvailable(true);
-    }
-    //StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
+    ClearDediRecoveryWatchdogStage(TEXT("CardGateReady"));
+    StartPreBattleShopPhase();
 }
 
 void AMainGameMode::ScheduleBattleRoyaleCardSpawnGateRetry(
@@ -1924,12 +2323,24 @@ bool AMainGameMode::WaitForTransitionStreamLevelIfNeeded(
         TargetLevel,
         PendingServerStreamLevelToUnload);
 
+    const int32 ExcludedTotal = ClientStreamGateExcludedReasons.Num();
+    if (ExcludedClients > 0 || ExcludedTotal > 0)
+    {
+        AbortMatchAndShutdown(FString::Printf(
+            TEXT("TransitionStreamGateTimeout:Phase=%s:Excluded=%d"),
+            GetServerPhaseName(TransitionPhase),
+            ExcludedTotal));
+        return true;
+    }
+
     if (bClientsReady && ServerState.bReady)
     {
         PendingServerStreamLevelToUnload = NAME_None;
+        ClearDediRecoveryWatchdogStage(TEXT("TransitionStreamGateReady"));
         return false;
     }
 
+    BeginDediRecoveryWatchdogStage(TEXT("TransitionStreamGate"), GetServerPhaseName(TransitionPhase));
     CurrentServerPhase = TransitionPhase;
     RemainingPhaseSeconds = 0;
     SetServerRemainingTime(0);
@@ -1980,6 +2391,8 @@ void AMainGameMode::StartBattleRoyalePhase()
         return;
     }
 
+    ClearGoldDrops(TEXT("BattleRoyaleStart"));
+
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().ClearTimer(BattleRoyaleCardSpawnGateTimerHandle);
@@ -2018,6 +2431,75 @@ void AMainGameMode::StartBattleRoyalePhase()
     TrySpawnBattleRoyaleCardsWhenStreamReady();
 }
 
+void AMainGameMode::StartPreBattleShopPhase()
+{
+    StartTimedServerPhase(EDediServerPhase::PreBattleShop, GetPreBattleShopDuration());
+    if (CurrentServerPhase != EDediServerPhase::PreBattleShop || bGameEndReached)
+    {
+        return;
+    }
+
+    if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
+    {
+        GS->SetShopAvailable(true);
+        GS->ForceNetUpdate();
+    }
+
+    SetPlayerPawnGameplayState(true, false, true, TEXT("PreBattleShop"));
+    DS_LOG(TEXT("[DS] PreBattleShop Open Round=%d Duration=%d"),
+        CurrentRound,
+        RemainingPhaseSeconds);
+}
+
+void AMainGameMode::FinishPreBattleShopPhase()
+{
+    if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
+    {
+        GS->SetShopAvailable(false);
+        GS->ForceNetUpdate();
+    }
+
+    CloseShopForAllPlayers(TEXT("PreBattleShopFinished"));
+    StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
+
+    if (CurrentServerPhase == EDediServerPhase::BattleRoyale && !bGameEndReached)
+    {
+        SetPlayerPawnGameplayEnabled(true, TEXT("BattleRoyaleCombatStart"));
+    }
+}
+
+void AMainGameMode::CloseShopForAllPlayers(const TCHAR* Context)
+{
+    int32 ControllerCount = 0;
+    int32 ClosedShopCount = 0;
+
+    if (!GetWorld())
+    {
+        return;
+    }
+
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        AMainPlayerController* PlayerController = Cast<AMainPlayerController>(It->Get());
+        if (!PlayerController)
+        {
+            continue;
+        }
+
+        ++ControllerCount;
+        if (PlayerController->ForceCloseShopMode(Context))
+        {
+            ++ClosedShopCount;
+        }
+    }
+
+    DS_LOG(TEXT("[DS] PreBattleShop Close Controllers=%d OpenShopsClosed=%d Context=%s Round=%d"),
+        ControllerCount,
+        ClosedShopCount,
+        Context ? Context : TEXT("<NULL>"),
+        CurrentRound);
+}
+
 void AMainGameMode::StartTransitionToCardPhase()
 {
     if (bGameEndReached)
@@ -2030,6 +2512,7 @@ void AMainGameMode::StartTransitionToCardPhase()
     // UTPSPhaseStrategy::OnPhaseEnd(EndPhase 호출 시점)로 이전됨. 여기선 전환 글루만 수행.
     ClearBattleRoyaleCardSpawnGate(TEXT("TransitionToCard"));
     EndPhase();
+    ClearGoldDrops(TEXT("TransitionToCard"));
     BroadcastSwitchLevel(NAME_None, TEXT("Card_Game_Stage"));
     RequestMovePlayersToCardIslandSeats(TEXT("TransitionToCard"));
     StartTimedServerPhase(EDediServerPhase::TransitionToCard, GetTransitionDuration());
@@ -2055,6 +2538,11 @@ void AMainGameMode::StartCardGamePhase()
     DS_LOG(TEXT("[DS] PhaseStart Round=%d Phase=%s Duration=0 ManualCardGame=1"),
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));
+
+    if (CardGameService)
+    {
+        CardGameService->StartSeotdaSelectionTimeout();
+    }
 }
 
 void AMainGameMode::StartResultPhase()
@@ -2085,10 +2573,171 @@ void AMainGameMode::StartTransitionToBattlePhase()
 
     CardGameService->ClearCardDrops();
     CardGameService->ClearRoundCardsForAllPlayers();
+    ClearDisconnectedPlayerRoundCards(TEXT("TransitionToBattle"));
     SetPlayerPawnGameplayState(true, false, true, TEXT("TransitionToBattle"));
     ClearPlayerPawnMovementBases(TEXT("TransitionToBattle"));
     BroadcastSwitchLevel(TEXT("Card_Game_Stage"), GetPersistentMainWorldLevelName());
     StartTimedServerPhase(EDediServerPhase::TransitionToBattle, GetTransitionDuration());
+}
+
+void AMainGameMode::ClearGoldDrops(const TCHAR* Context)
+{
+    int32 ClearedCount = 0;
+    for (AGoldDropActor* GoldDrop : ActiveGoldDrops)
+    {
+        if (IsValid(GoldDrop))
+        {
+            GoldDrop->Destroy();
+            ++ClearedCount;
+        }
+    }
+    ActiveGoldDrops.Reset();
+
+    if (ClearedCount > 0)
+    {
+        UE_LOG(LogManager, Display,
+            TEXT("[DS] GoldDrop Cleared Count=%d Context=%s Round=%d"),
+            ClearedCount,
+            Context ? Context : TEXT("<NULL>"),
+            CurrentRound);
+    }
+}
+
+void AMainGameMode::BuildFinalGoldRanking(
+    FString& OutWinnerName,
+    FString& OutRankingSummary) const
+{
+    struct FManagerFinalGoldEntry
+    {
+        FString PlayerName;
+        int32 Gold = 0;
+        int64 Ticket = 0;
+    };
+
+    TArray<FManagerFinalGoldEntry> Entries;
+    auto UpsertEntry = [&Entries](
+        int64 Ticket,
+        const FString& PlayerName,
+        int32 Gold)
+    {
+        if (Ticket > 0)
+        {
+            if (FManagerFinalGoldEntry* Existing = Entries.FindByPredicate(
+                [Ticket](const FManagerFinalGoldEntry& Entry)
+                {
+                    return Entry.Ticket == Ticket;
+                }))
+            {
+                Existing->PlayerName = PlayerName;
+                Existing->Gold = FMath::Max(0, Gold);
+                return;
+            }
+        }
+
+        FManagerFinalGoldEntry Entry;
+        Entry.PlayerName = PlayerName;
+        Entry.Gold = FMath::Max(0, Gold);
+        Entry.Ticket = Ticket;
+        Entries.Add(MoveTemp(Entry));
+    };
+
+    for (const TPair<int64, FMatchParticipantGoldRecord>& Pair : MatchParticipantGoldLedger)
+    {
+        UpsertEntry(Pair.Key, Pair.Value.PlayerName, Pair.Value.Gold);
+    }
+
+    if (GetWorld())
+    {
+        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+        {
+            const AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
+            const AMainPlayerState* PS = MPC
+                ? MPC->GetPlayerState<AMainPlayerState>()
+                : nullptr;
+            if (!MPC || !PS)
+            {
+                continue;
+            }
+
+            const FString PlayerName = PS->GetPlayerName().IsEmpty()
+                ? GetNameSafe(PS)
+                : PS->GetPlayerName();
+            UpsertEntry(
+                GetDediTicketForController(MPC),
+                PlayerName,
+                PS->CurPlayerData.HoldingGold);
+        }
+    }
+
+    for (const TPair<int64, FDisconnectedPlayerSnapshot>& Pair : DisconnectedPlayerSnapshots)
+    {
+        const FString PlayerName = Pair.Value.PlayerName.IsEmpty()
+            ? FString::Printf(TEXT("Disconnected_%lld"), Pair.Key)
+            : Pair.Value.PlayerName;
+        UpsertEntry(
+            Pair.Key,
+            PlayerName,
+            Pair.Value.PlayerState.CurPlayerData.HoldingGold);
+    }
+
+    Entries.Sort([](const FManagerFinalGoldEntry& Left, const FManagerFinalGoldEntry& Right)
+    {
+        if (Left.Gold != Right.Gold)
+        {
+            return Left.Gold > Right.Gold;
+        }
+
+        const int32 NameCompare = Left.PlayerName.Compare(
+            Right.PlayerName,
+            ESearchCase::IgnoreCase);
+        if (NameCompare != 0)
+        {
+            return NameCompare < 0;
+        }
+        return Left.Ticket < Right.Ticket;
+    });
+
+    if (Entries.IsEmpty())
+    {
+        OutWinnerName = TEXT("None");
+        OutRankingSummary = TEXT("None");
+        return;
+    }
+
+    TArray<FString> RankingParts;
+    int32 CurrentRank = 1;
+    for (int32 Index = 0; Index < Entries.Num(); ++Index)
+    {
+        if (Index > 0 && Entries[Index].Gold < Entries[Index - 1].Gold)
+        {
+            CurrentRank = Index + 1;
+        }
+
+        RankingParts.Add(FString::Printf(
+            TEXT("#%d %s=%d"),
+            CurrentRank,
+            *Entries[Index].PlayerName,
+            Entries[Index].Gold));
+    }
+    OutRankingSummary = FString::Join(RankingParts, TEXT(" | "));
+
+    TArray<FString> TopPlayerNames;
+    const int32 TopGold = Entries[0].Gold;
+    for (const FManagerFinalGoldEntry& Entry : Entries)
+    {
+        if (Entry.Gold != TopGold)
+        {
+            break;
+        }
+        TopPlayerNames.Add(Entry.PlayerName);
+    }
+
+    OutWinnerName = TopPlayerNames.Num() == 1
+        ? TopPlayerNames[0]
+        : FString::Printf(
+            TEXT("Tie(%s, Money=%d)"),
+            *FString::Join(TopPlayerNames, TEXT("/")),
+            TopGold);
 }
 
 void AMainGameMode::StartGameEndPhase()
@@ -2101,10 +2750,18 @@ void AMainGameMode::StartGameEndPhase()
 
     bGameEndReached = true;
     bGameStarted = false;
+    ClearDediRecoveryWatchdogStage(TEXT("GameEnd"));
 
     EndPhase();
+
+    FString WinnerName = TEXT("None");
+    FString MoneySummary = TEXT("None");
+    BuildFinalGoldRanking(WinnerName, MoneySummary);
+
+    ClearGoldDrops(TEXT("GameEnd"));
     CardGameService->ClearCardDrops();
     CardGameService->ClearRoundCardsForAllPlayers();
+    ClearDisconnectedPlayerRoundCards(TEXT("GameEnd"));
     ClearServerPhaseTimer();
     if (UWorld* World = GetWorld())
     {
@@ -2125,58 +2782,6 @@ void AMainGameMode::StartGameEndPhase()
 
     SetPlayerPawnGameplayEnabled(false, TEXT("GameEnd"));
 
-    FString WinnerName = TEXT("None");
-    FString MoneySummary = TEXT("None");
-
-    int32 BestMoney = MIN_int32;
-    int32 BestMoneyPlayerCount = 0;
-
-    TArray<FString> MoneyParts;
-
-    if (GetWorld())
-    {
-        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
-        {
-            AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
-            if (!MPC)
-            {
-                continue;
-            }
-
-            AMainPlayerState* PS = MPC->GetPlayerState<AMainPlayerState>();
-            if (!PS)
-            {
-                continue;
-            }
-
-            const int32 Money = CardGameService->GetSeotdaPlayerMoney(PS);
-            const FString PlayerName = PS->GetPlayerName();
-
-            MoneyParts.Add(FString::Printf(TEXT("%s=%d"), *PlayerName, Money));
-
-            if (Money > BestMoney)
-            {
-                BestMoney = Money;
-                BestMoneyPlayerCount = 1;
-                WinnerName = PlayerName;
-            }
-            else if (Money == BestMoney)
-            {
-                BestMoneyPlayerCount++;
-            }
-        }
-    }
-
-    if (MoneyParts.Num() > 0)
-    {
-        MoneySummary = FString::Join(MoneyParts, TEXT(", "));
-    }
-
-    if (BestMoneyPlayerCount >= 2)
-    {
-        WinnerName = FString::Printf(TEXT("Tie(%d players, Money=%d)"), BestMoneyPlayerCount, BestMoney);
-    }
-
     DS_LOG(TEXT("[DS] GameEnd RoomId=%d Round=%d MaxRound=%d Winner=%s MoneySummary=%s"),
         DediRoomId,
         CurrentRound,
@@ -2187,7 +2792,7 @@ void AMainGameMode::StartGameEndPhase()
     NotifyIocpMatchEnd(WinnerName, MoneySummary);
 
     const FString FinalResultText = FString::Printf(
-        TEXT("[MATCH END]\nWinner=%s\nRound=%d/%d\nMoney=%s"),
+        TEXT("[MATCH END]\nWinner=%s\nRound=%d/%d\nRanking=%s"),
         *WinnerName,
         CurrentRound,
         MaxRoundCount,
@@ -2989,11 +3594,7 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
         StartBattleRoyalePhase();
         break;
     case EDediServerPhase::PreBattleShop:
-        if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
-        {
-            GS->SetShopAvailable(false);
-        }
-        StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
+        FinishPreBattleShopPhase();
         break;
     default:
         break;
@@ -3138,24 +3739,39 @@ namespace
         return Value;
     }
 
-    static bool ManagerRecvExactWithTimeout(FSocket* Socket, uint8* Buffer, int32 BytesToRead, int32 TimeoutMs)
+    static int32 ManagerRemainingTimeoutMs(double DeadlineSeconds)
     {
-        if (!Socket || !Buffer || BytesToRead <= 0)
+        const double RemainingSeconds = DeadlineSeconds - FPlatformTime::Seconds();
+        return RemainingSeconds > 0.0
+            ? FMath::Max(1, FMath::CeilToInt(RemainingSeconds * 1000.0))
+            : 0;
+    }
+
+    static bool ManagerRecvExactUntilDeadline(
+        FSocket* Socket,
+        uint8* Buffer,
+        int32 BytesToRead,
+        double DeadlineSeconds)
+    {
+        if (!Socket || BytesToRead < 0 || (BytesToRead > 0 && !Buffer))
         {
             return false;
         }
 
-        const double DeadlineSeconds = FPlatformTime::Seconds() + FMath::Max(0.001, static_cast<double>(TimeoutMs) / 1000.0);
+        if (BytesToRead == 0)
+        {
+            return true;
+        }
+
         int32 TotalBytesRead = 0;
         while (TotalBytesRead < BytesToRead)
         {
-            const double RemainingSeconds = DeadlineSeconds - FPlatformTime::Seconds();
-            if (RemainingSeconds <= 0.0)
+            const int32 RemainingMs = ManagerRemainingTimeoutMs(DeadlineSeconds);
+            if (RemainingMs <= 0)
             {
                 return false;
             }
 
-            const int32 RemainingMs = FMath::Max(1, FMath::CeilToInt(RemainingSeconds * 1000.0));
             if (!Socket->Wait(ESocketWaitConditions::WaitForRead, FTimespan::FromMilliseconds(RemainingMs)))
             {
                 return false;
@@ -3168,6 +3784,63 @@ namespace
             }
 
             TotalBytesRead += BytesRead;
+        }
+
+        return true;
+    }
+
+    static bool ManagerConnectUntilDeadline(
+        FSocket* Socket,
+        const FInternetAddr& Address,
+        double DeadlineSeconds)
+    {
+        if (!Socket || !Socket->SetNonBlocking(true) || !Socket->Connect(Address))
+        {
+            return false;
+        }
+
+        const int32 RemainingMs = ManagerRemainingTimeoutMs(DeadlineSeconds);
+        if (RemainingMs <= 0 ||
+            !Socket->Wait(ESocketWaitConditions::WaitForWrite, FTimespan::FromMilliseconds(RemainingMs)))
+        {
+            return false;
+        }
+
+        return Socket->GetConnectionState() == SCS_Connected;
+    }
+
+    static bool ManagerSendExactUntilDeadline(
+        FSocket* Socket,
+        const uint8* Buffer,
+        int32 BytesToSend,
+        double DeadlineSeconds,
+        int32& OutBytesSent)
+    {
+        OutBytesSent = 0;
+        if (!Socket || !Buffer || BytesToSend <= 0)
+        {
+            return false;
+        }
+
+        while (OutBytesSent < BytesToSend)
+        {
+            const int32 RemainingMs = ManagerRemainingTimeoutMs(DeadlineSeconds);
+            if (RemainingMs <= 0 ||
+                !Socket->Wait(ESocketWaitConditions::WaitForWrite, FTimespan::FromMilliseconds(RemainingMs)))
+            {
+                return false;
+            }
+
+            int32 BytesSentThisCall = 0;
+            if (!Socket->Send(
+                Buffer + OutBytesSent,
+                BytesToSend - OutBytesSent,
+                BytesSentThisCall))
+            {
+                return false;
+            }
+
+            OutBytesSent += BytesSentThisCall;
         }
 
         return true;
@@ -3229,102 +3902,129 @@ namespace
             return false;
         }
 
-        Socket->SetNonBlocking(false);
-
-        const bool bConnected = Socket->Connect(*Addr);
+        const double AttemptDeadlineSeconds =
+            FPlatformTime::Seconds() +
+            FMath::Max(0.001, static_cast<double>(AckTimeoutMs) / 1000.0);
+        const bool bConnected = ManagerConnectUntilDeadline(Socket, *Addr, AttemptDeadlineSeconds);
         int32 TotalBytesSent = 0;
-        bool bSent = false;
-
-        if (bConnected)
-        {
-            while (TotalBytesSent < Packet.Num())
-            {
-                int32 BytesSentThisCall = 0;
-                if (!Socket->Send(
-                    Packet.GetData() + TotalBytesSent,
-                    Packet.Num() - TotalBytesSent,
-                    BytesSentThisCall) ||
-                    BytesSentThisCall <= 0)
-                {
-                    break;
-                }
-
-                TotalBytesSent += BytesSentThisCall;
-            }
-
-            bSent = TotalBytesSent == Packet.Num();
-        }
+        const bool bSent = bConnected && ManagerSendExactUntilDeadline(
+            Socket,
+            Packet.GetData(),
+            Packet.Num(),
+            AttemptDeadlineSeconds,
+            TotalBytesSent);
 
         bool bAckOk = false;
         bool bAckAccepted = false;
         uint16 AckType = 0;
+        int32 AckPacketsRead = 0;
+        int32 SkippedWelcomePackets = 0;
+        uint32 WelcomeSessionId = 0;
         FString AckResult = bSent ? TEXT("NoAck") : TEXT("SendFailed");
 
         if (bSent)
         {
-            uint8 AckHeader[4] = {};
-            if (ManagerRecvExactWithTimeout(Socket, AckHeader, UE_ARRAY_COUNT(AckHeader), AckTimeoutMs))
+            constexpr uint16 WelcomePacketType = 10;
+            constexpr int32 WelcomePayloadLength = 4;
+            constexpr int32 MaxAckPackets = 2;
+            constexpr int32 MaxControlPacketSize = 512;
+
+            for (int32 PacketIndex = 0; PacketIndex < MaxAckPackets; ++PacketIndex)
             {
+                uint8 AckHeader[4] = {};
+                if (!ManagerRecvExactUntilDeadline(
+                    Socket,
+                    AckHeader,
+                    UE_ARRAY_COUNT(AckHeader),
+                    AttemptDeadlineSeconds))
+                {
+                    AckResult = TEXT("AckHeaderTimeout");
+                    break;
+                }
+
                 const uint16 AckSize = ManagerReadU16BE(AckHeader);
                 AckType = ManagerReadU16BE(AckHeader + 2);
-                if (AckSize < 4 || AckSize > 512)
+                ++AckPacketsRead;
+
+                if (AckSize < 4 || AckSize > MaxControlPacketSize)
                 {
                     AckResult = TEXT("BadAckSize");
+                    break;
+                }
+
+                const int32 AckPayloadLen = static_cast<int32>(AckSize) - 4;
+                TArray<uint8> AckPayload;
+                AckPayload.SetNumUninitialized(AckPayloadLen);
+                if (!ManagerRecvExactUntilDeadline(
+                    Socket,
+                    AckPayload.GetData(),
+                    AckPayloadLen,
+                    AttemptDeadlineSeconds))
+                {
+                    AckResult = TEXT("AckPayloadTimeout");
+                    break;
+                }
+
+                if (AckType == WelcomePacketType)
+                {
+                    if (AckPayloadLen != WelcomePayloadLength)
+                    {
+                        AckResult = TEXT("BadWelcomePayloadLen");
+                        break;
+                    }
+                    if (SkippedWelcomePackets > 0)
+                    {
+                        AckResult = TEXT("DuplicateWelcome");
+                        break;
+                    }
+
+                    ++SkippedWelcomePackets;
+                    WelcomeSessionId = ManagerReadU32BE(AckPayload.GetData());
+                    AckResult = TEXT("WelcomeSkipped");
+                    continue;
+                }
+
+                if (AckType != ExpectedAckType)
+                {
+                    AckResult = TEXT("UnexpectedAckType");
+                    break;
+                }
+                if (AckPayloadLen != 19)
+                {
+                    AckResult = TEXT("BadAckPayloadLen");
+                    break;
+                }
+
+                const uint32 AckRoomId = ManagerReadU32BE(AckPayload.GetData());
+                const uint16 AckDediPort = ManagerReadU16BE(AckPayload.GetData() + 4);
+                const uint32 AckGeneration = ManagerReadU32BE(AckPayload.GetData() + 6);
+                const uint64 AckControlToken = ManagerReadU64BE(AckPayload.GetData() + 10);
+                bAckAccepted = AckPayload[18] != 0;
+
+                const bool bIdentityMatches =
+                    AckRoomId == static_cast<uint32>(RoomId) &&
+                    AckDediPort == static_cast<uint16>(DediPort) &&
+                    AckGeneration == Generation &&
+                    AckControlToken == ControlToken;
+
+                if (!bIdentityMatches)
+                {
+                    AckResult = TEXT("AckIdentityMismatch");
+                }
+                else if (!bAckAccepted)
+                {
+                    AckResult = TEXT("AckRejected");
                 }
                 else
                 {
-                    const int32 AckPayloadLen = static_cast<int32>(AckSize) - 4;
-                    TArray<uint8> AckPayload;
-                    AckPayload.SetNumUninitialized(AckPayloadLen);
-                    if (!ManagerRecvExactWithTimeout(Socket, AckPayload.GetData(), AckPayloadLen, AckTimeoutMs))
-                    {
-                        AckResult = TEXT("AckPayloadTimeout");
-                    }
-                    else if (AckType != ExpectedAckType)
-                    {
-                        AckResult = TEXT("UnexpectedAckType");
-                    }
-                    else if (AckPayloadLen != 19)
-                    {
-                        AckResult = TEXT("BadAckPayloadLen");
-                    }
-                    else
-                    {
-                        const uint32 AckRoomId = ManagerReadU32BE(AckPayload.GetData());
-                        const uint16 AckDediPort = ManagerReadU16BE(AckPayload.GetData() + 4);
-                        const uint32 AckGeneration = ManagerReadU32BE(AckPayload.GetData() + 6);
-                        const uint64 AckControlToken = ManagerReadU64BE(AckPayload.GetData() + 10);
-                        bAckAccepted = AckPayload[18] != 0;
-
-                        const bool bIdentityMatches =
-                            AckRoomId == static_cast<uint32>(RoomId) &&
-                            AckDediPort == static_cast<uint16>(DediPort) &&
-                            AckGeneration == Generation &&
-                            AckControlToken == ControlToken;
-
-                        if (!bIdentityMatches)
-                        {
-                            AckResult = TEXT("AckIdentityMismatch");
-                        }
-                        else if (!bAckAccepted)
-                        {
-                            AckResult = TEXT("AckRejected");
-                        }
-                        else
-                        {
-                            bAckOk = true;
-                            AckResult = TEXT("OK");
-                        }
-                    }
+                    bAckOk = true;
+                    AckResult = TEXT("OK");
                 }
-            }
-            else
-            {
-                AckResult = TEXT("AckHeaderTimeout");
+                break;
             }
         }
 
-        DS_LOG(TEXT("[DS] IOCP %s Host=%s Port=%d Attempt=%d Connected=%d Sent=%d Bytes=%d/%d AckType=%u AckAccepted=%d Fallback=%d Result=%s"),
+        DS_LOG(TEXT("[DS] IOCP %s Host=%s Port=%d Attempt=%d Connected=%d Sent=%d Bytes=%d/%d AckPackets=%d AckType=%u AckAccepted=%d WelcomeSkipped=%d WelcomeSession=%u Fallback=%d Result=%s"),
             Context,
             *Host,
             Port,
@@ -3333,8 +4033,11 @@ namespace
             bSent ? 1 : 0,
             TotalBytesSent,
             Packet.Num(),
+            AckPacketsRead,
             AckType,
             bAckAccepted ? 1 : 0,
+            SkippedWelcomePackets,
+            WelcomeSessionId,
             bFallbackAttempt ? 1 : 0,
             *AckResult);
 
@@ -3429,6 +4132,420 @@ namespace
 
         return false;
     }
+
+    static void DispatchIocpControlPacketAsync(
+        FString Context,
+        int32 RoomId,
+        int32 DediPort,
+        uint32 Generation,
+        uint64 ControlToken,
+        uint16 ExpectedAckType,
+        TArray<uint8> Packet,
+        FString PrimaryHost,
+        int32 PrimaryPort,
+        int32 MaxAttempts,
+        int32 AttemptTimeoutMs,
+        float RetryDelaySeconds,
+        TFunction<void(bool)> Completion)
+    {
+        Async(
+            EAsyncExecution::ThreadPool,
+            [
+                Context = MoveTemp(Context),
+                RoomId,
+                DediPort,
+                Generation,
+                ControlToken,
+                ExpectedAckType,
+                Packet = MoveTemp(Packet),
+                PrimaryHost = MoveTemp(PrimaryHost),
+                PrimaryPort,
+                MaxAttempts,
+                AttemptTimeoutMs,
+                RetryDelaySeconds,
+                Completion = MoveTemp(Completion)
+            ]() mutable
+            {
+                const bool bSucceeded = SendIocpControlPacketWithFallback(
+                    *Context,
+                    RoomId,
+                    DediPort,
+                    Generation,
+                    ControlToken,
+                    ExpectedAckType,
+                    Packet,
+                    PrimaryHost,
+                    PrimaryPort,
+                    MaxAttempts,
+                    AttemptTimeoutMs,
+                    RetryDelaySeconds);
+
+                if (bSucceeded)
+                {
+                    UE_LOG(LogTemp, Display, TEXT("[DS] IOCP %s completed asynchronously RoomId=%d Port=%d Generation=%u"),
+                        *Context,
+                        RoomId,
+                        DediPort,
+                        Generation);
+                }
+                else
+                {
+                    UE_LOG(LogTemp, Error, TEXT("[DS] IOCP %s exhausted asynchronously RoomId=%d Port=%d Generation=%u Primary=%s:%d"),
+                        *Context,
+                        RoomId,
+                        DediPort,
+                        Generation,
+                        *PrimaryHost,
+                        PrimaryPort);
+                }
+
+                if (Completion)
+                {
+                    AsyncTask(
+                        ENamedThreads::GameThread,
+                        [Completion = MoveTemp(Completion), bSucceeded]() mutable
+                        {
+                            Completion(bSucceeded);
+                        });
+                }
+            });
+    }
+}
+
+void AMainGameMode::BeginDediRecoveryWatchdogStage(FName Stage, const TCHAR* Context)
+{
+    if (Stage.IsNone() || bGameEndReached || bMatchAbortRequested)
+    {
+        return;
+    }
+
+    if (DediRecoveryWatchdogStage == Stage && DediRecoveryLastProgressTimeSeconds > 0.0)
+    {
+        return;
+    }
+
+    DediRecoveryWatchdogStage = Stage;
+    DediRecoveryLastProgressTimeSeconds = FPlatformTime::Seconds();
+    DS_LOG(TEXT("[DS] RecoveryWatchdog StageBegin Stage=%s Context=%s Timeout=%.1f RoomId=%d Round=%d Phase=%s"),
+        *Stage.ToString(),
+        Context ? Context : TEXT("<NULL>"),
+        Stage == FName(TEXT("WaitingPlayers"))
+            ? DediPlayerJoinNoProgressTimeoutSeconds
+            : DediGateNoProgressTimeoutSeconds,
+        DediRoomId,
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+}
+
+void AMainGameMode::MarkDediRecoveryProgress(const TCHAR* Context)
+{
+    if (DediRecoveryWatchdogStage.IsNone() || bGameEndReached || bMatchAbortRequested)
+    {
+        return;
+    }
+
+    const double NowSeconds = FPlatformTime::Seconds();
+    const double PreviousElapsed = DediRecoveryLastProgressTimeSeconds > 0.0
+        ? FMath::Max(0.0, NowSeconds - DediRecoveryLastProgressTimeSeconds)
+        : 0.0;
+    DediRecoveryLastProgressTimeSeconds = NowSeconds;
+
+    DS_LOG(TEXT("[DS] RecoveryWatchdog Progress Stage=%s Context=%s PreviousIdle=%.3f RoomId=%d Round=%d Phase=%s"),
+        *DediRecoveryWatchdogStage.ToString(),
+        Context ? Context : TEXT("<NULL>"),
+        PreviousElapsed,
+        DediRoomId,
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+}
+
+void AMainGameMode::ClearDediRecoveryWatchdogStage(const TCHAR* Context)
+{
+    if (DediRecoveryWatchdogStage.IsNone())
+    {
+        return;
+    }
+
+    const double IdleSeconds = DediRecoveryLastProgressTimeSeconds > 0.0
+        ? FMath::Max(0.0, FPlatformTime::Seconds() - DediRecoveryLastProgressTimeSeconds)
+        : 0.0;
+    DS_LOG(TEXT("[DS] RecoveryWatchdog StageClear Stage=%s Context=%s Idle=%.3f RoomId=%d Round=%d Phase=%s"),
+        *DediRecoveryWatchdogStage.ToString(),
+        Context ? Context : TEXT("<NULL>"),
+        IdleSeconds,
+        DediRoomId,
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase));
+
+    DediRecoveryWatchdogStage = NAME_None;
+    DediRecoveryLastProgressTimeSeconds = 0.0;
+}
+
+void AMainGameMode::TickDediRecoveryWatchdog()
+{
+    if (bGameEndReached || bMatchAbortRequested)
+    {
+        return;
+    }
+
+    const double NowSeconds = FPlatformTime::Seconds();
+    const int32 HumanPlayers = CountConnectedHumanPlayers();
+
+    if (bGameStarted)
+    {
+        if (HumanPlayers <= 0)
+        {
+            if (DediEmptySinceSeconds <= 0.0)
+            {
+                DediEmptySinceSeconds = NowSeconds;
+                UE_LOG(LogTemp, Warning, TEXT("[DS] RecoveryWatchdog empty server detected RoomId=%d Round=%d Phase=%s"),
+                    DediRoomId,
+                    CurrentRound,
+                    GetServerPhaseName(CurrentServerPhase));
+            }
+
+            const double EmptyTimeoutSeconds = FMath::Max(
+                static_cast<double>(ReconnectGraceSeconds),
+                static_cast<double>(DediEmptyServerAbortTimeoutSeconds));
+            const double EmptyElapsedSeconds = FMath::Max(0.0, NowSeconds - DediEmptySinceSeconds);
+            if (EmptyTimeoutSeconds > 0.0 && EmptyElapsedSeconds >= EmptyTimeoutSeconds)
+            {
+                AbortMatchAndShutdown(FString::Printf(
+                    TEXT("EmptyServerTimeout:Elapsed=%.1f:Phase=%s"),
+                    EmptyElapsedSeconds,
+                    GetServerPhaseName(CurrentServerPhase)));
+                return;
+            }
+        }
+        else if (DediEmptySinceSeconds > 0.0)
+        {
+            DS_LOG(TEXT("[DS] RecoveryWatchdog empty server recovered RoomId=%d EmptyElapsed=%.3f Players=%d"),
+                DediRoomId,
+                FMath::Max(0.0, NowSeconds - DediEmptySinceSeconds),
+                HumanPlayers);
+            DediEmptySinceSeconds = 0.0;
+        }
+    }
+    else
+    {
+        DediEmptySinceSeconds = 0.0;
+    }
+
+    if (DediRecoveryWatchdogStage.IsNone() || DediRecoveryLastProgressTimeSeconds <= 0.0)
+    {
+        return;
+    }
+
+    const double NoProgressTimeoutSeconds =
+        DediRecoveryWatchdogStage == FName(TEXT("WaitingPlayers"))
+        ? static_cast<double>(DediPlayerJoinNoProgressTimeoutSeconds)
+        : static_cast<double>(DediGateNoProgressTimeoutSeconds);
+    const double NoProgressElapsedSeconds = FMath::Max(
+        0.0,
+        NowSeconds - DediRecoveryLastProgressTimeSeconds);
+    if (NoProgressTimeoutSeconds > 0.0 &&
+        NoProgressElapsedSeconds >= NoProgressTimeoutSeconds)
+    {
+        AbortMatchAndShutdown(FString::Printf(
+            TEXT("NoProgressTimeout:Stage=%s:Elapsed=%.1f:Players=%d"),
+            *DediRecoveryWatchdogStage.ToString(),
+            NoProgressElapsedSeconds,
+            HumanPlayers));
+    }
+}
+
+void AMainGameMode::AbortMatchAndShutdown(const FString& Reason)
+{
+    if (bMatchAbortRequested || bGameEndReached)
+    {
+        DS_LOG(TEXT("[DS] MatchAbort ignored duplicate RoomId=%d Requested=%d GameEnd=%d Reason=%s"),
+            DediRoomId,
+            bMatchAbortRequested ? 1 : 0,
+            bGameEndReached ? 1 : 0,
+            *Reason);
+        return;
+    }
+
+    bMatchAbortRequested = true;
+    MatchAbortReason = Reason.IsEmpty() ? TEXT("UnspecifiedMatchAbort") : Reason;
+    ClearDediRecoveryWatchdogStage(TEXT("MatchAbort"));
+    bGameEndReached = true;
+    bGameStarted = false;
+
+    UE_LOG(LogTemp, Error, TEXT("[DS] MatchAbort begin RoomId=%d Port=%d Generation=%u Reason=%s Round=%d Phase=%s Players=%d"),
+        DediRoomId,
+        DediPort,
+        DediMatchGeneration,
+        *MatchAbortReason,
+        CurrentRound,
+        GetServerPhaseName(CurrentServerPhase),
+        CountConnectedHumanPlayers());
+
+    EndPhase();
+    ClearServerPhaseTimer();
+    if (UWorld* World = GetWorld())
+    {
+        FTimerManager& TimerManager = World->GetTimerManager();
+        TimerManager.ClearTimer(MatchEndShutdownTimerHandle);
+        TimerManager.ClearTimer(CardSeatMoveRetryTimerHandle);
+        TimerManager.ClearTimer(BattleRoyaleCardSpawnGateTimerHandle);
+        TimerManager.ClearTimer(ReconnectGraceTimerHandle);
+        TimerManager.ClearTimer(DediRecoveryWatchdogTimerHandle);
+    }
+
+    if (CardGameService)
+    {
+        CardGameService->ClearCardDrops();
+        CardGameService->ClearRoundCardsForAllPlayers();
+    }
+    ClearGoldDrops(TEXT("MatchAbort"));
+    ClearDisconnectedPlayerRoundCards(TEXT("MatchAbort"));
+    SetPlayerPawnGameplayEnabled(false, TEXT("MatchAbort"));
+    CurrentServerPhase = EDediServerPhase::GameEnd;
+    RemainingPhaseSeconds = 0;
+    SetServerRemainingTime(0);
+
+    NotifyIocpMatchAbort(MatchAbortReason);
+
+    if (GetWorld())
+    {
+        for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+        {
+            if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(It->Get()))
+            {
+                MainPC->ClientReturnToMainMenuWithTextReason(
+                    FText::FromString(FString::Printf(TEXT("MatchAborted: %s"), *MatchAbortReason)));
+            }
+        }
+
+        GetWorld()->GetTimerManager().SetTimer(
+            MatchAbortShutdownTimerHandle,
+            this,
+            &AMainGameMode::ShutdownDedicatedServerAfterMatchAbort,
+            1.0f,
+            false);
+    }
+    else
+    {
+        ShutdownDedicatedServerAfterMatchAbort();
+    }
+}
+
+void AMainGameMode::NotifyIocpMatchAbort(const FString& Reason)
+{
+    constexpr uint16 MatchAbortPacketType = 304;
+    constexpr uint16 MatchAbortAckType = 305;
+
+    bMatchAbortControlNotifyComplete = false;
+    bMatchAbortControlNotifySucceeded = false;
+    bMatchAbortShutdownWaitLogged = false;
+    MatchAbortControlNotifyStartTimeSeconds = FPlatformTime::Seconds();
+
+    if (DediRoomId <= 0 || DediPort <= 0 || DediMatchGeneration == 0 || DediControlToken == 0)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] IOCP MatchAbortNotify skipped. Invalid control identity RoomId=%d Port=%d Generation=%u TokenPresent=%d Reason=%s"),
+            DediRoomId,
+            DediPort,
+            DediMatchGeneration,
+            DediControlToken != 0 ? 1 : 0,
+            *Reason);
+        bMatchAbortControlNotifyComplete = true;
+        return;
+    }
+
+    TArray<uint8> Payload;
+    ManagerAppendU32BE(Payload, static_cast<uint32>(DediRoomId));
+    ManagerAppendU16BE(Payload, static_cast<uint16>(DediPort));
+    ManagerAppendU32BE(Payload, DediMatchGeneration);
+    ManagerAppendU64BE(Payload, DediControlToken);
+    ManagerAppendUtf8Limited(Payload, Reason, 180);
+
+    TArray<uint8> Packet;
+    ManagerAppendU16BE(Packet, static_cast<uint16>(4 + Payload.Num()));
+    ManagerAppendU16BE(Packet, MatchAbortPacketType);
+    Packet.Append(Payload);
+
+    const TWeakObjectPtr<AMainGameMode> WeakThis(this);
+    DispatchIocpControlPacketAsync(
+        FString(TEXT("MatchAbortNotify")),
+        DediRoomId,
+        DediPort,
+        DediMatchGeneration,
+        DediControlToken,
+        MatchAbortAckType,
+        MoveTemp(Packet),
+        DediIocpHost,
+        DediIocpPort,
+        DediControlNotifyMaxAttempts,
+        DediControlAckTimeoutMs,
+        DediControlRetryDelaySeconds,
+        [WeakThis](bool bSucceeded)
+        {
+            if (AMainGameMode* GameMode = WeakThis.Get())
+            {
+                GameMode->HandleIocpMatchAbortNotifyComplete(bSucceeded);
+            }
+        });
+}
+
+void AMainGameMode::HandleIocpMatchAbortNotifyComplete(bool bSucceeded)
+{
+    bMatchAbortControlNotifyComplete = true;
+    bMatchAbortControlNotifySucceeded = bSucceeded;
+    DS_LOG(TEXT("[DS] IOCP MatchAbortNotify completion RoomId=%d Success=%d Elapsed=%.3f Reason=%s"),
+        DediRoomId,
+        bSucceeded ? 1 : 0,
+        FMath::Max(0.0, FPlatformTime::Seconds() - MatchAbortControlNotifyStartTimeSeconds),
+        *MatchAbortReason);
+}
+
+void AMainGameMode::ShutdownDedicatedServerAfterMatchAbort()
+{
+    constexpr double MatchAbortControlHardDeadlineSeconds = 20.0;
+    const double ControlElapsedSeconds = MatchAbortControlNotifyStartTimeSeconds > 0.0
+        ? FMath::Max(0.0, FPlatformTime::Seconds() - MatchAbortControlNotifyStartTimeSeconds)
+        : MatchAbortControlHardDeadlineSeconds;
+
+    if (!bMatchAbortControlNotifyComplete &&
+        ControlElapsedSeconds < MatchAbortControlHardDeadlineSeconds)
+    {
+        if (!bMatchAbortShutdownWaitLogged)
+        {
+            bMatchAbortShutdownWaitLogged = true;
+            UE_LOG(LogTemp, Warning, TEXT("[DS] MatchAbort shutdown waiting for IOCP RoomId=%d Elapsed=%.3f HardDeadline=%.1f Reason=%s"),
+                DediRoomId,
+                ControlElapsedSeconds,
+                MatchAbortControlHardDeadlineSeconds,
+                *MatchAbortReason);
+        }
+
+        if (UWorld* World = GetWorld())
+        {
+            World->GetTimerManager().SetTimer(
+                MatchAbortShutdownTimerHandle,
+                this,
+                &AMainGameMode::ShutdownDedicatedServerAfterMatchAbort,
+                0.25f,
+                false);
+            return;
+        }
+    }
+
+    if (!bMatchAbortControlNotifyComplete)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] MatchAbort shutdown reached IOCP hard deadline RoomId=%d Elapsed=%.3f Reason=%s"),
+            DediRoomId,
+            ControlElapsedSeconds,
+            *MatchAbortReason);
+    }
+
+    UE_LOG(LogTemp, Display, TEXT("[DS] MatchAbort shutdown proceeding RoomId=%d NotifyComplete=%d NotifySucceeded=%d Elapsed=%.3f Reason=%s"),
+        DediRoomId,
+        bMatchAbortControlNotifyComplete ? 1 : 0,
+        bMatchAbortControlNotifySucceeded ? 1 : 0,
+        ControlElapsedSeconds,
+        *MatchAbortReason);
+    FPlatformMisc::RequestExit(false);
 }
 
 void AMainGameMode::NotifyIocpServerReady() const
@@ -3459,25 +4576,31 @@ void AMainGameMode::NotifyIocpServerReady() const
     ManagerAppendU16BE(Packet, ServerReadyPacketType);
     Packet.Append(Payload);
 
-    SendIocpControlPacketWithFallback(
-        TEXT("ServerReadyNotify"),
+    DispatchIocpControlPacketAsync(
+        FString(TEXT("ServerReadyNotify")),
         DediRoomId,
         DediPort,
         DediMatchGeneration,
         DediControlToken,
         ServerReadyAckType,
-        Packet,
+        MoveTemp(Packet),
         DediIocpHost,
         DediIocpPort,
         DediControlNotifyMaxAttempts,
         DediControlAckTimeoutMs,
-        DediControlRetryDelaySeconds);
+        DediControlRetryDelaySeconds,
+        TFunction<void(bool)>());
 }
 
-void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary) const
+void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString& MoneySummary)
 {
     constexpr uint16 MatchEndPacketType = 300;
     constexpr uint16 MatchEndAckType = 302;
+
+    bMatchEndControlNotifyComplete = false;
+    bMatchEndControlNotifySucceeded = false;
+    bMatchEndShutdownWaitLogged = false;
+    MatchEndControlNotifyStartTimeSeconds = FPlatformTime::Seconds();
 
     if (DediRoomId <= 0 || DediPort <= 0 || DediMatchGeneration == 0 || DediControlToken == 0)
     {
@@ -3487,6 +4610,7 @@ void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString&
             DediMatchGeneration,
             DediControlToken != 0 ? 1 : 0,
             *WinnerName);
+        bMatchEndControlNotifyComplete = true;
         return;
     }
 
@@ -3505,27 +4629,87 @@ void AMainGameMode::NotifyIocpMatchEnd(const FString& WinnerName, const FString&
     ManagerAppendU16BE(Packet, MatchEndPacketType);
     Packet.Append(Payload);
 
-    SendIocpControlPacketWithFallback(
-        TEXT("MatchEndNotify"),
+    const TWeakObjectPtr<AMainGameMode> WeakThis(this);
+    DispatchIocpControlPacketAsync(
+        FString(TEXT("MatchEndNotify")),
         DediRoomId,
         DediPort,
         DediMatchGeneration,
         DediControlToken,
         MatchEndAckType,
-        Packet,
+        MoveTemp(Packet),
         DediIocpHost,
         DediIocpPort,
         DediControlNotifyMaxAttempts,
         DediControlAckTimeoutMs,
-        DediControlRetryDelaySeconds);
+        DediControlRetryDelaySeconds,
+        [WeakThis](bool bSucceeded)
+        {
+            if (AMainGameMode* GameMode = WeakThis.Get())
+            {
+                GameMode->HandleIocpMatchEndNotifyComplete(bSucceeded);
+            }
+        });
+}
+
+void AMainGameMode::HandleIocpMatchEndNotifyComplete(bool bSucceeded)
+{
+    bMatchEndControlNotifyComplete = true;
+    bMatchEndControlNotifySucceeded = bSucceeded;
+
+    DS_LOG(TEXT("[DS] IOCP MatchEndNotify completion delivered to game thread RoomId=%d Success=%d Elapsed=%.3f"),
+        DediRoomId,
+        bSucceeded ? 1 : 0,
+        FMath::Max(0.0, FPlatformTime::Seconds() - MatchEndControlNotifyStartTimeSeconds));
 }
 
 void AMainGameMode::ShutdownDedicatedServerAfterMatchEnd()
 {
+    constexpr double MatchEndControlHardDeadlineSeconds = 20.0;
+    const double ControlElapsedSeconds = MatchEndControlNotifyStartTimeSeconds > 0.0
+        ? FMath::Max(0.0, FPlatformTime::Seconds() - MatchEndControlNotifyStartTimeSeconds)
+        : MatchEndControlHardDeadlineSeconds;
+
+    if (!bMatchEndControlNotifyComplete && ControlElapsedSeconds < MatchEndControlHardDeadlineSeconds)
+    {
+        if (!bMatchEndShutdownWaitLogged)
+        {
+            bMatchEndShutdownWaitLogged = true;
+            UE_LOG(LogTemp, Warning, TEXT("[DS] MatchEnd shutdown waiting for IOCP control completion RoomId=%d Elapsed=%.3f HardDeadline=%.1f"),
+                DediRoomId,
+                ControlElapsedSeconds,
+                MatchEndControlHardDeadlineSeconds);
+        }
+
+        if (UWorld* World = GetWorld())
+        {
+            World->GetTimerManager().SetTimer(
+                MatchEndShutdownTimerHandle,
+                this,
+                &AMainGameMode::ShutdownDedicatedServerAfterMatchEnd,
+                0.25f,
+                false);
+            return;
+        }
+    }
+
+    if (!bMatchEndControlNotifyComplete)
+    {
+        UE_LOG(LogTemp, Error, TEXT("[DS] MatchEnd shutdown reached IOCP control hard deadline RoomId=%d Elapsed=%.3f"),
+            DediRoomId,
+            ControlElapsedSeconds);
+    }
+
     DS_LOG(TEXT("[DS] ShutdownDedicatedServerAfterMatchEnd RoomId=%d Round=%d Phase=%s"),
         DediRoomId,
         CurrentRound,
         GetServerPhaseName(CurrentServerPhase));
+
+    UE_LOG(LogTemp, Display, TEXT("[DS] MatchEnd shutdown proceeding RoomId=%d NotifyComplete=%d NotifySucceeded=%d Elapsed=%.3f"),
+        DediRoomId,
+        bMatchEndControlNotifyComplete ? 1 : 0,
+        bMatchEndControlNotifySucceeded ? 1 : 0,
+        ControlElapsedSeconds);
 
     FPlatformMisc::RequestExit(false);
 }

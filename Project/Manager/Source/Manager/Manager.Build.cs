@@ -32,20 +32,7 @@ public class Manager : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		PublicIncludePaths.AddRange(new string[] {
-			"Manager",
-			"Manager/Variant_Platforming",
-			"Manager/Variant_Platforming/Animation",
-			"Manager/Variant_Combat",
-			"Manager/Variant_Combat/AI",
-			"Manager/Variant_Combat/Animation",
-			"Manager/Variant_Combat/Gameplay",
-			"Manager/Variant_Combat/Interfaces",
-			"Manager/Variant_Combat/UI",
-			"Manager/Variant_SideScrolling",
-			"Manager/Variant_SideScrolling/AI",
-			"Manager/Variant_SideScrolling/Gameplay",
-			"Manager/Variant_SideScrolling/Interfaces",
-			"Manager/Variant_SideScrolling/UI"
+			"Manager"
 		});
 
 		// Uncomment if you are using Slate UI

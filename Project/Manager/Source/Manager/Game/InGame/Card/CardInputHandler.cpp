@@ -23,6 +23,7 @@ void UCardInputHandler::BeginPlay()
 void UCardInputHandler::InputActivate()
 {
 	Super::InputActivate();
+	ResetSelectedCards();
 
 	if (!OwnerController) return;
 	OwnerController->bShowMouseCursor = true;
@@ -123,32 +124,17 @@ void UCardInputHandler::Input_AllIn()
 
 void UCardInputHandler::Input_SelectCard1()
 {
-    bSelectedCard0 = !bSelectedCard0;
-    if (GEngine)
-    {
-        DS_SCREEN(-1, 2.0f, bSelectedCard0 ? FColor::Green : FColor::Yellow,
-            FString::Printf(TEXT("[Card] SelectCard1=%d"), bSelectedCard0 ? 1 : 0));
-    }
+	ToggleCardSelectionForCurrentStage(0);
 }
 
 void UCardInputHandler::Input_SelectCard2()
 {
-    bSelectedCard1 = !bSelectedCard1;
-    if (GEngine)
-    {
-        DS_SCREEN(-1, 2.0f, bSelectedCard1 ? FColor::Green : FColor::Yellow,
-            FString::Printf(TEXT("[Card] SelectCard2=%d"), bSelectedCard1 ? 1 : 0));
-    }
+	ToggleCardSelectionForCurrentStage(1);
 }
 
 void UCardInputHandler::Input_SelectCard3()
 {
-    bSelectedCard2 = !bSelectedCard2;
-    if (GEngine)
-    {
-        DS_SCREEN(-1, 2.0f, bSelectedCard2 ? FColor::Green : FColor::Yellow,
-            FString::Printf(TEXT("[Card] SelectCard3=%d"), bSelectedCard2 ? 1 : 0));
-    }
+	ToggleCardSelectionForCurrentStage(2);
 }
 
 void UCardInputHandler::Input_ConfirmSelection()
@@ -159,14 +145,91 @@ void UCardInputHandler::Input_ConfirmSelection()
         return;
     }
 
+    if (MainPC->bSeotdaUiMySubmitted)
+    {
+        DS_SCREEN(-1, 2.0f, FColor::Yellow, TEXT("[Card] Final hand is already submitted."));
+        return;
+    }
+
+    const int32 SelectedCount = GetSelectedCardCount();
+    if (!MainPC->bSeotdaUiMyRevealConfirmed)
+    {
+        if (SelectedCount != 1)
+        {
+            DS_SCREEN(-1, 2.0f, FColor::Yellow, TEXT("[Card] Select exactly 1 public card."));
+            return;
+        }
+
+        MainPC->Server_RevealSeotdaCard(bSelectedCard0, bSelectedCard1, bSelectedCard2);
+        ResetSelectedCards();
+        DS_SCREEN(-1, 2.0f, FColor::Green, TEXT("[Card] Public card request sent. Wait for server approval."));
+        return;
+    }
+
+    if (SelectedCount != 2)
+    {
+        DS_SCREEN(-1, 2.0f, FColor::Yellow, TEXT("[Card] Select exactly 2 cards for the final hand."));
+        return;
+    }
+
     MainPC->Server_SubmitSeotdaSelection(bSelectedCard0, bSelectedCard1, bSelectedCard2);
 
-    if (GEngine)
+    DS_SCREEN(-1, 2.0f, FColor::Green,
+        FString::Printf(TEXT("[Card] Submit final hand %d/%d/%d"),
+            bSelectedCard0 ? 1 : 0,
+            bSelectedCard1 ? 1 : 0,
+            bSelectedCard2 ? 1 : 0));
+}
+
+void UCardInputHandler::ToggleCardSelectionForCurrentStage(int32 CardIndex)
+{
+    AMainPlayerController* MainPC = Cast<AMainPlayerController>(OwnerController);
+    if (!MainPC || MainPC->bSeotdaUiMySubmitted || CardIndex < 0 || CardIndex > 2)
     {
-        DS_SCREEN(-1, 2.0f, FColor::Green,
-            FString::Printf(TEXT("[Card] Submit selection %d/%d/%d"),
-                bSelectedCard0 ? 1 : 0,
-                bSelectedCard1 ? 1 : 0,
-                bSelectedCard2 ? 1 : 0));
+        return;
     }
+
+    bool* Target = CardIndex == 0
+        ? &bSelectedCard0
+        : (CardIndex == 1 ? &bSelectedCard1 : &bSelectedCard2);
+
+    if (*Target)
+    {
+        *Target = false;
+    }
+    else if (!MainPC->bSeotdaUiMyRevealConfirmed)
+    {
+        ResetSelectedCards();
+        *Target = true;
+    }
+    else
+    {
+        if (GetSelectedCardCount() >= 2)
+        {
+            DS_SCREEN(-1, 2.0f, FColor::Yellow, TEXT("[Card] Final hand can contain exactly 2 cards."));
+            return;
+        }
+        *Target = true;
+    }
+
+    DS_SCREEN(-1, 2.0f, FColor::Green,
+        FString::Printf(TEXT("[Card] %s selection=%d/%d/%d"),
+            MainPC->bSeotdaUiMyRevealConfirmed ? TEXT("Hand") : TEXT("Public"),
+            bSelectedCard0 ? 1 : 0,
+            bSelectedCard1 ? 1 : 0,
+            bSelectedCard2 ? 1 : 0));
+}
+
+void UCardInputHandler::ResetSelectedCards()
+{
+    bSelectedCard0 = false;
+    bSelectedCard1 = false;
+    bSelectedCard2 = false;
+}
+
+int32 UCardInputHandler::GetSelectedCardCount() const
+{
+    return (bSelectedCard0 ? 1 : 0) +
+        (bSelectedCard1 ? 1 : 0) +
+        (bSelectedCard2 ? 1 : 0);
 }

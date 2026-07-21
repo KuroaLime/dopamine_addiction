@@ -31,5 +31,8 @@ protected:
 	virtual void NativeConstruct() override;
 
 	UFUNCTION()
+	void OnIdTextChanged(const FText& Text);
+
+	UFUNCTION()
 	void OnLoginButtonClick();
 };

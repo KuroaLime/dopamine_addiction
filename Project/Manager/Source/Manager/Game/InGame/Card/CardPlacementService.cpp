@@ -1032,10 +1032,9 @@ bool FCardPlacementService::PickDeathCardDropLocation(const FVector& DeathLocati
     UNavigationSystemV1* NavSystem = UNavigationSystemV1::GetCurrent(World);
     if (!NavSystem)
     {
-        UE_LOG(LogTemp, Error, TEXT("[DS] Card DeathDropLocationFail CardIndex=%d Reason=NoNavSystem Death=%s"),
+        UE_LOG(LogManagerCard, Warning, TEXT("[DS] Card DeathDropNoNavSystem CardIndex=%d Death=%s Result=TryGroundTraceFallback"),
             CardIndex,
             *DeathLocation.ToCompactString());
-        return false;
     }
 
     const int32 MaxAttempts = FMath::Max(8, CardDeathDropMaxAttemptsPerCard);
@@ -1057,6 +1056,12 @@ bool FCardPlacementService::PickDeathCardDropLocation(const FVector& DeathLocati
     int32 DistFail = 0;
     int32 OverlapFail = 0;
     int32 OverheadFail = 0;
+    int32 GroundTraceFail = 0;
+    int32 GroundWalkableFail = 0;
+    int32 GroundNoDropFail = 0;
+    int32 GroundDistFail = 0;
+    int32 GroundOverlapFail = 0;
+    int32 GroundOverheadFail = 0;
     int32 TotalCandidates = 0;
 
     auto IsFarEnoughFromDeathCards = [&](const FVector& Candidate) -> bool
@@ -1081,6 +1086,12 @@ bool FCardPlacementService::PickDeathCardDropLocation(const FVector& DeathLocati
     auto TryAcceptQueryPoint = [&](const FVector& QueryPoint, const TCHAR* Source, int32 Attempt) -> bool
     {
         ++TotalCandidates;
+
+        if (!NavSystem)
+        {
+            ++NavFail;
+            return false;
+        }
 
         FNavLocation NavLocation;
         if (!NavSystem->ProjectPointToNavigation(QueryPoint, NavLocation, ProjectExtent))
@@ -1149,6 +1160,30 @@ bool FCardPlacementService::PickDeathCardDropLocation(const FVector& DeathLocati
     const int32 PointsPerRing = 8;
     const float BaseAngleDegrees = 90.0f + static_cast<float>(CardIndex) * 72.0f;
 
+    if (NavSystem)
+    {
+        for (int32 Attempt = 1; Attempt <= MaxAttempts; ++Attempt)
+        {
+            const int32 ZeroBasedAttempt = Attempt - 1;
+            const int32 RingIndex = ZeroBasedAttempt / PointsPerRing;
+            const int32 PointIndex = ZeroBasedAttempt % PointsPerRing;
+            const float Radius = FMath::Min(MaxRadius, StartRadius + static_cast<float>(RingIndex) * RadiusStep);
+            const float AngleDegrees = BaseAngleDegrees + static_cast<float>(PointIndex) * (360.0f / static_cast<float>(PointsPerRing)) + static_cast<float>(RingIndex) * 22.5f;
+            const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
+
+            const FVector QueryPoint(
+                DeathLocation.X + FMath::Cos(AngleRadians) * Radius,
+                DeathLocation.Y + FMath::Sin(AngleRadians) * Radius,
+                DeathLocation.Z);
+
+            if (TryAcceptQueryPoint(QueryPoint, TEXT("DeathNavSpiral"), Attempt))
+            {
+                return true;
+            }
+        }
+    }
+
+    const float TraceHalfHeight = FMath::Max(1000.0f, CardIslandGroundTraceHalfHeight);
     for (int32 Attempt = 1; Attempt <= MaxAttempts; ++Attempt)
     {
         const int32 ZeroBasedAttempt = Attempt - 1;
@@ -1157,25 +1192,100 @@ bool FCardPlacementService::PickDeathCardDropLocation(const FVector& DeathLocati
         const float Radius = FMath::Min(MaxRadius, StartRadius + static_cast<float>(RingIndex) * RadiusStep);
         const float AngleDegrees = BaseAngleDegrees + static_cast<float>(PointIndex) * (360.0f / static_cast<float>(PointsPerRing)) + static_cast<float>(RingIndex) * 22.5f;
         const float AngleRadians = FMath::DegreesToRadians(AngleDegrees);
-
         const FVector QueryPoint(
             DeathLocation.X + FMath::Cos(AngleRadians) * Radius,
             DeathLocation.Y + FMath::Sin(AngleRadians) * Radius,
             DeathLocation.Z);
+        const FVector TraceStart(QueryPoint.X, QueryPoint.Y, DeathLocation.Z + TraceHalfHeight);
+        const FVector TraceEnd(QueryPoint.X, QueryPoint.Y, DeathLocation.Z - TraceHalfHeight);
 
-        if (TryAcceptQueryPoint(QueryPoint, TEXT("DeathNavSpiral"), Attempt))
+        ++TotalCandidates;
+
+        TArray<FHitResult> TraceHits;
+        FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(CardDeathGroundFallback), false);
+        QueryParams.bTraceComplex = false;
+        World->LineTraceMultiByChannel(TraceHits, TraceStart, TraceEnd, ECC_Visibility, QueryParams);
+
+        const FHitResult* GroundHit = TraceHits.FindByPredicate([this](const FHitResult& Hit)
         {
-            return true;
+            const UPrimitiveComponent* HitComponent = Hit.GetComponent();
+            return HitComponent &&
+                HitComponent->GetCollisionObjectType() != ECC_Pawn &&
+                IsCardIslandSurfaceWalkable(Hit);
+        });
+
+        if (!GroundHit)
+        {
+            if (TraceHits.IsEmpty())
+            {
+                ++GroundTraceFail;
+            }
+            else
+            {
+                ++GroundWalkableFail;
+            }
+            continue;
         }
+
+        const FVector Candidate = GroundHit->ImpactPoint + FVector(0.0f, 0.0f, GroundOffsetZ);
+        if (FVector::Dist2D(DeathLocation, Candidate) > MaxRadius)
+        {
+            ++DeathDistanceFail;
+            continue;
+        }
+
+        if (IsInsideNoDropZone(Candidate))
+        {
+            ++GroundNoDropFail;
+            continue;
+        }
+
+        if (!IsFarEnoughFromDeathCards(Candidate))
+        {
+            ++GroundDistFail;
+            continue;
+        }
+
+        if (!IsCardDropLocationClear(Candidate))
+        {
+            ++GroundOverlapFail;
+            continue;
+        }
+
+        if (!HasOverheadClearance(Candidate))
+        {
+            ++GroundOverheadFail;
+            continue;
+        }
+
+        OutLocation = Candidate;
+        const float SurfaceSlopeDegrees = FMath::RadiansToDegrees(
+            FMath::Acos(FMath::Clamp(GroundHit->ImpactNormal.Z, -1.0f, 1.0f)));
+        UE_LOG(LogManagerCard, Warning,
+            TEXT("[DS] Card DeathDropGroundFallback CardIndex=%d Attempt=%d ExistingCards=%d Death=%s Query=%s HitActor=%s HitComponent=%s Impact=%s Normal=%s Slope=%.1f Spawn=%s NavAvailable=%d"),
+            CardIndex,
+            Attempt,
+            ExistingDropLocations.Num(),
+            *DeathLocation.ToCompactString(),
+            *QueryPoint.ToCompactString(),
+            *GetNameSafe(GroundHit->GetActor()),
+            *GetNameSafe(GroundHit->GetComponent()),
+            *GroundHit->ImpactPoint.ToCompactString(),
+            *GroundHit->ImpactNormal.ToCompactString(),
+            SurfaceSlopeDegrees,
+            *Candidate.ToCompactString(),
+            NavSystem ? 1 : 0);
+        return true;
     }
 
     UE_LOG(LogTemp, Error,
-        TEXT("[DS] Card DeathDropLocationFail CardIndex=%d Reason=AllCandidatesRejected Death=%s MaxAttempts=%d MaxRadius=%.1f ExistingCards=%d NavFail=%d ProjectDistFail=%d DeathDistFail=%d DistFail=%d OverlapFail=%d OverheadFail=%d NoDrop=%d TotalCandidates=%d"),
+        TEXT("[DS] Card DeathDropLocationFail CardIndex=%d Reason=AllCandidatesRejected Death=%s MaxAttempts=%d MaxRadius=%.1f ExistingCards=%d NavAvailable=%d NavFail=%d ProjectDistFail=%d DeathDistFail=%d DistFail=%d OverlapFail=%d OverheadFail=%d NoDrop=%d GroundTraceFail=%d GroundWalkableFail=%d GroundDistFail=%d GroundOverlapFail=%d GroundOverheadFail=%d GroundNoDrop=%d TotalCandidates=%d"),
         CardIndex,
         *DeathLocation.ToCompactString(),
         MaxAttempts,
         MaxRadius,
         ExistingDropLocations.Num(),
+        NavSystem ? 1 : 0,
         NavFail,
         ProjectDistanceFail,
         DeathDistanceFail,
@@ -1183,6 +1293,12 @@ bool FCardPlacementService::PickDeathCardDropLocation(const FVector& DeathLocati
         OverlapFail,
         OverheadFail,
         NoDropFail,
+        GroundTraceFail,
+        GroundWalkableFail,
+        GroundDistFail,
+        GroundOverlapFail,
+        GroundOverheadFail,
+        GroundNoDropFail,
         TotalCandidates);
 
     return false;

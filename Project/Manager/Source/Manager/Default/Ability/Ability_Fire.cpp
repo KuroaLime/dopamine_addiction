@@ -14,6 +14,13 @@
 #include "CollisionShape.h"
 #include "Engine/StaticMesh.h"
 #include "Game/InGame/MainCharacter.h"
+#include "Game/InGame/MainGameMode.h"
+
+namespace
+{
+	constexpr float MinFireIntervalSeconds = 0.01f;
+	constexpr float FireRetryIntervalSeconds = 0.02f;
+}
 
 UAbility_Fire::UAbility_Fire()
 {
@@ -35,30 +42,32 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 	if (bIsClientFire) return;
 
 	ACharacter* Character = Cast<ACharacter>(InOwner);
-	if (!Character) return;
+	UWorld* World = Character ? Character->GetWorld() : nullptr;
+	if (!Character || !World) return;
 
 	IAbilityCheckInterface* CheckInterface = Cast<IAbilityCheckInterface>(Character);
 	if (!CheckInterface || !CheckInterface->IsCharacterAiming()) return;
 
 	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
-	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(Character->GetWorld()->GetGameState());
+	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(World->GetGameState());
 	if (!PS_Interface || !GS_Interface) return;
 
 	const EWeaponType WeaponID = PS_Interface->GetWeaponID();
 
 	int32 BaseFireRate = GS_Interface->GetWeaponBaseData(WeaponID, EWeaponBaseStatType::FireRate);
 	int32 LvFireRate = PS_Interface->GetWeaponStatLV(EWeaponStatType::FireRate);
-	float FireRate = CalculateFireRate(BaseFireRate, LvFireRate);
+	const float FireRate = FMath::Max(CalculateFireRate(BaseFireRate, LvFireRate), MinFireIntervalSeconds);
 
 	bool bFullAuto = true;
 	GS_Interface->GetWeaponFireMode(WeaponID, bFullAuto);
 
 	bIsClientFire = true;
+	ClientFireCharacter = Character;
+	ActiveClientFireRate = FireRate;
+	bClientFullAuto = bFullAuto;
 
-	float CurrentTime = Character->GetWorld()->GetTimeSeconds();
-	float TimeSinceLastShot = CurrentTime - LastClientFireTime;
-
-	TWeakObjectPtr<ACharacter> WeakChar(Character);
+	const float CurrentTime = World->GetTimeSeconds();
+	const float TimeSinceLastShot = CurrentTime - LastClientFireTime;
 
 	if (TimeSinceLastShot >= FireRate)
 	{
@@ -68,17 +77,10 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 		// 세미오토(샷건/저격 등): 한 발만 나가고 홀드해도 루프를 걸지 않음. 다음 발은 재클릭해야 함.
 		if (!bFullAuto) return;
 
-		FTimerDelegate Delegate;
-		Delegate.BindLambda([this, WeakChar]()
-			{
-				if (!WeakChar.IsValid()) return;
-				Client_ExecuteFire(WeakChar.Get());
-				LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-			});
-
-		Character->GetWorldTimerManager().SetTimer(
+		World->GetTimerManager().SetTimer(
 			ClientFireTimerHandle,
-			Delegate,
+			this,
+			&UAbility_Fire::HandleClientFireLoop,
 			FireRate,
 			true
 		);
@@ -87,103 +89,139 @@ void UAbility_Fire::LocalActivateWithOwner(AActor* InOwner)
 	{
 		// 쿨다운이 아직 안 끝났으면, 버튼을 누르고 있는 동안만 짧은 간격으로 재검사해서 쿨다운이 끝나는
 		// 순간 자동 발사한다(상용 게임과 동일). 손을 떼면(bIsClientFire=false) 그 즉시 재검사를 멈춘다.
-		constexpr float RetryInterval = 0.02f;
-
-		FTimerDelegate RetryDelegate;
-		RetryDelegate.BindLambda([this, WeakChar, bFullAuto, FireRate]()
-			{
-				if (!WeakChar.IsValid() || !bIsClientFire)
-				{
-					if (WeakChar.IsValid())
-					{
-						WeakChar->GetWorldTimerManager().ClearTimer(ClientFireRetryTimerHandle);
-					}
-					return;
-				}
-
-				ACharacter* Char = WeakChar.Get();
-				const float Now = Char->GetWorld()->GetTimeSeconds();
-				if (Now - LastClientFireTime < FireRate) return; // 아직 준비 안 됨, 다음 재검사 때 다시 확인
-
-				Char->GetWorldTimerManager().ClearTimer(ClientFireRetryTimerHandle);
-
-				Client_ExecuteFire(Char);
-				LastClientFireTime = Now;
-
-				if (!bFullAuto) return;
-
-				FTimerDelegate LoopDelegate;
-				LoopDelegate.BindLambda([this, WeakChar]()
-					{
-						if (!WeakChar.IsValid()) return;
-						Client_ExecuteFire(WeakChar.Get());
-						LastClientFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-					});
-
-				Char->GetWorldTimerManager().SetTimer(ClientFireTimerHandle, LoopDelegate, FireRate, true);
-			});
-
-		Character->GetWorldTimerManager().SetTimer(ClientFireRetryTimerHandle, RetryDelegate, RetryInterval, true);
+		World->GetTimerManager().SetTimer(
+			ClientFireRetryTimerHandle,
+			this,
+			&UAbility_Fire::HandleClientFireRetry,
+			FireRetryIntervalSeconds,
+			true);
 	}
 }
 
 void UAbility_Fire::LocalCancelWithOwner(AActor* InOwner)
 {
-	if (!InOwner) return;
-	InOwner->GetWorldTimerManager().ClearTimer(ClientFireTimerHandle);
-	InOwner->GetWorldTimerManager().ClearTimer(ClientFireRetryTimerHandle);
+	UWorld* World = InOwner ? InOwner->GetWorld() : nullptr;
+	ClearClientFireTimers(World);
 	bIsClientFire = false;
+	bClientFullAuto = false;
+	ClientFireCharacter.Reset();
+}
+
+void UAbility_Fire::HandleClientFireLoop()
+{
+	ACharacter* Character = ClientFireCharacter.Get();
+	UWorld* World = Character ? Character->GetWorld() : nullptr;
+	if (!bIsClientFire || !Character || !World)
+	{
+		ClearClientFireTimers(World);
+		bIsClientFire = false;
+		ClientFireCharacter.Reset();
+		return;
+	}
+
+	Client_ExecuteFire(Character);
+	if (!bIsClientFire) return;
+	LastClientFireTime = World->GetTimeSeconds();
+}
+
+void UAbility_Fire::HandleClientFireRetry()
+{
+	ACharacter* Character = ClientFireCharacter.Get();
+	UWorld* World = Character ? Character->GetWorld() : nullptr;
+	if (!bIsClientFire || !Character || !World)
+	{
+		ClearClientFireTimers(World);
+		bIsClientFire = false;
+		ClientFireCharacter.Reset();
+		return;
+	}
+
+	const float Now = World->GetTimeSeconds();
+	if (Now - LastClientFireTime < ActiveClientFireRate) return;
+
+	World->GetTimerManager().ClearTimer(ClientFireRetryTimerHandle);
+	Client_ExecuteFire(Character);
+	if (!bIsClientFire) return;
+
+	LastClientFireTime = Now;
+	if (bClientFullAuto)
+	{
+		World->GetTimerManager().SetTimer(
+			ClientFireTimerHandle,
+			this,
+			&UAbility_Fire::HandleClientFireLoop,
+			ActiveClientFireRate,
+			true);
+	}
+}
+
+void UAbility_Fire::ClearClientFireTimers(UWorld* World)
+{
+	if (!World && ClientFireCharacter.IsValid())
+	{
+		World = ClientFireCharacter->GetWorld();
+	}
+	if (!World) return;
+
+	World->GetTimerManager().ClearTimer(ClientFireTimerHandle);
+	World->GetTimerManager().ClearTimer(ClientFireRetryTimerHandle);
 }
 
 void UAbility_Fire::ActivateAbility()
 {
-	if (!OwnerCharacter || !OwnerCharacter->HasAuthority()) return;
-	if (bIsServerFire) return;
+	UWorld* World = IsValid(OwnerCharacter) ? OwnerCharacter->GetWorld() : nullptr;
+	if (!IsValid(OwnerCharacter) || !OwnerCharacter->HasAuthority() || !World || bIsServerFire)
+	{
+		EndAbility(true);
+		return;
+	}
 
 	IAbilityCheckInterface* CheckInterface = Cast<IAbilityCheckInterface>(OwnerCharacter);
-	if (!CheckInterface || !CheckInterface->IsCharacterAiming()) return;
+	if (!CheckInterface || !CheckInterface->IsCharacterAiming())
+	{
+		EndAbility(true);
+		return;
+	}
 
 	IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
 	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
-	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(OwnerCharacter->GetWorld()->GetGameState());
+	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(World->GetGameState());
 
-	if (!Owner || !PS_Interface || !GS_Interface) return;
+	if (!Owner || !PS_Interface || !GS_Interface)
+	{
+		EndAbility(true);
+		return;
+	}
 
 	const EWeaponType WeaponID = PS_Interface->GetWeaponID();
 
 	int32 BaseFireRate = GS_Interface->GetWeaponBaseData(WeaponID, EWeaponBaseStatType::FireRate);
 	int32 LvFireRate = PS_Interface->GetWeaponStatLV(EWeaponStatType::FireRate);
-	float FireRate = CalculateFireRate(BaseFireRate, LvFireRate);
+	const float FireRate = FMath::Max(CalculateFireRate(BaseFireRate, LvFireRate), MinFireIntervalSeconds);
 
 	bool bFullAuto = true;
 	GS_Interface->GetWeaponFireMode(WeaponID, bFullAuto);
 
 	bIsServerFire = true;
+	ActiveServerFireRate = FireRate;
+	bServerFullAuto = bFullAuto;
 
-	float CurrentTime = OwnerCharacter->GetWorld()->GetTimeSeconds();
-	float TimeSinceLastShot = CurrentTime - LastServerFireTime;
-
-	TWeakObjectPtr<ACharacter> WeakChar(OwnerCharacter);
+	const float CurrentTime = World->GetTimeSeconds();
+	const float TimeSinceLastShot = CurrentTime - LastServerFireTime;
 
 	if (TimeSinceLastShot >= FireRate)
 	{
 		Server_ExecuteFire();
-		LastServerFireTime = CurrentTime;
+		if (!IsValid(this) || !IsActive() || !bIsServerFire || !IsValid(World)) return;
+		LastServerFireTime = World->GetTimeSeconds();
 
 		// 세미오토(샷건/저격 등): 한 발만 나가고 홀드해도 루프를 걸지 않음. 다음 발은 재클릭해야 함.
 		if (!bFullAuto) return;
 
-		FTimerDelegate Delegate;
-		Delegate.BindLambda([this, WeakChar]()
-			{
-				if (!WeakChar.IsValid()) return;
-				Server_ExecuteFire();
-				LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-			});
-
-		OwnerCharacter->GetWorldTimerManager().SetTimer(
+		World->GetTimerManager().SetTimer(
 			ServerFireTimerHandle,
-			Delegate,
+			this,
+			&UAbility_Fire::HandleServerFireLoop,
 			FireRate,
 			true
 		);
@@ -192,52 +230,90 @@ void UAbility_Fire::ActivateAbility()
 	{
 		// 쿨다운이 아직 안 끝났으면, 버튼을 누르고 있는 동안만 짧은 간격으로 재검사해서 쿨다운이 끝나는
 		// 순간 자동 발사한다(상용 게임과 동일). 손을 떼면(bIsServerFire=false) 그 즉시 재검사를 멈춘다.
-		constexpr float RetryInterval = 0.02f;
-
-		FTimerDelegate RetryDelegate;
-		RetryDelegate.BindLambda([this, WeakChar, bFullAuto, FireRate]()
-			{
-				if (!WeakChar.IsValid() || !bIsServerFire)
-				{
-					if (WeakChar.IsValid())
-					{
-						WeakChar->GetWorldTimerManager().ClearTimer(ServerFireRetryTimerHandle);
-					}
-					return;
-				}
-
-				ACharacter* Char = WeakChar.Get();
-				const float Now = Char->GetWorld()->GetTimeSeconds();
-				if (Now - LastServerFireTime < FireRate) return; // 아직 준비 안 됨, 다음 재검사 때 다시 확인
-
-				Char->GetWorldTimerManager().ClearTimer(ServerFireRetryTimerHandle);
-
-				Server_ExecuteFire();
-				LastServerFireTime = Now;
-
-				if (!bFullAuto) return;
-
-				FTimerDelegate LoopDelegate;
-				LoopDelegate.BindLambda([this, WeakChar]()
-					{
-						if (!WeakChar.IsValid()) return;
-						Server_ExecuteFire();
-						LastServerFireTime = WeakChar->GetWorld()->GetTimeSeconds();
-					});
-
-				Char->GetWorldTimerManager().SetTimer(ServerFireTimerHandle, LoopDelegate, FireRate, true);
-			});
-
-		OwnerCharacter->GetWorldTimerManager().SetTimer(ServerFireRetryTimerHandle, RetryDelegate, RetryInterval, true);
+		World->GetTimerManager().SetTimer(
+			ServerFireRetryTimerHandle,
+			this,
+			&UAbility_Fire::HandleServerFireRetry,
+			FireRetryIntervalSeconds,
+			true);
 	}
+}
+
+void UAbility_Fire::HandleServerFireLoop()
+{
+	UWorld* World = IsValid(OwnerCharacter) ? OwnerCharacter->GetWorld() : nullptr;
+	if (!IsActive() || !bIsServerFire)
+	{
+		ClearServerFireTimers(World);
+		bIsServerFire = false;
+		return;
+	}
+	if (!IsValid(OwnerCharacter) || !OwnerCharacter->HasAuthority() || !World)
+	{
+		EndAbility(true);
+		return;
+	}
+
+	Server_ExecuteFire();
+	if (!IsValid(this) || !IsActive() || !bIsServerFire || !IsValid(World)) return;
+
+	LastServerFireTime = World->GetTimeSeconds();
+}
+
+void UAbility_Fire::HandleServerFireRetry()
+{
+	UWorld* World = IsValid(OwnerCharacter) ? OwnerCharacter->GetWorld() : nullptr;
+	if (!IsActive() || !bIsServerFire)
+	{
+		ClearServerFireTimers(World);
+		bIsServerFire = false;
+		return;
+	}
+	if (!IsValid(OwnerCharacter) || !OwnerCharacter->HasAuthority() || !World)
+	{
+		EndAbility(true);
+		return;
+	}
+
+	const float Now = World->GetTimeSeconds();
+	if (Now - LastServerFireTime < ActiveServerFireRate) return;
+
+	World->GetTimerManager().ClearTimer(ServerFireRetryTimerHandle);
+	Server_ExecuteFire();
+	if (!IsValid(this) || !IsActive() || !bIsServerFire || !IsValid(World)) return;
+
+	LastServerFireTime = World->GetTimeSeconds();
+	if (bServerFullAuto)
+	{
+		World->GetTimerManager().SetTimer(
+			ServerFireTimerHandle,
+			this,
+			&UAbility_Fire::HandleServerFireLoop,
+			ActiveServerFireRate,
+			true);
+	}
+}
+
+void UAbility_Fire::ClearServerFireTimers(UWorld* World)
+{
+	if (!World && IsValid(OwnerCharacter))
+	{
+		World = OwnerCharacter->GetWorld();
+	}
+	if (!World) return;
+
+	World->GetTimerManager().ClearTimer(ServerFireTimerHandle);
+	World->GetTimerManager().ClearTimer(ServerFireRetryTimerHandle);
 }
 
 void UAbility_Fire::EndAbility(bool bWasCancelled)
 {
-	if (!OwnerCharacter || !OwnerCharacter->HasAuthority()) return;
-	OwnerCharacter->GetWorldTimerManager().ClearTimer(ServerFireTimerHandle);
-	OwnerCharacter->GetWorldTimerManager().ClearTimer(ServerFireRetryTimerHandle);
+	UWorld* World = IsValid(OwnerCharacter)
+		? OwnerCharacter->GetWorld()
+		: (IsValid(AvatarActor) ? AvatarActor->GetWorld() : nullptr);
+	ClearServerFireTimers(World);
 	bIsServerFire = false;
+	bServerFullAuto = false;
 	CurrentBloomAngle = 0.f; // 트리거를 놓으면 다음 사격은 다시 최소 탄퍼짐부터 시작
 	ShotsFiredInBurst = 0;
 	Super::EndAbility(bWasCancelled);
@@ -263,21 +339,45 @@ void UAbility_Fire::Client_ExecuteFire(AActor* InOwner)
 
 void UAbility_Fire::Server_ExecuteFire()
 {
+	UWorld* World = IsValid(OwnerCharacter) ? OwnerCharacter->GetWorld() : nullptr;
+	AMainGameMode* GameMode = World ? World->GetAuthGameMode<AMainGameMode>() : nullptr;
+	if (!IsValid(OwnerCharacter) || !OwnerCharacter->HasAuthority() || !GameMode || !GameMode->IsBattleRoyalePhase())
+	{
+		EndAbility(true);
+		return;
+	}
+
 	// 연사 도중 조준을 풀면 그 즉시(다음 발부터) 발사가 멈추도록 매 발마다 재확인한다.
 	IAbilityCheckInterface* CheckInterface = Cast<IAbilityCheckInterface>(OwnerCharacter);
-	if (!CheckInterface || !CheckInterface->IsCharacterAiming()) return;
+	if (!CheckInterface || !CheckInterface->IsCharacterAiming())
+	{
+		EndAbility(true);
+		return;
+	}
 
 	IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter);
 	IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
 	IPhaseGameStateInterface* GS_Interface = Cast<IPhaseGameStateInterface>(OwnerCharacter->GetWorld()->GetGameState());
 
-	if (!Owner || !PS_Interface || !GS_Interface) return;
+	if (!Owner || !PS_Interface || !GS_Interface)
+	{
+		EndAbility(true);
+		return;
+	}
 
 	UCameraComponent* FollowCamera = Owner->GetFollowCameraComponent();
-	if (!FollowCamera) return;
+	if (!FollowCamera)
+	{
+		EndAbility(true);
+		return;
+	}
 
 	AWeapon* EquippedGun = Cast<AWeapon>(Owner->GetEquippedWeapon());
-	if (!EquippedGun || !EquippedGun->Setting || !EquippedGun->m_pMesh) return;
+	if (!IsValid(EquippedGun) || !IsValid(EquippedGun->Setting) || !IsValid(EquippedGun->m_pMesh))
+	{
+		EndAbility(true);
+		return;
+	}
 
 	AMainCharacter* MainChar = Cast<AMainCharacter>(OwnerCharacter);
 	if (MainChar)
@@ -349,7 +449,6 @@ void UAbility_Fire::Server_ExecuteFire()
 	}
 	FVector MuzzleLoc = EquippedGun->m_pMesh->GetSocketLocation(TEXT("Muzzle"));
 
-	UWorld* World = OwnerCharacter->GetWorld();
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(OwnerCharacter);
 
@@ -393,10 +492,21 @@ void UAbility_Fire::Server_ExecuteFire()
 				OwnerCharacter,
 				nullptr
 			);
+
+			// ApplyDamage가 사망/라운드 종료를 동기적으로 일으키면 사격 Ability와 무기가
+			// 바로 정리될 수 있다. 그 뒤의 펠릿이나 피드백에서 해제된 상태를 다시 쓰지 않는다.
+			if (!IsValid(this) || !IsActive() || !bIsServerFire || !IsValid(World) ||
+				!IsValid(OwnerCharacter) || !IsValid(EquippedGun) || !IsValid(EquippedGun->Setting))
+			{
+				return;
+			}
 		}
 	}
 
-	EquippedGun->Setting->Multicast_PlayFireFeedback(MuzzleLoc, RepresentativeTargetLoc);
+	if (IsActive() && bIsServerFire && IsValid(EquippedGun) && IsValid(EquippedGun->Setting))
+	{
+		EquippedGun->Setting->Multicast_PlayFireFeedback(MuzzleLoc, RepresentativeTargetLoc);
+	}
 }
 
 float UAbility_Fire::CalculateDamage(int32 Base, int32 Level) const

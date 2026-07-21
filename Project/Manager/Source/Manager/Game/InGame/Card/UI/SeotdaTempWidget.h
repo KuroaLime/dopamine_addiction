@@ -148,10 +148,22 @@ public:
 	bool bSelected1 = false;
 	bool bSelected2 = false;
 
-	bool bLocalSelectionSubmitted = false;
+	bool bLocalRevealPending = false;
+	bool bLocalSelectionPending = false;
+	int32 LastHandledRevealResultSerial = 0;
+	int32 LastHandledSelectionResultSerial = 0;
+	bool bLastKnownRevealConfirmed = false;
+	FString LocalSelectionFeedback;
+	FString LastPublicCardVisualSignature;
 	double LastBetActionTimeSeconds = -1000.0;
 
 	TArray<int32> LastSeenCardInstanceIds;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> PublicCardsTitleText = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UHorizontalBox> PublicCardsBox = nullptr;
 
 	// ===== Card Image Map =====
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|Images", meta = (AllowPrivateAccess = "true"))
@@ -193,6 +205,9 @@ private:
 	void ResetLocalRoundUiState(const TArray<FOwnedCardInfo>& Cards);
 	void SetCardSelectionButtonsEnabled(bool bEnabled);
 	void SetBetButtonsEnabled(bool bEnabled);
+	void ClearLocalCardSelection();
+	void EnsurePublicCardsPanel();
+	void RefreshPublicCardVisuals();
 
 	void ToggleCardSelection(int32 CardIndex);
 	int32 GetSelectedCount() const;
@@ -201,6 +216,7 @@ private:
 	void RequestBetAction(EBettingAction Action);
 
 	FString BuildCardIdListString(const TArray<int32>& Ids) const;
+	FString BuildPublicCardSummary() const;
 
 	// ===== Card Button Events =====
 	UFUNCTION()

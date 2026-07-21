@@ -1,4 +1,5 @@
 #pragma once
+#include <cstddef>
 #include <cstdint>
 
 enum class PacketType : uint16_t
@@ -37,6 +38,8 @@ enum class PacketType : uint16_t
     D2L_SERVER_READY_NOTIFY = 301,
     L2D_MATCH_END_ACK = 302,
     L2D_SERVER_READY_ACK = 303,
+    D2L_MATCH_ABORT_NOTIFY = 304,
+    L2D_MATCH_ABORT_ACK = 305,
 };
 
 struct PacketHeader
@@ -46,13 +49,22 @@ struct PacketHeader
 };
 static_assert(sizeof(PacketHeader) == 4, "PacketHeader must be 4 bytes");
 
-static constexpr uint8_t MAX_ID_LEN = 16;
+static constexpr uint8_t MAX_ID_CHAR_LEN = 8;
+static constexpr uint8_t MAX_ID_LEN = MAX_ID_CHAR_LEN * 4;
 static constexpr uint8_t MAX_PW_LEN = 16;
-static constexpr uint8_t MAX_NICKNAME_LEN = 16;
+static constexpr uint8_t MAX_NICKNAME_CHAR_LEN = 8;
+static constexpr uint8_t MAX_NICKNAME_LEN = MAX_NICKNAME_CHAR_LEN * 4;
 
 static constexpr uint8_t ROOM_MAX_PLAYERS = 4;
 static constexpr uint8_t ROOM_TITLE_MAX = 96;
 static constexpr uint16_t PACKET_SIZE_MAX = 4096;
+static constexpr uint16_t ROOM_LIST_MAX_ROOMS = 32;
+static constexpr std::size_t ROOM_INFO_WIRE_FIXED_SIZE = 12;
+
+static_assert(
+    2u + ROOM_LIST_MAX_ROOMS * (ROOM_INFO_WIRE_FIXED_SIZE + ROOM_TITLE_MAX) <=
+        PACKET_SIZE_MAX - sizeof(PacketHeader),
+    "Worst-case room list must fit in one packet");
 
 enum class LoginResult : uint8_t
 {

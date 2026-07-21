@@ -31,6 +31,7 @@ void AMainPlayerState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& Out
 	DOREPLIFETIME(AMainPlayerState, CurPlayerData);
 	DOREPLIFETIME_CONDITION(AMainPlayerState, OwnedCards, COND_OwnerOnly);
 	DOREPLIFETIME(AMainPlayerState, PublicCardCount);
+	DOREPLIFETIME(AMainPlayerState, RevealedCard);
 	DOREPLIFETIME(AMainPlayerState, AccumulatedUpgrades);
 	DOREPLIFETIME(AMainPlayerState, CarriedAmmoList);
 }
@@ -162,6 +163,10 @@ bool AMainPlayerState::RemoveOwnedCardByInstanceId(int32 CardInstanceId, FOwnedC
 	OutRemovedCard = OwnedCards[Index];
 	OwnedCards.RemoveAt(Index);
 	PublicCardCount = OwnedCards.Num();
+	if (RevealedCard.CardInstanceId == CardInstanceId)
+	{
+		ClearRevealedCard();
+	}
 	OnOwnedCardsChangedNative.Broadcast(OwnedCards);
 	ForceNetUpdate();
 	return true;
@@ -176,7 +181,35 @@ void AMainPlayerState::ClearOwnedCards()
 
 	OwnedCards.Empty();
 	PublicCardCount = 0;
+	ClearRevealedCard();
 	OnOwnedCardsChangedNative.Broadcast(OwnedCards);
+	ForceNetUpdate();
+}
+
+void AMainPlayerState::SetRevealedCard(const FOwnedCardInfo& CardInfo)
+{
+	if (!HasAuthority() ||
+		CardInfo.CardInstanceId <= 0 ||
+		CardInfo.CardID == ECardID::None ||
+		!HasOwnedCardInstance(CardInfo.CardInstanceId))
+	{
+		return;
+	}
+
+	RevealedCard = CardInfo;
+	OnRep_RevealedCard();
+	ForceNetUpdate();
+}
+
+void AMainPlayerState::ClearRevealedCard()
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	RevealedCard = FOwnedCardInfo();
+	OnRep_RevealedCard();
 	ForceNetUpdate();
 }
 
@@ -197,6 +230,7 @@ void AMainPlayerState::CaptureReconnectSnapshot(FMainPlayerReconnectSnapshot& Ou
 	OutSnapshot.PlayerData = PlayerData;
 	OutSnapshot.CurPlayerData = CurPlayerData;
 	OutSnapshot.OwnedCards = OwnedCards;
+	OutSnapshot.RevealedCard = RevealedCard;
 	OutSnapshot.AccumulatedUpgrades = AccumulatedUpgrades;
 	OutSnapshot.CarriedAmmoList = CarriedAmmoList;
 	OutSnapshot.LastRandomUpgradeClaimedRound = LastRandomUpgradeClaimedRound;
@@ -216,6 +250,7 @@ void AMainPlayerState::RestoreReconnectSnapshot(const FMainPlayerReconnectSnapsh
 	CurPlayerData = Snapshot.CurPlayerData;
 	OwnedCards = Snapshot.OwnedCards;
 	PublicCardCount = OwnedCards.Num();
+	RevealedCard = Snapshot.RevealedCard;
 	AccumulatedUpgrades = Snapshot.AccumulatedUpgrades;
 	CarriedAmmoList = Snapshot.CarriedAmmoList;
 	LastRandomUpgradeClaimedRound = Snapshot.LastRandomUpgradeClaimedRound;
@@ -224,6 +259,7 @@ void AMainPlayerState::RestoreReconnectSnapshot(const FMainPlayerReconnectSnapsh
 	OnRep_CurPlayerData(OldCurPlayerData);
 	OnOwnedCardsChangedNative.Broadcast(OwnedCards);
 	OnRep_PublicCardCount();
+	OnRep_RevealedCard();
 	OnRep_AccumulatedUpgrades();
 	ForceNetUpdate();
 }
@@ -235,7 +271,12 @@ void AMainPlayerState::AddGold(float Amount)
 		return;
 	}
 
-	CurPlayerData.HoldingGold += Amount;
+	const int64 Delta = static_cast<int64>(FMath::RoundToInt(Amount));
+	const int64 NewGold = static_cast<int64>(CurPlayerData.HoldingGold) + Delta;
+	CurPlayerData.HoldingGold = static_cast<int32>(FMath::Clamp<int64>(
+		NewGold,
+		0,
+		MAX_int32));
 	ForceNetUpdate();
 }
 
@@ -301,6 +342,10 @@ void AMainPlayerState::OnRep_OwnedCards()
 }
 
 void AMainPlayerState::OnRep_PublicCardCount()
+{
+}
+
+void AMainPlayerState::OnRep_RevealedCard()
 {
 }
 

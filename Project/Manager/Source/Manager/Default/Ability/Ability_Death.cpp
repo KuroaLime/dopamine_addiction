@@ -6,7 +6,6 @@
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/MainPlayerState.h"
-#include "Game/InGame/Card/CardGameService.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/PlayerController.h"
 
@@ -40,7 +39,7 @@ void UAbility_Death::ActivateAbility()
 		return;
 	}
 
-	DropAllPlayerCards();
+	DropDeathGold();
 
 	RespawnTime = 5;
 
@@ -68,7 +67,7 @@ void UAbility_Death::EndAbility(bool bWasCancelled)
 	Super::EndAbility(bWasCancelled);
 }
 
-void UAbility_Death::DropAllPlayerCards()
+void UAbility_Death::DropDeathGold()
 {
 	if (!OwnerCharacter || !OwnerCharacter->HasAuthority())
 	{
@@ -88,12 +87,12 @@ void UAbility_Death::DropAllPlayerCards()
 	}
 
 	AMainGameMode* GameMode = Cast<AMainGameMode>(GetWorld()->GetAuthGameMode());
-	if (!GameMode)
+	if (!GameMode || !GameMode->IsBattleRoyalePhase())
 	{
 		return;
 	}
 
-	GameMode->GetCardGameService()->DropOwnedCardsFromPlayer(PlayerState, OwnerCharacter->GetActorLocation());
+	GameMode->DropGoldFromPlayer(PlayerState, OwnerCharacter);
 }
 
 void UAbility_Death::Server_ExecuteCountDown()

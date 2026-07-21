@@ -32,6 +32,12 @@ void UAbility_PickUp::ActivateAbility()
 	// (Ability_Death가 GetCardGameService()를 직접 쓰는 패턴과 동일)
 	if (AMainPlayerController* PC = Cast<AMainPlayerController>(OwnerCharacter->GetController()))
 	{
+		if (!PC->TryConsumeCardPickupRequest())
+		{
+			EndAbilityNow();
+			return;
+		}
+
 		if (UWorld* World = OwnerCharacter->GetWorld())
 		{
 			if (AMainGameMode* GM = World->GetAuthGameMode<AMainGameMode>())
