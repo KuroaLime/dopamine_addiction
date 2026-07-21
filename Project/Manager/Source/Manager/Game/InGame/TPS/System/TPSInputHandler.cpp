@@ -36,6 +36,16 @@ void UTPSInputHandler::InputActivate()
 
 void UTPSInputHandler::InputDeactivate()
 {
+	if (UPFGASC* ASC = ResolveOwnerASC())
+	{
+		FGameplayTagContainer ActionTags;
+		ActionTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire")));
+		ActionTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Aim")));
+		ActionTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Crouch")));
+		ActionTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.CardDiscard")));
+		ASC->CancelAbilitiesWithTag(ActionTags);
+	}
+
 	Super::InputDeactivate();
 }
 

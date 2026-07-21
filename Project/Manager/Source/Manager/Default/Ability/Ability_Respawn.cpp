@@ -1,79 +1,83 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
 #include "Default/Ability/Ability_Respawn.h"
-#include "Game/InGame/TPS/System/TPSUIHandler.h"
-#include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
-#include "Game/InGame/Interface/PhasePlayerStateInterface.h"
-#include "GameFramework/Character.h"
-#include "GameFramework/PlayerController.h"
-#include "GameFramework/PlayerState.h"
+#include "Game/InGame/MainCharacter.h"
 #include "Game/InGame/MainGameMode.h"
-#include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
-#include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
+#include "Engine/World.h"
+#include "GameFramework/PlayerState.h"
+#include "TimerManager.h"
 
 UAbility_Respawn::UAbility_Respawn()
 {
-	AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Respawn")));
+    AbilityTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Respawn")));
 }
 
 void UAbility_Respawn::LocalActivateWithOwner(AActor* InOwner)
 {
-	ACharacter* Character = Cast<ACharacter>(InOwner);
-	if (!Character) return;
-
-	IPhasePlayerControllerInterface* PC =
-		Cast<IPhasePlayerControllerInterface>(Character->GetController());
-	if (!PC) return;
-
-	PC->SwitchState(EGamePhase::TPS);
+    // The server switches the client to TPS only after placement and state restoration succeed.
 }
 
 void UAbility_Respawn::LocalCancelWithOwner(AActor* InOwner)
 {
-
 }
 
 void UAbility_Respawn::ActivateAbility()
 {
     if (!OwnerCharacter || !OwnerCharacter->HasAuthority())
     {
-        EndAbilityNow();
+        EndAbility(true);
         return;
     }
-    IPhasePlayerControllerInterface* PC =
-        Cast<IPhasePlayerControllerInterface>(OwnerCharacter->GetController());
-    if (!PC)
-    {
-        EndAbilityNow();
-        return;
-    }
-    IPhasePlayerStateInterface* PS =
-        Cast<IPhasePlayerStateInterface>(OwnerCharacter->GetPlayerState());
-    if (PS) PS->ResetState();
 
-    USpawnManagerComponent* ActiveSpawnManager = USpawnManagerComponent::GetActive(OwnerCharacter);
-    if (ActiveSpawnManager)
+    ServerRespawnRetryCount = 0;
+    TryCompleteServerRespawn();
+}
+
+void UAbility_Respawn::TryCompleteServerRespawn()
+{
+    if (!IsActive())
     {
-        AA_Spawn* RandomSpawn = ActiveSpawnManager->GetRandomCenterSpawnActor();
-        if (RandomSpawn)
-        {
-            FVector SpawnLocation = RandomSpawn->GetActorLocation() + FVector(0.f, 0.f, 200.f);
-            FRotator SpawnRotation = RandomSpawn->GetActorRotation();
-            SpawnRotation.Yaw += 90.0f;
-            OwnerCharacter->TeleportTo(SpawnLocation, SpawnRotation);
-            AController* Controller = OwnerCharacter->GetController();
-            if (Controller)
-            {
-                Controller->SetControlRotation(SpawnRotation);
-            }
-        }
+        return;
     }
-    PC->SwitchState(EGamePhase::TPS);
-    EndAbilityNow();
+
+    UWorld* World = GetWorld();
+    AMainCharacter* MainCharacter = Cast<AMainCharacter>(OwnerCharacter);
+    AMainGameMode* GameMode = World ? Cast<AMainGameMode>(World->GetAuthGameMode()) : nullptr;
+    if (!World || !MainCharacter)
+    {
+        EndAbility(true);
+        return;
+    }
+
+    if (GameMode && GameMode->TryRespawnPlayerAuthoritatively(MainCharacter, TEXT("DeathRespawn")))
+    {
+        EndAbilityNow();
+        return;
+    }
+
+    ++ServerRespawnRetryCount;
+    if (ServerRespawnRetryCount == 1 || ServerRespawnRetryCount % 10 == 0)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("[DS] RespawnPending Player=%s Attempt=%d Reason=SpawnOrPlacementNotReady"),
+            *GetNameSafe(MainCharacter->GetPlayerState()),
+            ServerRespawnRetryCount);
+    }
+
+    World->GetTimerManager().SetTimer(
+        ServerRespawnRetryTimerHandle,
+        this,
+        &UAbility_Respawn::TryCompleteServerRespawn,
+        1.f,
+        false);
 }
 
 void UAbility_Respawn::EndAbility(bool bWasCancelled)
 {
-	Super::EndAbility(bWasCancelled);
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(ServerRespawnRetryTimerHandle);
+    }
+    ServerRespawnRetryCount = 0;
+    Super::EndAbility(bWasCancelled);
 }

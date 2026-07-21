@@ -33,6 +33,7 @@
 #include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
+#include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
 
 namespace
 {
@@ -844,6 +845,93 @@ bool AMainGameMode::IsBattleRoyalePhase() const
     return bGameStarted
         && CurrentServerPhase == EDediServerPhase::BattleRoyale
         && bBattleRoyaleCardsSpawnedThisPhase;
+}
+
+bool AMainGameMode::TryRespawnPlayerAuthoritatively(AMainCharacter* Character, const TCHAR* Context)
+{
+    UWorld* World = GetWorld();
+    if (!HasAuthority() || !World || !IsValid(Character))
+    {
+        return false;
+    }
+
+    AMainPlayerController* MainPC = Cast<AMainPlayerController>(Character->GetController());
+    AMainPlayerState* PlayerState = Character->GetPlayerState<AMainPlayerState>();
+    if (!MainPC || !PlayerState)
+    {
+        UE_LOG(LogManager, Warning,
+            TEXT("[DS] RespawnRetry Reason=MissingControllerOrPlayerState Character=%s Context=%s"),
+            *GetNameSafe(Character),
+            Context ? Context : TEXT("<NULL>"));
+        return false;
+    }
+
+    // A delayed death timer may complete after the round has already left combat.
+    // Restore health, but let the current phase strategy own visibility, input and placement.
+    if (!IsBattleRoyalePhase())
+    {
+        PlayerState->ResetState();
+        DS_LOG(TEXT("[DS] RespawnNormalizedOutsideBattle Player=%s Phase=%s Context=%s"),
+            *GetNameSafe(PlayerState),
+            GetServerPhaseName(CurrentServerPhase),
+            Context ? Context : TEXT("<NULL>"));
+        return true;
+    }
+
+    USpawnManagerComponent* ActiveSpawnManager = USpawnManagerComponent::GetActive(this);
+    AA_Spawn* SpawnPoint = ActiveSpawnManager ? ActiveSpawnManager->GetRandomCenterSpawnActor() : nullptr;
+    if (!IsValid(SpawnPoint))
+    {
+        return false;
+    }
+
+    FTransform SpawnTransform = SpawnPoint->GetActorTransform();
+    SpawnTransform.AddToTranslation(FVector(0.f, 0.f, 200.f));
+    FRotator SpawnRotation = SpawnTransform.GetRotation().Rotator();
+    SpawnRotation.Yaw += 90.f;
+    SpawnTransform.SetRotation(SpawnRotation.Quaternion());
+
+    // HP and controls are restored only after the authoritative placement succeeded.
+    if (!TeleportPlayerAuthoritatively(MainPC, SpawnTransform, Context))
+    {
+        return false;
+    }
+
+    PlayerState->ResetState();
+    Character->UnCrouch();
+    Character->SetReplicateMovement(true);
+    Character->SetActorHiddenInGame(false);
+    Character->SetActorEnableCollision(true);
+
+    if (UCharacterMovementComponent* MoveComp = Character->GetCharacterMovement())
+    {
+        MoveComp->SetBase(nullptr);
+        MoveComp->StopMovementImmediately();
+        MoveComp->SetMovementMode(MOVE_Walking);
+    }
+
+    if (AWeapon* EquippedWeapon = Character->GetEquippedGun())
+    {
+        EquippedWeapon->SetActorHiddenInGame(false);
+        EquippedWeapon->SetActorEnableCollision(true);
+        EquippedWeapon->SetActorTickEnabled(true);
+        if (EquippedWeapon->Setting)
+        {
+            EquippedWeapon->Setting->CancelReloadLock();
+        }
+        EquippedWeapon->ForceNetUpdate();
+    }
+
+    Character->ForceNetUpdate();
+    MainPC->SetGameplayInputLocked(false, Context);
+    MainPC->SwitchState(EGamePhase::TPS);
+
+    DS_LOG(TEXT("[DS] RespawnComplete Player=%s Spawn=%s Location=%s Context=%s"),
+        *GetNameSafe(PlayerState),
+        *GetNameSafe(SpawnPoint),
+        *Character->GetActorLocation().ToString(),
+        Context ? Context : TEXT("<NULL>"));
+    return true;
 }
 
 bool AMainGameMode::IsShopRequestAllowed() const
@@ -2199,15 +2287,7 @@ void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
         GetServerPhaseName(CurrentServerPhase));
 
     ClearDediRecoveryWatchdogStage(TEXT("CardGateReady"));
-    StartTimedServerPhase(EDediServerPhase::PreBattleShop, GetPreBattleShopDuration());
-    if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
-    {
-        GS->SetShopAvailable(true);
-    }
-    if (USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this))
-    {
-        SpawnMgr->SetShopBarriersActive(true);
-    }
+    StartPreBattleShopPhase();
     //StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
 }
 
@@ -2457,6 +2537,11 @@ void AMainGameMode::StartPreBattleShopPhase()
         GS->ForceNetUpdate();
     }
 
+    if (USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this))
+    {
+        SpawnMgr->SetShopBarriersActive(true);
+    }
+
     SetPlayerPawnGameplayState(true, false, true, TEXT("PreBattleShop"));
     DS_LOG(TEXT("[DS] PreBattleShop Open Round=%d Duration=%d"),
         CurrentRound,
@@ -2469,6 +2554,11 @@ void AMainGameMode::FinishPreBattleShopPhase()
     {
         GS->SetShopAvailable(false);
         GS->ForceNetUpdate();
+    }
+
+    if (USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this))
+    {
+        SpawnMgr->SetShopBarriersActive(false);
     }
 
     CloseShopForAllPlayers(TEXT("PreBattleShopFinished"));
@@ -3642,15 +3732,7 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
         StartBattleRoyalePhase();
         break;
     case EDediServerPhase::PreBattleShop:
-        if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
-        {
-            GS->SetShopAvailable(false);
-        }
-        if (USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this))
-        {
-            SpawnMgr->SetShopBarriersActive(false);
-        }
-        StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
+        FinishPreBattleShopPhase();
         break;
     default:
         break;

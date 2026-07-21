@@ -59,7 +59,6 @@ void UAbility_Reload::ActivateAbility()
 								WeaponComp->SetCurrentAmmo(CurrentAmmo);
 								PS->AddCarriedAmmoByWeaponType(WeaponType, -AmmoToLoad);
 
-								WeaponComp->Multicast_PlayReloadFeedback();
 
 								// 장전 잠금: 이 시간 동안 사격 불가. 무기 데이터의 ReloadTime(초) 사용, 없으면 기본 1.5초.
 								// 장전 잠금: 이 시간 동안 사격 불가. 
@@ -110,6 +109,12 @@ void UAbility_Reload::ActivateAbility()
 
 
 
+								// Upgrade values represent reload speed, so reduce the lock duration.
+								const float ReloadSpeedMultiplier =
+									FMath::Max(PS->GetFinalReloadTimeMultiplier(), 1.0f);
+								ReloadLockTime = FMath::Max(0.1f, ReloadLockTime / ReloadSpeedMultiplier);
+
+								WeaponComp->Multicast_PlayReloadFeedback();
 								WeaponComp->StartReloadLock(ReloadLockTime);
 							}
 						}

@@ -51,6 +51,17 @@ void UWeaponComponent::StartReloadLock(float Duration)
     }
 }
 
+void UWeaponComponent::CancelReloadLock()
+{
+    if (!GetOwner() || !GetOwner()->HasAuthority()) return;
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(ReloadLockTimerHandle);
+    }
+    ClearReloadLock();
+    GetOwner()->ForceNetUpdate();
+}
+
 void UWeaponComponent::ClearReloadLock()
 {
     bIsReloading = false;

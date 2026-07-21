@@ -71,7 +71,7 @@ void UHealthRegenComponent::TickRegeneration()
     AMainPlayerState* PS = PawnOwner ? Cast<AMainPlayerState>(PawnOwner->GetPlayerState()) : nullptr;
     if (PS)
     {
-        float MaxHP = PS->GetFinalMaxHP(100.0f);
+        float MaxHP = PS->GetCurrentMaxHP();
         float RegenRate = PS->GetFinalRegenRate(0.0f);
 
         if (PS->CurPlayerData.CurrentHP <= 0 || PS->CurPlayerData.CurrentHP >= MaxHP)
@@ -87,8 +87,13 @@ void UHealthRegenComponent::TickRegeneration()
         {
             int32 AddHP = FMath::FloorToInt(FractionalHP);
             FractionalHP -= static_cast<float>(AddHP);
-            PS->CurPlayerData.CurrentHP = FMath::Min(static_cast<int32>(MaxHP), PS->CurPlayerData.CurrentHP + AddHP);
-            PS->ForceNetUpdate();
+            const int32 OldHP = PS->CurPlayerData.CurrentHP;
+            PS->CurPlayerData.CurrentHP = FMath::Min(static_cast<int32>(MaxHP), OldHP + AddHP);
+            if (PS->CurPlayerData.CurrentHP != OldHP)
+            {
+                PS->OnHPChnageNative.Broadcast(PS->CurPlayerData.CurrentHP);
+                PS->ForceNetUpdate();
+            }
         }
     }
 }

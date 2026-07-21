@@ -312,7 +312,7 @@ void UAbility_Fire::EndAbility(bool bWasCancelled)
 
 	// Standalone/리슨서버 호스트(HasAuthority()==true라서 LocalCancelWithOwner가 안 불리는 경우):
 	// 여기서도 조준점 블룸 표시를 리셋해야 트리거를 놓았을 때 크로스헤어가 원래 크기로 돌아온다.
-	if (OwnerCharacter->IsLocallyControlled())
+	if (IsValid(OwnerCharacter) && OwnerCharacter->IsLocallyControlled())
 	{
 		if (IAbilityOwnerInterface* Owner = Cast<IAbilityOwnerInterface>(OwnerCharacter))
 		{
@@ -376,7 +376,7 @@ void UAbility_Fire::Client_ExecuteFire(AActor* InOwner)
 		}
 		WeaponComp->SetCurrentBloomDegrees(NewBloomDegrees);
 
-		UE_LOG(LogTemp, Warning, TEXT("[DS] Bloom: WeaponID=%d Shots=%d BloomPerShot=%.2f MaxBloomAngle=%.2f BloomStartShotCount=%d CurrentBloomAngle=%.2f"),
+		UE_LOG(LogTemp, VeryVerbose, TEXT("[CL] Bloom: WeaponID=%d Shots=%d BloomPerShot=%.2f MaxBloomAngle=%.2f BloomStartShotCount=%d CurrentBloomAngle=%.2f"),
 			static_cast<int32>(WeaponID), NewShotsFired, BloomPerShot, MaxBloomAngle, BloomStartShotCount, NewBloomDegrees);
 
 		// Tick을 기다리지 않고 발사 즉시 조준점 위젯을 갱신한다.
@@ -502,7 +502,7 @@ void UAbility_Fire::Server_ExecuteFire()
 
 	// Standalone/리슨서버 호스트처럼 이 캐릭터를 로컬에서도 직접 조작 중이면(HasAuthority()==true라서
 	// LocalActivateWithOwner/Client_ExecuteFire가 아예 안 불리는 경우), 여기서도 조준점 UI를 갱신해야 한다.
-	if (OwnerCharacter->IsLocallyControlled())
+	if (IsValid(OwnerCharacter) && OwnerCharacter->IsLocallyControlled())
 	{
 		EquippedGun->Setting->SetCurrentBloomDegrees(CurrentBloomAngle);
 		if (UTpsPlayerMainHUD* HUD = ResolveHUD(OwnerCharacter))
