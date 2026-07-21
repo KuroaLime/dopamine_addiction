@@ -273,8 +273,12 @@ bool bMyTurn,
 bool bMyRevealConfirmed,
 bool bMySubmitted,
 bool bMyFolded,
-bool bRoundResolved
+bool bRoundResolved,
+const TArray<FSeotdaOpponentInfo>& Opponents
 );
+
+UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
+TArray<FSeotdaOpponentInfo> SeotdaUiOpponents;
 
 UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
 int32 SeotdaUiRound = 0;

@@ -1478,6 +1478,34 @@ return;
 AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
 const FString TurnName = TurnPS ? TurnPS->GetPlayerName() : TEXT("None");
 
+// 좌석 순서(SeotdaTurnOrder) 기준으로 전체 플레이어의 좌석 정보를 한 번만 만들어 두고,
+// 아래 루프에서 각 클라이언트별로 "자기 자신만 제외"해서 재사용한다.
+// (자기 제외 판단은 이름이 아니라 AMainPlayerState 포인터로 해야 동명이인 문제가 없다.)
+TArray<TPair<AMainPlayerState*, FSeotdaOpponentInfo>> AllSeatInfo;
+AllSeatInfo.Reserve(SeotdaTurnOrder.Num());
+for (int32 SeatIndex = 0; SeatIndex < SeotdaTurnOrder.Num(); ++SeatIndex)
+{
+AMainPlayerState* SeatPS = SeotdaTurnOrder[SeatIndex].Get();
+if (!SeatPS)
+{
+continue;
+}
+
+FSeotdaOpponentInfo Info;
+Info.PlayerName = SeatPS->GetPlayerName();
+Info.SeatIndex = SeatIndex;
+Info.bIsCurrentTurn = (TurnPS == SeatPS);
+
+if (const FSeotdaPlayerRoundState* State = SeotdaRoundStates.Find(SeatPS))
+{
+Info.BetMoney = State->BetMoney;
+Info.bFolded = State->bFolded;
+Info.bAllIn = State->bAllIn;
+}
+
+AllSeatInfo.Add(TPair<AMainPlayerState*, FSeotdaOpponentInfo>(SeatPS, Info));
+}
+
 for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
 {
 AMainPlayerController* MPC = Cast<AMainPlayerController>(It->Get());
@@ -1509,6 +1537,16 @@ NeedCall = FMath::Max(0, SeotdaCurrentBet - MyBetMoney);
 }
 }
 
+TArray<FSeotdaOpponentInfo> Opponents;
+Opponents.Reserve(AllSeatInfo.Num());
+for (const TPair<AMainPlayerState*, FSeotdaOpponentInfo>& SeatEntry : AllSeatInfo)
+{
+if (SeatEntry.Key != PS)
+{
+Opponents.Add(SeatEntry.Value);
+}
+}
+
 MPC->Client_UpdateSeotdaState(
 OwnerGM->GetCurrentRound(),
 bSeotdaBettingActive,
@@ -1521,7 +1559,8 @@ bMyTurn,
 bMyRevealConfirmed,
 bMySubmitted,
 bMyFolded,
-bSeotdaRoundResolved
+bSeotdaRoundResolved,
+Opponents
 );
 }
 }

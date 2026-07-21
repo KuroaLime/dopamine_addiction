@@ -1659,7 +1659,8 @@ bool bMyTurn,
 bool bMyRevealConfirmed,
 bool bMySubmitted,
 bool bMyFolded,
-bool bRoundResolved
+bool bRoundResolved,
+const TArray<FSeotdaOpponentInfo>& Opponents
 )
 {
 SeotdaUiRound = Round;
@@ -1674,6 +1675,7 @@ bSeotdaUiMyRevealConfirmed = bMyRevealConfirmed;
 bSeotdaUiMySubmitted = bMySubmitted;
 bSeotdaUiMyFolded = bMyFolded;
 bSeotdaUiRoundResolved = bRoundResolved;
+SeotdaUiOpponents = Opponents;
 
 UE_LOG(LogTemp, Warning,
 TEXT("[CL] SeotdaState Round=%d Betting=%d Turn=%s Pot=%d CurrentBet=%d MyBet=%d NeedCall=%d MyTurn=%d Revealed=%d Submitted=%d Folded=%d Resolved=%d"),

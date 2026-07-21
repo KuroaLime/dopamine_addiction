@@ -99,6 +99,44 @@ void USeotdaTempWidget::BindWidgetsByName()
 	// Lobby Button
 	BindWidgetByName(LobbyButton, TEXT("Lobby_Button"));
 	BindWidgetByName(LobbyText, TEXT("Lobby_Text"));
+
+	// Opponent Seats
+	BindWidgetByName(Seat0_NameText, TEXT("Seat0_NameText"));
+	BindWidgetByName(Seat1_NameText, TEXT("Seat1_NameText"));
+	BindWidgetByName(Seat2_NameText, TEXT("Seat2_NameText"));
+	BindWidgetByName(Seat3_NameText, TEXT("Seat3_NameText"));
+	BindWidgetByName(Seat0_ChipText, TEXT("Seat0_ChipText"));
+	BindWidgetByName(Seat1_ChipText, TEXT("Seat1_ChipText"));
+	BindWidgetByName(Seat2_ChipText, TEXT("Seat2_ChipText"));
+	BindWidgetByName(Seat3_ChipText, TEXT("Seat3_ChipText"));
+	BindWidgetByName(Seat0_FoldedOverlay, TEXT("Seat0_FoldedOverlay"));
+	BindWidgetByName(Seat1_FoldedOverlay, TEXT("Seat1_FoldedOverlay"));
+	BindWidgetByName(Seat2_FoldedOverlay, TEXT("Seat2_FoldedOverlay"));
+	BindWidgetByName(Seat3_FoldedOverlay, TEXT("Seat3_FoldedOverlay"));
+	BindWidgetByName(Seat0_TurnHighlight, TEXT("Seat0_TurnHighlight"));
+	BindWidgetByName(Seat1_TurnHighlight, TEXT("Seat1_TurnHighlight"));
+	BindWidgetByName(Seat2_TurnHighlight, TEXT("Seat2_TurnHighlight"));
+	BindWidgetByName(Seat3_TurnHighlight, TEXT("Seat3_TurnHighlight"));
+
+	SeatNameTexts[0] = Seat0_NameText;
+	SeatNameTexts[1] = Seat1_NameText;
+	SeatNameTexts[2] = Seat2_NameText;
+	SeatNameTexts[3] = Seat3_NameText;
+
+	SeatChipTexts[0] = Seat0_ChipText;
+	SeatChipTexts[1] = Seat1_ChipText;
+	SeatChipTexts[2] = Seat2_ChipText;
+	SeatChipTexts[3] = Seat3_ChipText;
+
+	SeatFoldedOverlays[0] = Seat0_FoldedOverlay;
+	SeatFoldedOverlays[1] = Seat1_FoldedOverlay;
+	SeatFoldedOverlays[2] = Seat2_FoldedOverlay;
+	SeatFoldedOverlays[3] = Seat3_FoldedOverlay;
+
+	SeatTurnHighlights[0] = Seat0_TurnHighlight;
+	SeatTurnHighlights[1] = Seat1_TurnHighlight;
+	SeatTurnHighlights[2] = Seat2_TurnHighlight;
+	SeatTurnHighlights[3] = Seat3_TurnHighlight;
 }
 
 void USeotdaTempWidget::BindButtonEvents()
@@ -444,6 +482,49 @@ FString USeotdaTempWidget::BuildPublicCardSummary() const
 		: TEXT("Public Cards: No players");
 }
 
+void USeotdaTempWidget::RefreshOpponentSeats(AMainPlayerController* PC)
+{
+	if (!PC) return;
+
+	const TArray<FSeotdaOpponentInfo>& Opponents = PC->SeotdaUiOpponents;
+
+	for (int32 i = 0; i < SeotdaOpponentSeatCount; ++i)
+	{
+		if (!Opponents.IsValidIndex(i))
+		{
+			// 상대가 좌석 수보다 적으면 남는 좌석은 통째로 숨긴다.
+			if (SeatNameTexts[i]) SeatNameTexts[i]->SetVisibility(ESlateVisibility::Collapsed);
+			if (SeatChipTexts[i]) SeatChipTexts[i]->SetVisibility(ESlateVisibility::Collapsed);
+			if (SeatFoldedOverlays[i]) SeatFoldedOverlays[i]->SetVisibility(ESlateVisibility::Collapsed);
+			if (SeatTurnHighlights[i]) SeatTurnHighlights[i]->SetVisibility(ESlateVisibility::Collapsed);
+			continue;
+		}
+
+		const FSeotdaOpponentInfo& Info = Opponents[i];
+
+		if (SeatNameTexts[i])
+		{
+			SeatNameTexts[i]->SetVisibility(ESlateVisibility::Visible);
+			SeatNameTexts[i]->SetText(FText::FromString(Info.PlayerName));
+		}
+		if (SeatChipTexts[i])
+		{
+			SeatChipTexts[i]->SetVisibility(ESlateVisibility::Visible);
+			SeatChipTexts[i]->SetText(Info.bAllIn
+				? FText::FromString(FString::Printf(TEXT("ALL-IN (%d)"), Info.BetMoney))
+				: FText::AsNumber(Info.BetMoney));
+		}
+		if (SeatFoldedOverlays[i])
+		{
+			SeatFoldedOverlays[i]->SetVisibility(Info.bFolded ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		}
+		if (SeatTurnHighlights[i])
+		{
+			SeatTurnHighlights[i]->SetVisibility(Info.bIsCurrentTurn ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		}
+	}
+}
+
 void USeotdaTempWidget::RefreshFromPlayerState()
 {
 	AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
@@ -455,6 +536,8 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 		}
 		return;
 	}
+
+	RefreshOpponentSeats(PC);
 
 	if (LastHandledRevealResultSerial != PC->SeotdaUiRevealResultSerial)
 	{

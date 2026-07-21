@@ -21,3 +21,28 @@ enum class EBettingAction : uint8
     Die,
     AllIn
 };
+
+// 섯다 테이블 UI에서 "다른 플레이어" 좌석 표시용. 서버가 매 상태 변화마다 각 클라이언트에 브로드캐스트한다.
+USTRUCT(BlueprintType)
+struct FSeotdaOpponentInfo
+{
+    GENERATED_BODY()
+
+    UPROPERTY(BlueprintReadOnly)
+    FString PlayerName;
+
+    UPROPERTY(BlueprintReadOnly)
+    int32 BetMoney = 0;
+
+    UPROPERTY(BlueprintReadOnly)
+    bool bFolded = false;
+
+    UPROPERTY(BlueprintReadOnly)
+    bool bAllIn = false;
+
+    UPROPERTY(BlueprintReadOnly)
+    bool bIsCurrentTurn = false;
+
+    UPROPERTY(BlueprintReadOnly)
+    int32 SeatIndex = 0;
+};
