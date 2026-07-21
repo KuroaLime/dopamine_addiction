@@ -180,7 +180,7 @@ protected:
 	class UTexture2D* PlayerIcon_Image = nullptr;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI", meta = (AllowPrivateAccess = "true"))
-	TMap<ECardID, UTexture2D*> CardTextureMap;
+	TObjectPtr<class UCardTextureSet> CardTextures;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "UI", meta = (AllowPrivateAccess = "true"))
 	UTexture2D* EmptyCardTexture = nullptr;

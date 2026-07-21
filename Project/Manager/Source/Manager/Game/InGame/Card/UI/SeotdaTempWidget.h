@@ -161,9 +161,9 @@ public:
 
 	TArray<int32> LastSeenCardInstanceIds;
 
-	// ===== Card Image Map =====
+	// ===== Card Textures (공용 DataAsset) =====
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|Images", meta = (AllowPrivateAccess = "true"))
-	TMap<ECardID, UTexture2D*> CardImageMap;
+	TObjectPtr<class UCardTextureSet> CardTextures;
 
 	// ===== Button Skin (일반/호버/클릭 상태별 텍스처, 모든 버튼에 공용 적용) =====
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|Images", meta = (AllowPrivateAccess = "true"))

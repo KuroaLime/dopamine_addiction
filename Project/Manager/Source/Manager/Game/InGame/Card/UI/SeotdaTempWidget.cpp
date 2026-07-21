@@ -1,4 +1,5 @@
 #include "Game/InGame/Card/UI/SeotdaTempWidget.h"
+#include "Game/InGame/Card/Data/CardTextureSet.h"
 
 #include "Components/Button.h"
 #include "Components/Image.h"
@@ -35,6 +36,10 @@ namespace
 void USeotdaTempWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (!CardTextures)
+	{
+		CardTextures = UCardTextureSet::LoadDefault();
+	}
 
 	// BindWidget으로 자동 해석된 좌석 포인터를, 인덱스 순회가 필요한 로직을 위해 편의 배열에 채워 넣는다.
 	SeatBackgrounds[0] = Seat0Bg;
@@ -338,9 +343,9 @@ void USeotdaTempWidget::RefreshOpponentSeats(AMainPlayerController* PC)
 		{
 			if (Info.bHasRevealedCard)
 			{
-				if (UTexture2D* const* Texture = CardImageMap.Find(Info.RevealedCardID); Texture && *Texture)
+				if (UTexture2D* Texture = CardTextures ? CardTextures->GetFront(Info.RevealedCardID) : nullptr)
 				{
-					SeatCardImages[i]->SetBrushFromTexture(*Texture, true);
+					SeatCardImages[i]->SetBrushFromTexture(Texture, true);
 				}
 				SeatCardImages[i]->SetVisibility(ESlateVisibility::Visible);
 			}
@@ -475,10 +480,9 @@ void USeotdaTempWidget::UpdateCardButtonText(UTextBlock* TargetText, UImage* Car
 	TargetText->SetText(FText::FromString(FormatCardShortLabel(CardInfo.CardID)));
 
 	// 카드 이미지 업데이트
-	if (CardImage && CardImageMap.Contains(CardInfo.CardID))
+	if (CardImage && CardTextures)
 	{
-		UTexture2D* Texture = CardImageMap[CardInfo.CardID];
-		if (Texture)
+		if (UTexture2D* Texture = CardTextures->GetFront(CardInfo.CardID))
 		{
 			CardImage->SetBrush(FSlateImageBrush(Texture, FVector2D(256.0f, 256.0f)));
 		}

@@ -1,4 +1,5 @@
 #include "Game/InGame/TPS/UI/TpsPlayerMainHUD.h"
+#include "Game/InGame/Card/Data/CardTextureSet.h"
 #include "Default/Data/CharacterStateComponent.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
@@ -38,6 +39,10 @@ void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacte
 void UTpsPlayerMainHUD::NativeConstruct()
 {
     Super::NativeConstruct();
+    if (!CardTextures)
+    {
+        CardTextures = UCardTextureSet::LoadDefault();
+    }
 
     // BindWidget으로 자동 해석된 포인터를, 인덱스 순회가 필요한 로직을 위해 편의 배열에 채워 넣는다.
     CardImage[0] = Card00;
@@ -167,10 +172,14 @@ void UTpsPlayerMainHUD::OnOwnedCardsChanged(const TArray<FOwnedCardInfo>& NewCar
         {
             Cards[i] = ECardID::None;
 
-            UTexture2D** FoundTexture = CardTextureMap.Find(Cards[i]);
-            if (FoundTexture && *FoundTexture)
+            UTexture2D* BackTexture = EmptyCardTexture;
+            if (!BackTexture && CardTextures)
             {
-                CardImage[i]->SetBrushFromTexture(*FoundTexture);
+                BackTexture = CardTextures->BackTexture;
+            }
+            if (BackTexture)
+            {
+                CardImage[i]->SetBrushFromTexture(BackTexture);
                 CardImage[i]->SetVisibility(ESlateVisibility::Visible);
             }
         }
@@ -212,10 +221,11 @@ void UTpsPlayerMainHUD::OnCardFlipMidpoint()
 {
     for(int32 i = 0; i < CardTotalNumber; i++)
     {
-        UTexture2D** FoundTexture = CardTextureMap.Find(Cards[i]);
-        if (FoundTexture && *FoundTexture)
+        if (Cards[i] == ECardID::None || !CardTextures) continue;
+
+        if (UTexture2D* FrontTexture = CardTextures->GetFront(Cards[i]))
         {
-            CardImage[i]->SetBrushFromTexture(*FoundTexture);
+            CardImage[i]->SetBrushFromTexture(FrontTexture);
             CardImage[i]->SetVisibility(ESlateVisibility::Visible);
         }
     }

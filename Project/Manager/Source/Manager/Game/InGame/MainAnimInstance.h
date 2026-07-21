@@ -69,6 +69,10 @@ protected:
 	UPROPERTY(BlueprintReadOnly, Category = "Locomotion")
 	bool bIsCrouched;
 
+	/** 카드 라운드 좌석 착석 여부 (MM_Sitting_Idle 포즈 전환용) */
+	UPROPERTY(BlueprintReadOnly, Category = "Locomotion")
+	bool bIsSitting;
+
 	//================ 전투(상체) ================
 	/** 조준 여부 (GAS 태그 State.Movement.Aiming) */
 	UPROPERTY(BlueprintReadOnly, Category = "Combat")

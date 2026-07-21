@@ -23,6 +23,7 @@ UMainAnimInstance::UMainAnimInstance()
 	bShouldMove = false;
 	bIsInAir = false;
 	bIsCrouched = false;
+	bIsSitting = false;
 
 	bIsAiming = false;
 	bIsFiring = false;
@@ -81,6 +82,8 @@ void UMainAnimInstance::NativeUpdateAnimation(float DeltaSeconds)
 		const bool bIsAccelerating = MoveComp->GetCurrentAcceleration().SizeSquared() > 0.f;
 		bShouldMove = (GroundSpeed > 3.f) && bIsAccelerating;
 	}
+
+	bIsSitting = OwningCharacter->IsSitting();
 
 	// 3) 조준 + Aim Offset(상하/좌우) + 사격 (GAS)
 	bIsAiming = OwningCharacter->IsCharacterAiming(); // 태그 State.Movement.Aiming

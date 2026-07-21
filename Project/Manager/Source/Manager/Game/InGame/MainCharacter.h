@@ -47,6 +47,8 @@ public:
 	virtual UPFGASC* GetASC() const override { return AbilitySystemComponent; }
 	virtual UCharacterStateComponent* GetCharacterState() const override { return CharacterState; }
 	virtual void EquipWeapon(EWeaponType NewWeaponID) override;
+	virtual void SetSitting(bool bNewSitting) override;
+	bool IsSitting() const { return bIsSitting; }
 
 protected:
 	virtual void BeginPlay() override;
@@ -105,6 +107,10 @@ protected:
 	AWeapon* m_pEquippedGun;
 	UFUNCTION()
 	void OnRep_EquippedGun();
+
+	// 카드 라운드 좌석 착석 여부. MainAnimInstance가 매 프레임 읽어서 앉기 포즈(MM_Sitting_Idle)로 전환한다.
+	UPROPERTY(Replicated, BlueprintReadOnly, Category = "State")
+	bool bIsSitting = false;
 
 	UPROPERTY(EditAnywhere, Category = "GAS")
 	TArray<TSubclassOf<UPFGAbility>> DefaultAbilities;

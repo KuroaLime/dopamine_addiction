@@ -39,7 +39,7 @@ public:
 	void UpdateTime(int32 time) const override;
 
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Card", meta = (AllowPrivateAccess = "true"))
-	TArray<class UTexture2D*> CardFrontImages;
+	TObjectPtr<class UCardTextureSet> CardTextures;
 
 	UFUNCTION(BlueprintCallable, Category = "Card")
 	void SetRandomCardFrontImage();
