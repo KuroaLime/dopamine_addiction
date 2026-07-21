@@ -70,6 +70,12 @@ void UCRoundandTimerWidget::UpdateRoundImage() {
 	AMainGameState* GS = Cast<AMainGameState>(GetWorld()->GetGameState());
 	if (!GS) return;
 	int32 CurrentRound = GS->CurrentRound;
+
+	if (Round_Text)
+	{
+		Round_Text->SetText(FText::FromString(FString::Printf(TEXT("Round %d"), CurrentRound)));
+	}
+
 	for (int32 i = 0; i < 4; ++i)
 	{
 		if (Round[i])

@@ -59,6 +59,16 @@ void UTpsPlayerMainHUD::NativeConstruct()
     Lv_Image[5] = LvWeaponRange;
     Lv_Image[6] = LvWeaponMagazine;
     Lv_Image[7] = LvWeaponReload;
+
+    LvText[0] = LvHealthText;
+    LvText[1] = LvHealthRegenText;
+    LvText[2] = LvMoveSpeedText;
+    LvText[3] = LvWeaponDamageText;
+    LvText[4] = LvWeaponFireRateText;
+    LvText[5] = LvWeaponRangeText;
+    LvText[6] = LvWeaponMagazineText;
+    LvText[7] = LvWeaponReloadText;
+
     for (int32 i = 0; i < LvTotalNumber; ++i)
     {
         if (!Lv_Image[i]) continue;
@@ -281,16 +291,29 @@ void UTpsPlayerMainHUD::UpdateLevel()
     {
         const FAccumulatedUpgrades& Upgrades = CachedPlayerState->GetAccumulatedUpgrades();
 
-        // 각 레벨 아이콘 업데이트
         // 0: Health, 1: HealthRegen, 2: MoveSpeed, 3: WeaponDamage, 4: FireRate, 5: Range, 6: Magazine, 7: Reload
-        if (LvLinearMID[0]) LvLinearMID[0]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvHealth + Upgrades.LvHealth) * 0.2f);
-        if (LvLinearMID[1]) LvLinearMID[1]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvHealthRegeneration + Upgrades.LvHealthRegen) * 0.2f);
-        if (LvLinearMID[2]) LvLinearMID[2]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvMovementSpeed + Upgrades.LvMoveSpeed) * 0.2f);
-        if (LvLinearMID[3]) LvLinearMID[3]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponDamage * 0.2f);
-        if (LvLinearMID[4]) LvLinearMID[4]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponFireRate * 0.2f);
-        if (LvLinearMID[5]) LvLinearMID[5]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponRange * 0.2f);
-        if (LvLinearMID[6]) LvLinearMID[6]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponMagazine * 0.2f);
-        if (LvLinearMID[7]) LvLinearMID[7]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponReload * 0.2f);
+        const int32 Levels[LvTotalNumber] = {
+            CachedPlayerState->PlayerData.LvHealth + Upgrades.LvHealth,
+            CachedPlayerState->PlayerData.LvHealthRegeneration + Upgrades.LvHealthRegen,
+            CachedPlayerState->PlayerData.LvMovementSpeed + Upgrades.LvMoveSpeed,
+            Upgrades.LvWeaponDamage,
+            Upgrades.LvWeaponFireRate,
+            Upgrades.LvWeaponRange,
+            Upgrades.LvWeaponMagazine,
+            Upgrades.LvWeaponReload
+        };
+
+        for (int32 i = 0; i < LvTotalNumber; ++i)
+        {
+            if (Lv_Image[i] && LvLinearMID[i])
+            {
+                LvLinearMID[i]->SetScalarParameterValue(LvLinearWipeParamName, Levels[i] * 0.2f);
+            }
+            if (LvText[i])
+            {
+                LvText[i]->SetText(FText::FromString(FString::Printf(TEXT("LV. %d"), Levels[i])));
+            }
+        }
     }
 }
 

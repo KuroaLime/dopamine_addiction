@@ -32,4 +32,8 @@ private:
 	class UTextBlock* Timer_Text;
 	UPROPERTY()
 	class UImage* Round[4];
+
+	// 현재 몇 번째 라운드인지 표시하는 텍스트.
+	UPROPERTY(meta = (BindWidget))
+	class UTextBlock* Round_Text = nullptr;
 };
