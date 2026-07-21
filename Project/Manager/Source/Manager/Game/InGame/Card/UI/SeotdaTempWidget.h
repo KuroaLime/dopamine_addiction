@@ -7,9 +7,6 @@
 #include "Widgets/SWidget.h"
 #include "SeotdaTempWidget.generated.h"
 
-class UBorder;
-class UVerticalBox;
-class UHorizontalBox;
 class UButton;
 class UTextBlock;
 class UImage;
@@ -30,165 +27,123 @@ public:
 	void RefreshFromPlayerState();
 
 public:
-	// ===== Root UI =====
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UBorder> RootBorder = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UVerticalBox> RootBox = nullptr;
-
 	// ===== Card Selection UI =====
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> TitleText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> InfoTxt = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> CardInfoText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> Card0Btn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> Card1Btn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> Card2Btn = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> CardButton0 = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Card0Txt = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Card1Txt = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Card2Txt = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> CardButton1 = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> Card0Img = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> Card1Img = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> Card2Img = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> CardButton2 = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> SubmitBtn = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> CardText0 = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> CardText1 = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> CardText2 = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UImage> CardImage0 = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UImage> CardImage1 = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UImage> CardImage2 = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> SubmitButton = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> SubmitText = nullptr;
-
-	// ===== Status/Info UI =====
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> StatusText = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> BetInfoText = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> ResultText = nullptr;
+	// ===== Top Bar (라운드 · 팟 · 현재턴) =====
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> RoundTxt = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> PotTxt = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> TurnTxt = nullptr;
 
 	// ===== Betting UI =====
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> CheckButton = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> CheckText = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> CallButton = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> CallText = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> QuarterButton = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> QuarterText = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> HalfButton = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> HalfText = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> DdadangButton = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> DdadangText = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> PpingButton = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> PpingText = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> AllInButton = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> AllInText = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> DieButton = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> DieText = nullptr;
+	// 각 버튼의 캡션("체크"/"콜" 등)은 항상 고정 텍스트라 C++이 갱신할 일이 없다.
+	// 버튼 라벨은 바인딩 없이 버튼 내부에 텍스트를 직접 넣으면 된다.
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> CheckBtn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> CallBtn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> QuarterBtn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> HalfBtn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> DdadangBtn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> PpingBtn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> AllInBtn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> DieBtn = nullptr;
 
 	// ===== Lobby UI =====
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UButton> LobbyButton = nullptr;
-
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> LobbyText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UButton> LobbyBtn = nullptr;
 
 	// ===== Opponent Seat UI (다른 플레이어 좌석 최대 4명) =====
 	static constexpr int32 SeotdaOpponentSeatCount = 4;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> Seat0_NameText = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> Seat1_NameText = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> Seat2_NameText = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> Seat3_NameText = nullptr;
+	// 좌석 배경(두루마리 장식). 그 자리에 상대가 없으면 이것도 같이 숨긴다.
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> Seat0Bg = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> Seat1Bg = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> Seat2Bg = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> Seat3Bg = nullptr;
 
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> Seat0_ChipText = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> Seat1_ChipText = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> Seat2_ChipText = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UTextBlock> Seat3_ChipText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Seat0Name = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Seat1Name = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Seat2Name = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Seat3Name = nullptr;
 
-	// 폴드(다이)한 좌석을 가리는 오버레이. 폴드 시 Visible, 아니면 Collapsed.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UWidget> Seat0_FoldedOverlay = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UWidget> Seat1_FoldedOverlay = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UWidget> Seat2_FoldedOverlay = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UWidget> Seat3_FoldedOverlay = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Seat0Chip = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Seat1Chip = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Seat2Chip = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UTextBlock> Seat3Chip = nullptr;
 
 	// 현재 턴인 좌석을 강조하는 테두리/하이라이트. 해당 좌석 턴일 때만 Visible.
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UWidget> Seat0_TurnHighlight = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UWidget> Seat1_TurnHighlight = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UWidget> Seat2_TurnHighlight = nullptr;
-	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
-	TObjectPtr<UWidget> Seat3_TurnHighlight = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> Seat0Turn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> Seat1Turn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> Seat2Turn = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UWidget> Seat3Turn = nullptr;
 
-	// 전체 좌석을 감싸는 루트(있으면 통째로 접어 숨기는 용도). 위 4묶음을 인덱스로 순회하기 위한 편의 배열.
+	// 그 좌석 플레이어가 현재 공개한 카드(있으면). 없으면 Collapsed.
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> Seat0Card = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> Seat1Card = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> Seat2Card = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	TObjectPtr<UImage> Seat3Card = nullptr;
+
+	// Seat0~3을 인덱스로 순회하기 위한 편의 배열(NativeConstruct에서 채움).
+	TObjectPtr<UWidget> SeatBackgrounds[SeotdaOpponentSeatCount] = {};
 	TObjectPtr<UTextBlock> SeatNameTexts[SeotdaOpponentSeatCount] = {};
 	TObjectPtr<UTextBlock> SeatChipTexts[SeotdaOpponentSeatCount] = {};
-	TObjectPtr<UWidget> SeatFoldedOverlays[SeotdaOpponentSeatCount] = {};
 	TObjectPtr<UWidget> SeatTurnHighlights[SeotdaOpponentSeatCount] = {};
+	TObjectPtr<UImage> SeatCardImages[SeotdaOpponentSeatCount] = {};
 
 	void RefreshOpponentSeats(class AMainPlayerController* PC);
 
@@ -202,61 +157,48 @@ public:
 	int32 LastHandledRevealResultSerial = 0;
 	int32 LastHandledSelectionResultSerial = 0;
 	bool bLastKnownRevealConfirmed = false;
-	FString LocalSelectionFeedback;
-	FString LastPublicCardVisualSignature;
 	double LastBetActionTimeSeconds = -1000.0;
 
 	TArray<int32> LastSeenCardInstanceIds;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UTextBlock> PublicCardsTitleText = nullptr;
-
-	UPROPERTY(Transient)
-	TObjectPtr<UHorizontalBox> PublicCardsBox = nullptr;
 
 	// ===== Card Textures (공용 DataAsset) =====
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|Images", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<class UCardTextureSet> CardTextures;
 
+	// ===== Button Skin (일반/호버/클릭 상태별 텍스처, 모든 버튼에 공용 적용) =====
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|Images", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTexture2D> ButtonNormalTexture = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|Images", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTexture2D> ButtonHoveredTexture = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|Images", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTexture2D> ButtonPressedTexture = nullptr;
+
 	// ===== Card Animations =====
 	UPROPERTY(Transient, meta = (BindWidgetAnim), BlueprintReadOnly)
-	TObjectPtr<UWidgetAnimation> Card0_HoverAnim = nullptr;
+	TObjectPtr<UWidgetAnimation> Card0Hover = nullptr;
+	UPROPERTY(Transient, meta = (BindWidgetAnim), BlueprintReadOnly)
+	TObjectPtr<UWidgetAnimation> Card0Select = nullptr;
 
 	UPROPERTY(Transient, meta = (BindWidgetAnim), BlueprintReadOnly)
-	TObjectPtr<UWidgetAnimation> Card0_SelectAnim = nullptr;
+	TObjectPtr<UWidgetAnimation> Card1Hover = nullptr;
+	UPROPERTY(Transient, meta = (BindWidgetAnim), BlueprintReadOnly)
+	TObjectPtr<UWidgetAnimation> Card1Select = nullptr;
 
 	UPROPERTY(Transient, meta = (BindWidgetAnim), BlueprintReadOnly)
-	TObjectPtr<UWidgetAnimation> Card1_HoverAnim = nullptr;
-
+	TObjectPtr<UWidgetAnimation> Card2Hover = nullptr;
 	UPROPERTY(Transient, meta = (BindWidgetAnim), BlueprintReadOnly)
-	TObjectPtr<UWidgetAnimation> Card1_SelectAnim = nullptr;
-
-	UPROPERTY(Transient, meta = (BindWidgetAnim), BlueprintReadOnly)
-	TObjectPtr<UWidgetAnimation> Card2_HoverAnim = nullptr;
-
-	UPROPERTY(Transient, meta = (BindWidgetAnim), BlueprintReadOnly)
-	TObjectPtr<UWidgetAnimation> Card2_SelectAnim = nullptr;
+	TObjectPtr<UWidgetAnimation> Card2Select = nullptr;
 
 private:
-	// ===== Widget Binding =====
-	void BindWidgetsByName();
-
-	template<typename WidgetType>
-	void BindWidgetByName(TObjectPtr<WidgetType>& OutWidget, const FName& WidgetName)
-	{
-		OutWidget = Cast<WidgetType>(GetWidgetFromName(WidgetName));
-	}
-
 	// ===== Event Binding =====
 	void BindButtonEvents();
+	void ApplyButtonSkin();
 
 	// ===== UI Logic =====
 	void ResetLocalRoundUiState(const TArray<FOwnedCardInfo>& Cards);
 	void SetCardSelectionButtonsEnabled(bool bEnabled);
 	void SetBetButtonsEnabled(bool bEnabled);
 	void ClearLocalCardSelection();
-	void EnsurePublicCardsPanel();
-	void RefreshPublicCardVisuals();
 
 	void ToggleCardSelection(int32 CardIndex);
 	int32 GetSelectedCount() const;
@@ -265,7 +207,6 @@ private:
 	void RequestBetAction(EBettingAction Action);
 
 	FString BuildCardIdListString(const TArray<int32>& Ids) const;
-	FString BuildPublicCardSummary() const;
 
 	// ===== Card Button Events =====
 	UFUNCTION()

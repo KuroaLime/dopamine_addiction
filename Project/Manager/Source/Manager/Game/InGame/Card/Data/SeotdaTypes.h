@@ -3,6 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Game/Protocol_Client/Protocol_InGame.h"
 #include "SeotdaTypes.generated.h"
 
 // 섯다 베팅 액션. 실제 섯다 구현(ECardID + FSeotdaHandResult + UCardGameService)에서 사용한다.
@@ -45,4 +46,10 @@ struct FSeotdaOpponentInfo
 
     UPROPERTY(BlueprintReadOnly)
     int32 SeatIndex = 0;
+
+    UPROPERTY(BlueprintReadOnly)
+    bool bHasRevealedCard = false;
+
+    UPROPERTY(BlueprintReadOnly)
+    ECardID RevealedCardID = ECardID::None;
 };

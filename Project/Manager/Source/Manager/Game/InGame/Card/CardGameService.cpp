@@ -1503,6 +1503,12 @@ Info.bFolded = State->bFolded;
 Info.bAllIn = State->bAllIn;
 }
 
+Info.bHasRevealedCard = SeatPS->HasRevealedCard();
+if (Info.bHasRevealedCard)
+{
+Info.RevealedCardID = SeatPS->GetRevealedCard().CardID;
+}
+
 AllSeatInfo.Add(TPair<AMainPlayerState*, FSeotdaOpponentInfo>(SeatPS, Info));
 }
 
