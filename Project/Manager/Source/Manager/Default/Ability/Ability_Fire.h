@@ -43,7 +43,8 @@ private:
 	// 여기 멤버에 저장하면 모든 캐릭터/세션이 상태를 공유해 발사 도중 꼬인다. WeaponComponent에 저장한다.
 
 
-
+	float ActiveServerFireRate;
+	bool bServerFullAuto;
 	void HandleServerFireLoop();
 	void HandleServerFireRetry();
 
