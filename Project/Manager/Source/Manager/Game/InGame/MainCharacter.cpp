@@ -170,6 +170,18 @@ void AMainCharacter::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 {
 	Super::GetLifetimeReplicatedProps(OutLifetimeProps);
 	DOREPLIFETIME(AMainCharacter, m_pEquippedGun);
+	DOREPLIFETIME(AMainCharacter, bIsSitting);
+}
+
+void AMainCharacter::SetSitting(bool bNewSitting)
+{
+	if (!HasAuthority())
+	{
+		return;
+	}
+
+	bIsSitting = bNewSitting;
+	ForceNetUpdate();
 }
 
 void AMainCharacter::OnRep_EquippedGun()

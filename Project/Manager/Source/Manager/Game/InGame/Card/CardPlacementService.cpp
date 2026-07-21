@@ -456,7 +456,7 @@ bool FCardPlacementService::IsCardDropLocationClear(const FVector& CandidateLoca
     const bool bOverlapsBlockingObject = World->OverlapBlockingTestByChannel(
         CandidateLocation,
         FQuat::Identity,
-        ECC_WorldDynamic,
+        ECC_Pawn,
         CheckShape,
         QueryParams);
 

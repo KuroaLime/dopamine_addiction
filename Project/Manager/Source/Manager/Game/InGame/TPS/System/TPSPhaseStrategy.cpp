@@ -81,6 +81,7 @@ void UTPSPhaseStrategy::LoadStage()
 				if (IPhaseCharacterInterface* IC = Cast<IPhaseCharacterInterface>(PlayerPawn))
 				{
 					IC->EquipWeapon(RoundWeapon);
+					IC->SetSitting(false);
 				}
 			}
 		}

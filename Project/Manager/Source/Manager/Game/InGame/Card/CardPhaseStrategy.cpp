@@ -2,6 +2,8 @@
 #include "Manager.h"
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/Card/CardGameService.h"
+#include "Game/InGame/Interface/PhaseCharacterInterface.h"
+#include "GameFramework/PlayerController.h"
 
 void UCardPhaseStrategy::OnPhaseStart()
 {
@@ -17,6 +19,21 @@ void UCardPhaseStrategy::OnPhaseStart()
 		GM->GetCardGameService()->EnsureThreeCardsForCardGame();
 		GM->GetCardGameService()->ResetSeotdaRoundStates();
 		GM->BroadcastSwitchMode(EGamePhase::Card);
+
+		if (UWorld* World = GetWorld())
+		{
+			for (FConstPlayerControllerIterator It = World->GetPlayerControllerIterator(); It; ++It)
+			{
+				APlayerController* PC = It->Get();
+				if (APawn* PlayerPawn = PC ? PC->GetPawn() : nullptr)
+				{
+					if (IPhaseCharacterInterface* IC = Cast<IPhaseCharacterInterface>(PlayerPawn))
+					{
+						IC->SetSitting(true);
+					}
+				}
+			}
+		}
 	}
 
 	LoadStage();

@@ -15,6 +15,7 @@
 #include "Game/InGame/TPS/Actor/GoldDropActor.h"
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "Game/InGame/Interface/PhaseCharacterInterface.h"
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/Character.h"
@@ -1571,6 +1572,18 @@ void AMainGameMode::SynchronizePlayerWithCurrentServerPhase(AMainPlayerControlle
     if (bBattleRoyaleCardBundleCommitted)
     {
         RequestClientCardBundleExpectation(PlayerController);
+    }
+
+    // 카드 좌석에 앉아있어야 하는 페이즈 중에 재접속하면, 새로 스폰된 폰도 앉은 상태로 맞춰준다.
+    const bool bShouldBeSitting =
+        CurrentServerPhase == EDediServerPhase::TransitionToCard
+        || CurrentServerPhase == EDediServerPhase::CardGame
+        || CurrentServerPhase == EDediServerPhase::Result
+        || CurrentServerPhase == EDediServerPhase::TransitionToBattle
+        || CurrentServerPhase == EDediServerPhase::GameEnd;
+    if (IPhaseCharacterInterface* IC = Cast<IPhaseCharacterInterface>(PlayerController->GetPawn()))
+    {
+        IC->SetSitting(bShouldBeSitting);
     }
 
     DS_LOG(TEXT("[DS] Reconnect PhaseSync Player=%s ClientPhase=%d StreamLevel=%s ServerPhase=%s Round=%d"),
