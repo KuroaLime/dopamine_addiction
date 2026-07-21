@@ -937,7 +937,10 @@ bool AMainGameMode::DropGoldFromPlayer(AMainPlayerState* TargetPS, AActor* Sourc
         *GoldDrop->GetActorLocation().ToCompactString());
     return true;
 }
-
+bool AMainGameMode::IsPreBattleShopPhase() const
+{
+    return bGameStarted && CurrentServerPhase == EDediServerPhase::PreBattleShop;
+}
 void AMainGameMode::InitStrategy()
 {
     StrategyMap.Empty();
@@ -2196,7 +2199,16 @@ void AMainGameMode::TrySpawnBattleRoyaleCardsWhenStreamReady()
         GetServerPhaseName(CurrentServerPhase));
 
     ClearDediRecoveryWatchdogStage(TEXT("CardGateReady"));
-    StartPreBattleShopPhase();
+    StartTimedServerPhase(EDediServerPhase::PreBattleShop, GetPreBattleShopDuration());
+    if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
+    {
+        GS->SetShopAvailable(true);
+    }
+    if (USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this))
+    {
+        SpawnMgr->SetShopBarriersActive(true);
+    }
+    //StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
 }
 
 void AMainGameMode::ScheduleBattleRoyaleCardSpawnGateRetry(
@@ -2574,12 +2586,48 @@ void AMainGameMode::StartTransitionToBattlePhase()
     CardGameService->ClearCardDrops();
     CardGameService->ClearRoundCardsForAllPlayers();
     ClearDisconnectedPlayerRoundCards(TEXT("TransitionToBattle"));
+
+    RedeployToSpawnPoint();
+
     SetPlayerPawnGameplayState(true, false, true, TEXT("TransitionToBattle"));
     ClearPlayerPawnMovementBases(TEXT("TransitionToBattle"));
     BroadcastSwitchLevel(TEXT("Card_Game_Stage"), GetPersistentMainWorldLevelName());
     StartTimedServerPhase(EDediServerPhase::TransitionToBattle, GetTransitionDuration());
 }
+void AMainGameMode::RedeployToSpawnPoint() {
+    TArray<AMainPlayerController*> Controllers;
+    for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+    {
+        if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(It->Get()))
+        {
+            Controllers.Add(MainPC);
+        }
+    }
 
+    USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this);
+    if (!SpawnMgr)
+    {
+        return;
+    }
+
+    // 원본 배열을 제자리에서 섞기만 함(제거 없음) -> 매 라운드 반복 호출해도 풀이 고갈되지 않음.
+    SpawnMgr->ShuffleAvailableSpawns();
+    const TArray<AA_Spawn*>& Pool = SpawnMgr->GetAvailableSpawnsView();
+
+    int32 SpawnIndex = 0;
+    for (AMainPlayerController* aController : Controllers)
+    {
+        if (SpawnIndex >= Pool.Num())
+        {
+            UE_LOG(LogTemp, Warning, TEXT("[DS] RedeployToSpawnPoint: spawn pool exhausted Player=%s"),
+                *GetNameSafe(aController->PlayerState));
+            continue;
+        }
+
+        TeleportPlayerAuthoritatively(aController, Pool[SpawnIndex]->GetActorTransform(), TEXT("TransitionToBattleRedeploy"));
+        ++SpawnIndex;
+    }
+}
 void AMainGameMode::ClearGoldDrops(const TCHAR* Context)
 {
     int32 ClearedCount = 0;
@@ -3594,7 +3642,15 @@ void AMainGameMode::FinishCurrentServerPhase(const TCHAR* Reason)
         StartBattleRoyalePhase();
         break;
     case EDediServerPhase::PreBattleShop:
-        FinishPreBattleShopPhase();
+        if (AMainGameState* GS = GetWorld() ? GetWorld()->GetGameState<AMainGameState>() : nullptr)
+        {
+            GS->SetShopAvailable(false);
+        }
+        if (USpawnManagerComponent* SpawnMgr = USpawnManagerComponent::GetActive(this))
+        {
+            SpawnMgr->SetShopBarriersActive(false);
+        }
+        StartTimedServerPhase(EDediServerPhase::BattleRoyale, GetBattleRoyaleDuration());
         break;
     default:
         break;
