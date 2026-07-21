@@ -1,4 +1,5 @@
 #include "Game/InGame/Card/UI/SeotdaTempWidget.h"
+#include "Game/InGame/Card/Data/CardTextureSet.h"
 
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
@@ -21,6 +22,10 @@
 void USeotdaTempWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (!CardTextures)
+	{
+		CardTextures = UCardTextureSet::LoadDefault();
+	}
 
 	BindWidgetsByName();
 	EnsurePublicCardsPanel();
@@ -403,10 +408,11 @@ void USeotdaTempWidget::RefreshPublicCardVisuals()
 		if (PlayerState->HasRevealedCard())
 		{
 			const FOwnedCardInfo CardInfo = PlayerState->GetRevealedCard();
-			if (UTexture2D* const* Texture = CardImageMap.Find(CardInfo.CardID);
-				Texture && *Texture)
+			if (UTexture2D* Texture = CardTextures
+				? CardTextures->GetFront(CardInfo.CardID)
+				: nullptr)
 			{
-				PublicCardImage->SetBrushFromTexture(*Texture, true);
+				PublicCardImage->SetBrushFromTexture(Texture, true);
 			}
 			CardStatusText->SetText(FText::FromString(FString::Printf(
 				TEXT("#%d %s"),
@@ -790,10 +796,9 @@ void USeotdaTempWidget::UpdateCardButtonText(UTextBlock* TargetText, UImage* Car
 	)));
 
 	// 카드 이미지 업데이트
-	if (CardImage && CardImageMap.Contains(CardInfo.CardID))
+	if (CardImage && CardTextures)
 	{
-		UTexture2D* Texture = CardImageMap[CardInfo.CardID];
-		if (Texture)
+		if (UTexture2D* Texture = CardTextures->GetFront(CardInfo.CardID))
 		{
 			CardImage->SetBrush(FSlateImageBrush(Texture, FVector2D(256.0f, 256.0f)));
 		}

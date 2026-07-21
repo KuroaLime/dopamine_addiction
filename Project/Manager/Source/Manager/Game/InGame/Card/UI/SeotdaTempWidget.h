@@ -214,9 +214,9 @@ public:
 	UPROPERTY(Transient)
 	TObjectPtr<UHorizontalBox> PublicCardsBox = nullptr;
 
-	// ===== Card Image Map =====
+	// ===== Card Textures (공용 DataAsset) =====
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|Images", meta = (AllowPrivateAccess = "true"))
-	TMap<ECardID, UTexture2D*> CardImageMap;
+	TObjectPtr<class UCardTextureSet> CardTextures;
 
 	// ===== Card Animations =====
 	UPROPERTY(Transient, meta = (BindWidgetAnim), BlueprintReadOnly)
