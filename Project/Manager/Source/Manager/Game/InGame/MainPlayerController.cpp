@@ -26,6 +26,7 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Game/InGame/TPS/UI/Shop/ShopWidget.h"
+#include "Game/InGame/TPS/UI/TpsPlayerMainHUD.h"
 #include "HAL/PlatformTime.h"
 #include "TimerManager.h"
 
@@ -1331,6 +1332,17 @@ void AMainPlayerController::Server_RequestDiscardCard_Implementation(int32 CardI
 			TEXT("[DS][Security] CardDiscardRejected Player=%s CardInstanceId=%d Reason=ServiceRejected"),
 			*GetNameSafe(PlayerState),
 			CardInstanceId);
+	}
+}
+
+void AMainPlayerController::Client_NotifyHitConfirmed_Implementation()
+{
+	TObjectPtr<UUIHandler>* Handler = UIHandlerMap.Find(EGamePhase::TPS);
+	if (!Handler || !*Handler) return;
+
+	if (UTpsPlayerMainHUD* HUD = Cast<UTpsPlayerMainHUD>((*Handler)->GetWidget()))
+	{
+		HUD->ShowHitMarker();
 	}
 }
 

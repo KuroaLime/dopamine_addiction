@@ -17,6 +17,7 @@
 #include "Game/InGame/Handler/UIHandler.h"
 #include "Game/InGame/TPS/UI/TpsPlayerMainHUD.h"
 #include "Game/InGame/MainGameMode.h"
+#include "Game/InGame/MainPlayerController.h"
 
 namespace
 {
@@ -560,8 +561,11 @@ void UAbility_Fire::Server_ExecuteFire()
 
 		if (bCamHit && CamHit.GetActor())
 		{
+			AActor* HitActor = CamHit.GetActor();
+			const bool bHitPlayer = HitActor->IsA<APawn>();
+
 			UGameplayStatics::ApplyDamage(
-				CamHit.GetActor(),
+				HitActor,
 				Damage,
 				OwnerCharacter->GetController(),
 				OwnerCharacter,
@@ -574,6 +578,15 @@ void UAbility_Fire::Server_ExecuteFire()
 				!IsValid(OwnerCharacter) || !IsValid(EquippedGun) || !IsValid(EquippedGun->Setting))
 			{
 				return;
+			}
+
+			// 플레이어(폰)를 맞췄을 때만 사수 화면에 히트마커를 띄운다.
+			if (bHitPlayer)
+			{
+				if (AMainPlayerController* ShooterPC = Cast<AMainPlayerController>(OwnerCharacter->GetController()))
+				{
+					ShooterPC->Client_NotifyHitConfirmed();
+				}
 			}
 		}
 	}
