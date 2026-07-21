@@ -2580,7 +2580,7 @@ void AMainGameMode::StartPreBattleShopPhase()
         SpawnMgr->SetShopBarriersActive(true);
     }
 
-    SetPlayerPawnGameplayState(true, false, true, TEXT("PreBattleShop"));
+    SetPlayerPawnGameplayState(true, true, true, TEXT("PreBattleShop"));
     DS_LOG(TEXT("[DS] PreBattleShop Open Round=%d Duration=%d"),
         CurrentRound,
         RemainingPhaseSeconds);
