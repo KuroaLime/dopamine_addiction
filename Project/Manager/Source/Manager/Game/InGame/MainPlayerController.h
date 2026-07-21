@@ -107,6 +107,9 @@ public:
 	void Server_SwitchMode(EGamePhase NewPhase);
 
 	void ApplySwitchMode(EGamePhase NewPhase);
+	// 카드 라운드(밀폐된 한옥방) 동안 메인 월드(퍼시스턴트 레벨)의 야외 DirectionalLight/SkyLight가
+	// 겹쳐 비치는 걸 막기 위해 껐다 켠다. Card_Game_Stage 서브레벨 자체 조명은 건드리지 않는다.
+	void UpdateEnvironmentLightsForPhase(EGamePhase NewPhase);
 	void SetGameplayInputLocked(bool bLocked, const TCHAR* Context);
 	void StartServerAuthoritativePositionCorrection(
 		const FVector& TargetLocation,

@@ -18,6 +18,8 @@
 #include "Game/InGame/Card/Actor/CardDropActor.h"
 #include "EngineUtils.h"
 #include "Engine/LevelStreaming.h"
+#include "Engine/DirectionalLight.h"
+#include "Engine/SkyLight.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
@@ -336,6 +338,38 @@ void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
 		UIHandlerMap[NewPhase]->UIActivate();
 	}
 	CurrentPhase = NewPhase;
+
+	UpdateEnvironmentLightsForPhase(NewPhase);
+}
+
+void AMainPlayerController::UpdateEnvironmentLightsForPhase(EGamePhase NewPhase)
+{
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	// 카드 라운드는 밀폐된 한옥방(Card_Game_Stage 서브레벨)에서 진행되는데, 메인 월드
+	// 퍼시스턴트 레벨의 야외 DirectionalLight/SkyLight는 서브레벨 로드와 무관하게 계속 켜져 있어서
+	// 그 방 조명과 겹쳐 보인다. Card 페이즈 동안만 퍼시스턴트 레벨 소속 라이트를 숨긴다.
+	// (GetLevel() 비교로 Card_Game_Stage 서브레벨 자체 라이트는 건드리지 않는다.)
+	const bool bShowOutdoorLights = (NewPhase != EGamePhase::Card);
+
+	for (TActorIterator<ADirectionalLight> It(World); It; ++It)
+	{
+		if (It->GetLevel() == World->PersistentLevel)
+		{
+			It->SetActorHiddenInGame(!bShowOutdoorLights);
+		}
+	}
+	for (TActorIterator<ASkyLight> It(World); It; ++It)
+	{
+		if (It->GetLevel() == World->PersistentLevel)
+		{
+			It->SetActorHiddenInGame(!bShowOutdoorLights);
+		}
+	}
 }
 
 void AMainPlayerController::SetGameplayInputLocked(bool bLocked, const TCHAR* Context)
