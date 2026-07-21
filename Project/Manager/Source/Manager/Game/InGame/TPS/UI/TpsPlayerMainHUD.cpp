@@ -283,14 +283,14 @@ void UTpsPlayerMainHUD::UpdateLevel()
 
         // 각 레벨 아이콘 업데이트
         // 0: Health, 1: HealthRegen, 2: MoveSpeed, 3: WeaponDamage, 4: FireRate, 5: Range, 6: Magazine, 7: Reload
-        if (Lv_Image[0]) LvLinearMID[0]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvHealth + Upgrades.LvHealth) * 0.2f);
-        if (Lv_Image[1]) LvLinearMID[1]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvHealthRegeneration + Upgrades.LvHealthRegen) * 0.2f);
-        if (Lv_Image[2]) LvLinearMID[2]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvMovementSpeed + Upgrades.LvMoveSpeed) * 0.2f);
-        if (Lv_Image[3]) LvLinearMID[3]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponDamage * 0.2f);
-        if (Lv_Image[4]) LvLinearMID[4]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponFireRate * 0.2f);
-        if (Lv_Image[5]) LvLinearMID[5]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponRange * 0.2f);
-        if (Lv_Image[6]) LvLinearMID[6]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponMagazine * 0.2f);
-        if (Lv_Image[7]) LvLinearMID[7]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponReload * 0.2f);
+        if (LvLinearMID[0]) LvLinearMID[0]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvHealth + Upgrades.LvHealth) * 0.2f);
+        if (LvLinearMID[1]) LvLinearMID[1]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvHealthRegeneration + Upgrades.LvHealthRegen) * 0.2f);
+        if (LvLinearMID[2]) LvLinearMID[2]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvMovementSpeed + Upgrades.LvMoveSpeed) * 0.2f);
+        if (LvLinearMID[3]) LvLinearMID[3]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponDamage * 0.2f);
+        if (LvLinearMID[4]) LvLinearMID[4]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponFireRate * 0.2f);
+        if (LvLinearMID[5]) LvLinearMID[5]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponRange * 0.2f);
+        if (LvLinearMID[6]) LvLinearMID[6]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponMagazine * 0.2f);
+        if (LvLinearMID[7]) LvLinearMID[7]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponReload * 0.2f);
     }
 }
 
