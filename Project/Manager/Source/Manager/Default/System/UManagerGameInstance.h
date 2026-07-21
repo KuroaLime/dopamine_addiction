@@ -88,6 +88,7 @@ public:
 	uint32_t GetSessionId() const { return m_sessionId; }
 
     void MarkReturnToRoomAfterMatch();
+    bool IsReturnToRoomAfterMatchPending() const { return bReturnToRoomAfterMatch; }
     bool ConsumeReturnToRoomAfterMatch();
     uint32 GetCachedRoomId() const { return CachedRoomId; }
     const TArray<FRoomMemberInfoView>& GetCachedRoomMembers() const { return CachedRoomMembers; }

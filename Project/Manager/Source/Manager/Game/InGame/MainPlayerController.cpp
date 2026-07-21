@@ -138,6 +138,11 @@ void AMainPlayerController::BeginPlay()
 
 void AMainPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (IsLocalController())
+	{
+		UWidgetLayoutLibrary::RemoveAllWidgets(this);
+	}
+
 	ClearPendingServerPositionCorrection();
 
 	if (UWorld* World = GetWorld())
@@ -1610,6 +1615,14 @@ UE_LOG(LogTemp, Warning, TEXT("[CL] Seotda Result: %s"), *ResultText);
 
     SeotdaUiLastResultText = ResultText;
     bSeotdaUiMatchEnded = ResultText.Contains(TEXT("[MATCH END]"));
+
+    if (bSeotdaUiMatchEnded)
+    {
+        if (UUManagerGameInstance* GI = GetGameInstance<UUManagerGameInstance>())
+        {
+            GI->MarkReturnToRoomAfterMatch();
+        }
+    }
 
 if (GEngine)
 {

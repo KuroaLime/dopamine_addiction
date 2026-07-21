@@ -179,6 +179,9 @@ protected:
     UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server")
     float DediTicketReservationTimeoutSeconds = 30.0f;
 
+    UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Dedicated Server|Match End", meta = (ClampMin = "5.0"))
+    float MatchEndReturnTimeoutSeconds = 60.0f;
+
     TSet<int64> AllowedDediTickets;
     TSet<int64> ActiveDediTickets;
     TMap<int64, double> PendingDediTicketReservations;
@@ -392,6 +395,7 @@ protected:
 private:
     FTimerHandle PhaseTimerHandle;
     FTimerHandle MatchEndShutdownTimerHandle;
+    FTimerHandle MatchEndReturnWaitTimerHandle;
     FTimerHandle MatchAbortShutdownTimerHandle;
     FTimerHandle DediRecoveryWatchdogTimerHandle;
     FTimerHandle CardSeatMoveRetryTimerHandle;
@@ -430,7 +434,10 @@ private:
     bool bMatchEndControlNotifyComplete = true;
     bool bMatchEndControlNotifySucceeded = false;
     bool bMatchEndShutdownWaitLogged = false;
+    bool bMatchEndFinalizationStarted = false;
     double MatchEndControlNotifyStartTimeSeconds = 0.0;
+    FString PendingMatchEndWinnerName;
+    FString PendingMatchEndMoneySummary;
 
     FName DediRecoveryWatchdogStage = NAME_None;
     double DediRecoveryLastProgressTimeSeconds = 0.0;
@@ -497,6 +504,8 @@ private:
     void StartResultPhase();
     void StartTransitionToBattlePhase();
     void StartGameEndPhase();
+    void HandleMatchEndReturnTimeout();
+    void FinalizeMatchEndAndShutdown(const TCHAR* Reason);
     void ClearGoldDrops(const TCHAR* Context);
     void BuildFinalGoldRanking(FString& OutWinnerName, FString& OutRankingSummary) const;
     void ShutdownDedicatedServerAfterMatchEnd();
