@@ -4,25 +4,40 @@
 #include "Blueprint/WidgetTree.h"
 #include "Components/Border.h"
 #include "Components/Button.h"
+#include "Components/HorizontalBox.h"
+#include "Components/HorizontalBoxSlot.h"
 #include "Components/Image.h"
+#include "Components/SizeBox.h"
 #include "Components/TextBlock.h"
 #include "Components/VerticalBox.h"
 #include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
+#include "Engine/World.h"
 #include "Game/InGame/MainPlayerController.h"
 #include "Game/InGame/MainPlayerState.h"
 #include "Game/Protocol_Client/Protocol_InGame.h"
+#include "GameFramework/GameStateBase.h"
 #include "Slate/SlateBrushAsset.h"
 
 void USeotdaTempWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (!CardTextures)
+	{
+		CardTextures = UCardTextureSet::LoadDefault();
+	}
 
 	BindWidgetsByName();
+	EnsurePublicCardsPanel();
 	BindButtonEvents();
 	if (LobbyButton)
 	{
 		LobbyButton->OnClicked.AddDynamic(this, &USeotdaTempWidget::OnLobbyClicked);
+	}
+	if (const AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer()))
+	{
+		LastHandledRevealResultSerial = PC->SeotdaUiRevealResultSerial;
+		LastHandledSelectionResultSerial = PC->SeotdaUiSelectionResultSerial;
 	}
 	RefreshFromPlayerState();
 
@@ -50,6 +65,8 @@ void USeotdaTempWidget::BindWidgetsByName()
 	BindWidgetByName(StatusText, TEXT("Status_Text"));
 	BindWidgetByName(BetInfoText, TEXT("Bet_Info_Text"));
 	BindWidgetByName(ResultText, TEXT("Result_Text"));
+	BindWidgetByName(PublicCardsTitleText, TEXT("Public_Cards_Title"));
+	BindWidgetByName(PublicCardsBox, TEXT("Public_Cards_Box"));
 
 	// Card Selection UI
 	BindWidgetByName(CardButton0, TEXT("Card_Button_0"));
@@ -87,6 +104,44 @@ void USeotdaTempWidget::BindWidgetsByName()
 	// Lobby Button
 	BindWidgetByName(LobbyButton, TEXT("Lobby_Button"));
 	BindWidgetByName(LobbyText, TEXT("Lobby_Text"));
+
+	// Opponent Seats
+	BindWidgetByName(Seat0_NameText, TEXT("Seat0_NameText"));
+	BindWidgetByName(Seat1_NameText, TEXT("Seat1_NameText"));
+	BindWidgetByName(Seat2_NameText, TEXT("Seat2_NameText"));
+	BindWidgetByName(Seat3_NameText, TEXT("Seat3_NameText"));
+	BindWidgetByName(Seat0_ChipText, TEXT("Seat0_ChipText"));
+	BindWidgetByName(Seat1_ChipText, TEXT("Seat1_ChipText"));
+	BindWidgetByName(Seat2_ChipText, TEXT("Seat2_ChipText"));
+	BindWidgetByName(Seat3_ChipText, TEXT("Seat3_ChipText"));
+	BindWidgetByName(Seat0_FoldedOverlay, TEXT("Seat0_FoldedOverlay"));
+	BindWidgetByName(Seat1_FoldedOverlay, TEXT("Seat1_FoldedOverlay"));
+	BindWidgetByName(Seat2_FoldedOverlay, TEXT("Seat2_FoldedOverlay"));
+	BindWidgetByName(Seat3_FoldedOverlay, TEXT("Seat3_FoldedOverlay"));
+	BindWidgetByName(Seat0_TurnHighlight, TEXT("Seat0_TurnHighlight"));
+	BindWidgetByName(Seat1_TurnHighlight, TEXT("Seat1_TurnHighlight"));
+	BindWidgetByName(Seat2_TurnHighlight, TEXT("Seat2_TurnHighlight"));
+	BindWidgetByName(Seat3_TurnHighlight, TEXT("Seat3_TurnHighlight"));
+
+	SeatNameTexts[0] = Seat0_NameText;
+	SeatNameTexts[1] = Seat1_NameText;
+	SeatNameTexts[2] = Seat2_NameText;
+	SeatNameTexts[3] = Seat3_NameText;
+
+	SeatChipTexts[0] = Seat0_ChipText;
+	SeatChipTexts[1] = Seat1_ChipText;
+	SeatChipTexts[2] = Seat2_ChipText;
+	SeatChipTexts[3] = Seat3_ChipText;
+
+	SeatFoldedOverlays[0] = Seat0_FoldedOverlay;
+	SeatFoldedOverlays[1] = Seat1_FoldedOverlay;
+	SeatFoldedOverlays[2] = Seat2_FoldedOverlay;
+	SeatFoldedOverlays[3] = Seat3_FoldedOverlay;
+
+	SeatTurnHighlights[0] = Seat0_TurnHighlight;
+	SeatTurnHighlights[1] = Seat1_TurnHighlight;
+	SeatTurnHighlights[2] = Seat2_TurnHighlight;
+	SeatTurnHighlights[3] = Seat3_TurnHighlight;
 }
 
 void USeotdaTempWidget::BindButtonEvents()
@@ -190,10 +245,11 @@ void USeotdaTempWidget::ResetLocalRoundUiState(const TArray<FOwnedCardInfo>& Car
 		*BuildCardIdListString(CurrentIds));
 
 	LastSeenCardInstanceIds = CurrentIds;
-	bSelected0 = false;
-	bSelected1 = false;
-	bSelected2 = false;
-	bLocalSelectionSubmitted = false;
+	ClearLocalCardSelection();
+	bLocalRevealPending = false;
+	bLocalSelectionPending = false;
+	bLastKnownRevealConfirmed = false;
+	LocalSelectionFeedback.Empty();
 	LastBetActionTimeSeconds = -1000.0;
 
 	SetCardSelectionButtonsEnabled(Cards.Num() >= 3);
@@ -212,7 +268,8 @@ void USeotdaTempWidget::ResetLocalRoundUiState(const TArray<FOwnedCardInfo>& Car
 		}
 		else
 		{
-			ResultText->SetText(FText::FromString(TEXT("Result: New card set detected. Select 2 cards.")));
+			ResultText->SetText(FText::FromString(
+				TEXT("Result: New card set detected. Choose 1 card to reveal.")));
 		}
 	}
 }
@@ -236,6 +293,150 @@ void USeotdaTempWidget::SetBetButtonsEnabled(bool bEnabled)
 	if (DieButton) DieButton->SetIsEnabled(bEnabled);
 }
 
+void USeotdaTempWidget::ClearLocalCardSelection()
+{
+	if (bSelected0 && Card0_SelectAnim)
+	{
+		PlayAnimation(Card0_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
+	}
+	if (bSelected1 && Card1_SelectAnim)
+	{
+		PlayAnimation(Card1_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
+	}
+	if (bSelected2 && Card2_SelectAnim)
+	{
+		PlayAnimation(Card2_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
+	}
+
+	bSelected0 = false;
+	bSelected1 = false;
+	bSelected2 = false;
+}
+
+void USeotdaTempWidget::EnsurePublicCardsPanel()
+{
+	if (!RootBox || !WidgetTree)
+	{
+		return;
+	}
+
+	if (!PublicCardsTitleText)
+	{
+		PublicCardsTitleText = WidgetTree->ConstructWidget<UTextBlock>(
+			UTextBlock::StaticClass(),
+			TEXT("Runtime_Public_Cards_Title"));
+		PublicCardsTitleText->SetText(FText::FromString(TEXT("Public Cards")));
+		RootBox->AddChildToVerticalBox(PublicCardsTitleText);
+	}
+
+	if (!PublicCardsBox)
+	{
+		PublicCardsBox = WidgetTree->ConstructWidget<UHorizontalBox>(
+			UHorizontalBox::StaticClass(),
+			TEXT("Runtime_Public_Cards_Box"));
+		RootBox->AddChildToVerticalBox(PublicCardsBox);
+	}
+}
+
+void USeotdaTempWidget::RefreshPublicCardVisuals()
+{
+	EnsurePublicCardsPanel();
+	if (!PublicCardsBox || !WidgetTree)
+	{
+		return;
+	}
+
+	const UWorld* World = GetWorld();
+	const AGameStateBase* GameState = World ? World->GetGameState() : nullptr;
+	if (!GameState)
+	{
+		return;
+	}
+
+	TArray<FString> SignatureParts;
+	for (APlayerState* BasePlayerState : GameState->PlayerArray)
+	{
+		const AMainPlayerState* PlayerState = Cast<AMainPlayerState>(BasePlayerState);
+		if (!PlayerState)
+		{
+			continue;
+		}
+
+		const FOwnedCardInfo CardInfo = PlayerState->GetRevealedCard();
+		SignatureParts.Add(FString::Printf(
+			TEXT("%s:%d:%d"),
+			*PlayerState->GetPlayerName(),
+			CardInfo.CardInstanceId,
+			static_cast<int32>(CardInfo.CardID)));
+	}
+
+	const FString Signature = FString::Join(SignatureParts, TEXT("|"));
+	if (Signature == LastPublicCardVisualSignature)
+	{
+		return;
+	}
+	LastPublicCardVisualSignature = Signature;
+
+	PublicCardsBox->ClearChildren();
+	for (APlayerState* BasePlayerState : GameState->PlayerArray)
+	{
+		const AMainPlayerState* PlayerState = Cast<AMainPlayerState>(BasePlayerState);
+		if (!PlayerState)
+		{
+			continue;
+		}
+
+		UVerticalBox* PlayerColumn = WidgetTree->ConstructWidget<UVerticalBox>();
+		UTextBlock* PlayerNameText = WidgetTree->ConstructWidget<UTextBlock>();
+		USizeBox* CardSizeBox = WidgetTree->ConstructWidget<USizeBox>();
+		UImage* PublicCardImage = WidgetTree->ConstructWidget<UImage>();
+		UTextBlock* CardStatusText = WidgetTree->ConstructWidget<UTextBlock>();
+		if (!PlayerColumn || !PlayerNameText || !CardSizeBox || !PublicCardImage || !CardStatusText)
+		{
+			continue;
+		}
+
+		const FString PlayerName = PlayerState->GetPlayerName().IsEmpty()
+			? GetNameSafe(PlayerState)
+			: PlayerState->GetPlayerName();
+		PlayerNameText->SetText(FText::FromString(PlayerName));
+
+		CardSizeBox->SetWidthOverride(96.0f);
+		CardSizeBox->SetHeightOverride(140.0f);
+		CardSizeBox->AddChild(PublicCardImage);
+
+		if (PlayerState->HasRevealedCard())
+		{
+			const FOwnedCardInfo CardInfo = PlayerState->GetRevealedCard();
+			if (UTexture2D* Texture = CardTextures
+				? CardTextures->GetFront(CardInfo.CardID)
+				: nullptr)
+			{
+				PublicCardImage->SetBrushFromTexture(Texture, true);
+			}
+			CardStatusText->SetText(FText::FromString(FString::Printf(
+				TEXT("#%d %s"),
+				CardInfo.CardInstanceId,
+				*CardDebug::ToString(CardInfo.CardID))));
+		}
+		else
+		{
+			PublicCardImage->SetBrush(FSlateNoResource());
+			CardStatusText->SetText(FText::FromString(TEXT("Waiting")));
+		}
+
+		PlayerColumn->AddChildToVerticalBox(PlayerNameText);
+		PlayerColumn->AddChildToVerticalBox(CardSizeBox);
+		PlayerColumn->AddChildToVerticalBox(CardStatusText);
+
+		if (UHorizontalBoxSlot* PublicCardSlot = PublicCardsBox->AddChildToHorizontalBox(PlayerColumn))
+		{
+			PublicCardSlot->SetPadding(FMargin(6.0f, 2.0f));
+			PublicCardSlot->SetHorizontalAlignment(HAlign_Center);
+		}
+	}
+}
+
 FString USeotdaTempWidget::BuildCardIdListString(const TArray<int32>& Ids) const
 {
 	TArray<FString> Parts;
@@ -244,6 +445,90 @@ FString USeotdaTempWidget::BuildCardIdListString(const TArray<int32>& Ids) const
 		Parts.Add(FString::FromInt(Id));
 	}
 	return Parts.Num() > 0 ? FString::Join(Parts, TEXT(",")) : TEXT("Empty");
+}
+
+FString USeotdaTempWidget::BuildPublicCardSummary() const
+{
+	const UWorld* World = GetWorld();
+	const AGameStateBase* GameState = World ? World->GetGameState() : nullptr;
+	if (!GameState)
+	{
+		return TEXT("Public Cards: Waiting for game state");
+	}
+
+	TArray<FString> Parts;
+	for (APlayerState* BasePlayerState : GameState->PlayerArray)
+	{
+		const AMainPlayerState* PlayerState = Cast<AMainPlayerState>(BasePlayerState);
+		if (!PlayerState)
+		{
+			continue;
+		}
+
+		const FString PlayerName = PlayerState->GetPlayerName().IsEmpty()
+			? GetNameSafe(PlayerState)
+			: PlayerState->GetPlayerName();
+		if (PlayerState->HasRevealedCard())
+		{
+			const FOwnedCardInfo CardInfo = PlayerState->GetRevealedCard();
+			Parts.Add(FString::Printf(
+				TEXT("%s=#%d:%s"),
+				*PlayerName,
+				CardInfo.CardInstanceId,
+				*CardDebug::ToString(CardInfo.CardID)));
+		}
+		else
+		{
+			Parts.Add(FString::Printf(TEXT("%s=Waiting"), *PlayerName));
+		}
+	}
+
+	return Parts.Num() > 0
+		? FString::Printf(TEXT("Public Cards: %s"), *FString::Join(Parts, TEXT(" | ")))
+		: TEXT("Public Cards: No players");
+}
+
+void USeotdaTempWidget::RefreshOpponentSeats(AMainPlayerController* PC)
+{
+	if (!PC) return;
+
+	const TArray<FSeotdaOpponentInfo>& Opponents = PC->SeotdaUiOpponents;
+
+	for (int32 i = 0; i < SeotdaOpponentSeatCount; ++i)
+	{
+		if (!Opponents.IsValidIndex(i))
+		{
+			// 상대가 좌석 수보다 적으면 남는 좌석은 통째로 숨긴다.
+			if (SeatNameTexts[i]) SeatNameTexts[i]->SetVisibility(ESlateVisibility::Collapsed);
+			if (SeatChipTexts[i]) SeatChipTexts[i]->SetVisibility(ESlateVisibility::Collapsed);
+			if (SeatFoldedOverlays[i]) SeatFoldedOverlays[i]->SetVisibility(ESlateVisibility::Collapsed);
+			if (SeatTurnHighlights[i]) SeatTurnHighlights[i]->SetVisibility(ESlateVisibility::Collapsed);
+			continue;
+		}
+
+		const FSeotdaOpponentInfo& Info = Opponents[i];
+
+		if (SeatNameTexts[i])
+		{
+			SeatNameTexts[i]->SetVisibility(ESlateVisibility::Visible);
+			SeatNameTexts[i]->SetText(FText::FromString(Info.PlayerName));
+		}
+		if (SeatChipTexts[i])
+		{
+			SeatChipTexts[i]->SetVisibility(ESlateVisibility::Visible);
+			SeatChipTexts[i]->SetText(Info.bAllIn
+				? FText::FromString(FString::Printf(TEXT("ALL-IN (%d)"), Info.BetMoney))
+				: FText::AsNumber(Info.BetMoney));
+		}
+		if (SeatFoldedOverlays[i])
+		{
+			SeatFoldedOverlays[i]->SetVisibility(Info.bFolded ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		}
+		if (SeatTurnHighlights[i])
+		{
+			SeatTurnHighlights[i]->SetVisibility(Info.bIsCurrentTurn ? ESlateVisibility::HitTestInvisible : ESlateVisibility::Collapsed);
+		}
+	}
 }
 
 void USeotdaTempWidget::RefreshFromPlayerState()
@@ -258,6 +543,47 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 		return;
 	}
 
+	RefreshOpponentSeats(PC);
+
+	if (LastHandledRevealResultSerial != PC->SeotdaUiRevealResultSerial)
+	{
+		LastHandledRevealResultSerial = PC->SeotdaUiRevealResultSerial;
+		bLocalRevealPending = false;
+		if (PC->bSeotdaUiRevealAccepted)
+		{
+			ClearLocalCardSelection();
+			LocalSelectionFeedback = TEXT("Result: Public card confirmed. Select exactly 2 cards for your final hand.");
+		}
+		else
+		{
+			LocalSelectionFeedback = FString::Printf(
+				TEXT("Result: Server rejected the public card (%s). Select and retry."),
+				*PC->SeotdaUiRevealResultReason);
+		}
+	}
+
+	if (LastHandledSelectionResultSerial != PC->SeotdaUiSelectionResultSerial)
+	{
+		LastHandledSelectionResultSerial = PC->SeotdaUiSelectionResultSerial;
+		bLocalSelectionPending = false;
+		LocalSelectionFeedback = PC->bSeotdaUiSelectionAccepted
+			? TEXT("Result: Server accepted the final hand. Waiting for all players / betting turn.")
+			: FString::Printf(
+				TEXT("Result: Server rejected the final hand (%s). Select and retry."),
+				*PC->SeotdaUiSelectionResultReason);
+	}
+
+	if (PC->bSeotdaUiMyRevealConfirmed)
+	{
+		bLocalRevealPending = false;
+	}
+
+	if (PC->bSeotdaUiMySubmitted)
+	{
+		bLocalRevealPending = false;
+		bLocalSelectionPending = false;
+	}
+
 	if (LobbyButton)
 	{
 		const bool bShowLobbyButton = PC->bSeotdaUiMatchEnded;
@@ -267,7 +593,15 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 
 	if (ResultText)
 	{
-		if (!PC->SeotdaUiLastResultText.IsEmpty())
+		if (PC->bSeotdaUiMatchEnded || PC->bSeotdaUiRoundResolved)
+		{
+			ResultText->SetText(FText::FromString(PC->SeotdaUiLastResultText));
+		}
+		else if (!LocalSelectionFeedback.IsEmpty())
+		{
+			ResultText->SetText(FText::FromString(LocalSelectionFeedback));
+		}
+		else if (!PC->SeotdaUiLastResultText.IsEmpty())
 		{
 			ResultText->SetText(FText::FromString(PC->SeotdaUiLastResultText));
 		}
@@ -290,6 +624,11 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 	const TArray<FOwnedCardInfo> Cards = PS->GetOwnedCards();
 
 	ResetLocalRoundUiState(Cards);
+	if (PC->bSeotdaUiMyRevealConfirmed != bLastKnownRevealConfirmed)
+	{
+		ClearLocalCardSelection();
+		bLastKnownRevealConfirmed = PC->bSeotdaUiMyRevealConfirmed;
+	}
 
 	if (CardInfoText)
 	{
@@ -303,10 +642,16 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 	UpdateCardButtonText(CardText0, CardImage0, 0, Cards);
 	UpdateCardButtonText(CardText1, CardImage1, 1, Cards);
 	UpdateCardButtonText(CardText2, CardImage2, 2, Cards);
+	RefreshPublicCardVisuals();
 
 	const bool bHasThreeCards = Cards.Num() >= 3;
-	const bool bCanSelect = bHasThreeCards && !bLocalSelectionSubmitted;
-	const bool bCanSubmit = bCanSelect && GetSelectedCount() == 2;
+	const bool bRevealConfirmed = PC->bSeotdaUiMyRevealConfirmed;
+	const bool bSelectionSubmitted = PC->bSeotdaUiMySubmitted;
+	const bool bAnySelectionPending = bLocalRevealPending || bLocalSelectionPending;
+	const bool bSelectionLocked = bSelectionSubmitted || bAnySelectionPending;
+	const bool bCanSelect = bHasThreeCards && !bSelectionLocked;
+	const int32 RequiredSelectionCount = bRevealConfirmed ? 2 : 1;
+	const bool bCanSubmit = bCanSelect && GetSelectedCount() == RequiredSelectionCount;
 
 	SetCardSelectionButtonsEnabled(bCanSelect);
 
@@ -317,14 +662,39 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 
 	if (SubmitText)
 	{
-		SubmitText->SetText(FText::FromString(bLocalSelectionSubmitted ? TEXT("Submitted / Waiting") : TEXT("Submit Selection")));
+		const FString SubmitLabel = bLocalRevealPending
+			? TEXT("Revealing...")
+			: (bLocalSelectionPending
+				? TEXT("Submitting...")
+				: (bSelectionSubmitted
+					? TEXT("Submitted / Waiting")
+					: (bRevealConfirmed ? TEXT("Submit Final Hand") : TEXT("Reveal Public Card"))));
+		SubmitText->SetText(FText::FromString(SubmitLabel));
 	}
 
-	SetBetButtonsEnabled(bLocalSelectionSubmitted && PC->bSeotdaUiBettingActive && PC->bSeotdaUiMyTurn && !PC->bSeotdaUiMyFolded && !PC->bSeotdaUiRoundResolved);
+	if (TitleText)
+	{
+		const FString StageTitle = bSelectionSubmitted
+			? TEXT("Seotda - Betting")
+			: (bRevealConfirmed
+				? TEXT("Seotda - Select Final 2-Card Hand")
+				: TEXT("Seotda - Reveal 1 Public Card"));
+		TitleText->SetText(FText::FromString(StageTitle));
+	}
+
+	SetBetButtonsEnabled(bSelectionSubmitted && PC->bSeotdaUiBettingActive && PC->bSeotdaUiMyTurn && !PC->bSeotdaUiMyFolded && !PC->bSeotdaUiRoundResolved);
 
 	if (StatusText)
 	{
-		if (bLocalSelectionSubmitted)
+		if (bLocalRevealPending)
+		{
+			StatusText->SetText(FText::FromString(TEXT("Status: Waiting for public-card approval.")));
+		}
+		else if (bLocalSelectionPending)
+		{
+			StatusText->SetText(FText::FromString(TEXT("Status: Waiting for final-hand approval.")));
+		}
+		else if (bSelectionSubmitted)
 		{
 			StatusText->SetText(FText::FromString(TEXT("Status: Submitted. Wait for betting turn. Server validates turn.")));
 		}
@@ -334,17 +704,21 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 		}
 		else
 		{
-			StatusText->SetText(FText::FromString(FString::Printf(
-				TEXT("Status: Selected %d/2. Select exactly 2 cards."),
-				GetSelectedCount()
-			)));
+			StatusText->SetText(FText::FromString(bRevealConfirmed
+				? FString::Printf(
+					TEXT("Status: Public card confirmed. Final hand selected %d/2."),
+					GetSelectedCount())
+				: FString::Printf(
+					TEXT("Status: Public card selected %d/1."),
+					GetSelectedCount())));
 		}
 	}
 
 	if (BetInfoText)
 	{
 		BetInfoText->SetText(FText::FromString(FString::Printf(
-			TEXT("Bet: Round=%d | Pot=%d | CurrentBet=%d | MyBet=%d | NeedCall=%d | Turn=%s"),
+			TEXT("%s\nBet: Round=%d | Pot=%d | CurrentBet=%d | MyBet=%d | NeedCall=%d | Turn=%s"),
+			*BuildPublicCardSummary(),
 			PC->SeotdaUiRound,
 			PC->SeotdaUiPot,
 			PC->SeotdaUiCurrentBet,
@@ -354,7 +728,7 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 		)));
 	}
 
-	if (StatusText && bLocalSelectionSubmitted)
+	if (StatusText && bSelectionSubmitted)
 	{
 		if (PC->bSeotdaUiRoundResolved)
 		{
@@ -394,7 +768,10 @@ void USeotdaTempWidget::UpdateCardButtonText(UTextBlock* TargetText, UImage* Car
 		(CardIndex == 1 && bSelected1) ||
 		(CardIndex == 2 && bSelected2);
 
-	const FString SelectedPrefix = bSelected ? TEXT("[SELECTED] ") : TEXT("");
+	const AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
+	const FString SelectedPrefix = bSelected
+		? (PC && PC->bSeotdaUiMyRevealConfirmed ? TEXT("[HAND] ") : TEXT("[PUBLIC] "))
+		: TEXT("");
 
 	if (!Cards.IsValidIndex(CardIndex))
 	{
@@ -439,11 +816,20 @@ int32 USeotdaTempWidget::GetSelectedCount() const
 
 void USeotdaTempWidget::ToggleCardSelection(int32 CardIndex)
 {
-	if (bLocalSelectionSubmitted)
+	const AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
+	if (!PC)
+	{
+		return;
+	}
+
+	if (bLocalRevealPending || bLocalSelectionPending || PC->bSeotdaUiMySubmitted)
 	{
 		if (ResultText)
 		{
-			ResultText->SetText(FText::FromString(TEXT("Result: Already submitted this round.")));
+			ResultText->SetText(FText::FromString(
+				(bLocalRevealPending || bLocalSelectionPending)
+					? TEXT("Result: Waiting for server approval.")
+					: TEXT("Result: Already submitted this round.")));
 		}
 		return;
 	}
@@ -460,21 +846,68 @@ void USeotdaTempWidget::ToggleCardSelection(int32 CardIndex)
 
 	if (*Target)
 	{
+		if (CardIndex == 0 && Card0_SelectAnim)
+		{
+			PlayAnimation(Card0_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
+		}
+		if (CardIndex == 1 && Card1_SelectAnim)
+		{
+			PlayAnimation(Card1_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
+		}
+		if (CardIndex == 2 && Card2_SelectAnim)
+		{
+			PlayAnimation(Card2_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
+		}
 		*Target = false;
 		RefreshFromPlayerState();
 		return;
 	}
 
-	if (GetSelectedCount() >= 2)
+	if (PC->bSeotdaUiMyRevealConfirmed)
 	{
-		if (ResultText)
+		if (GetSelectedCount() >= 2)
 		{
-			ResultText->SetText(FText::FromString(TEXT("Result: Already selected 2 cards. Unselect one first.")));
+			LocalSelectionFeedback = TEXT("Result: Final hand can contain exactly 2 cards.");
+			RefreshFromPlayerState();
+			return;
 		}
-		return;
+
+		*Target = true;
+	}
+	else
+	{
+		if (CardIndex != 0 && bSelected0 && Card0_SelectAnim)
+		{
+			PlayAnimation(Card0_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
+		}
+		if (CardIndex != 1 && bSelected1 && Card1_SelectAnim)
+		{
+			PlayAnimation(Card1_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
+		}
+		if (CardIndex != 2 && bSelected2 && Card2_SelectAnim)
+		{
+			PlayAnimation(Card2_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
+		}
+
+		bSelected0 = CardIndex == 0;
+		bSelected1 = CardIndex == 1;
+		bSelected2 = CardIndex == 2;
 	}
 
-	*Target = true;
+	if (CardIndex == 0 && Card0_SelectAnim)
+	{
+		PlayAnimation(Card0_SelectAnim);
+	}
+	if (CardIndex == 1 && Card1_SelectAnim)
+	{
+		PlayAnimation(Card1_SelectAnim);
+	}
+	if (CardIndex == 2 && Card2_SelectAnim)
+	{
+		PlayAnimation(Card2_SelectAnim);
+	}
+
+	LocalSelectionFeedback.Empty();
 	RefreshFromPlayerState();
 }
 
@@ -486,41 +919,68 @@ void USeotdaTempWidget::SubmitSelection()
 		return;
 	}
 
-	if (bLocalSelectionSubmitted)
+	if (bLocalRevealPending || bLocalSelectionPending || PC->bSeotdaUiMySubmitted)
 	{
 		if (ResultText)
 		{
-			ResultText->SetText(FText::FromString(TEXT("Result: Submit ignored. Already submitted this round.")));
+			ResultText->SetText(FText::FromString(
+				(bLocalRevealPending || bLocalSelectionPending)
+					? TEXT("Result: Submit ignored. Waiting for server approval.")
+					: TEXT("Result: Submit ignored. Already submitted this round.")));
 		}
 		return;
 	}
 
-	if (GetSelectedCount() != 2)
+	const bool bRevealConfirmed = PC->bSeotdaUiMyRevealConfirmed;
+	const int32 RequiredSelectionCount = bRevealConfirmed ? 2 : 1;
+	if (GetSelectedCount() != RequiredSelectionCount)
 	{
 		if (ResultText)
 		{
-			ResultText->SetText(FText::FromString(TEXT("Result: Select exactly 2 cards before submit.")));
+			ResultText->SetText(FText::FromString(bRevealConfirmed
+				? TEXT("Result: Select exactly 2 cards for the final hand.")
+				: TEXT("Result: Select exactly 1 public card before reveal.")));
 		}
 		return;
 	}
 
-	bLocalSelectionSubmitted = true;
+	bLocalRevealPending = !bRevealConfirmed;
+	bLocalSelectionPending = bRevealConfirmed;
+	LocalSelectionFeedback = bRevealConfirmed
+		? TEXT("Result: Sending final hand to the server.")
+		: TEXT("Result: Sending public card selection to the server.");
 	SetCardSelectionButtonsEnabled(false);
 	if (SubmitButton)
 	{
 		SubmitButton->SetIsEnabled(false);
 	}
 
-	PC->Server_SubmitSeotdaSelection(bSelected0, bSelected1, bSelected2);
+	if (bRevealConfirmed)
+	{
+		PC->Server_SubmitSeotdaSelection(bSelected0, bSelected1, bSelected2);
+	}
+	else
+	{
+		PC->Server_RevealSeotdaCard(bSelected0, bSelected1, bSelected2);
+	}
 
 	if (ResultText)
 	{
-		ResultText->SetText(FText::FromString(FString::Printf(
-			TEXT("Result: Selection submitted [%d,%d,%d]. Waiting for all players / betting turn."),
-			bSelected0 ? 1 : 0,
-			bSelected1 ? 1 : 0,
-			bSelected2 ? 1 : 0
-		)));
+		const int32 Selected0 = bSelected0 ? 1 : 0;
+		const int32 Selected1 = bSelected1 ? 1 : 0;
+		const int32 Selected2 = bSelected2 ? 1 : 0;
+		const FString RequestMessage = bRevealConfirmed
+			? FString::Printf(
+				TEXT("Result: Final hand submitted [%d,%d,%d]. Waiting for server approval."),
+				Selected0,
+				Selected1,
+				Selected2)
+			: FString::Printf(
+				TEXT("Result: Public card requested [%d,%d,%d]. Waiting for server approval."),
+				Selected0,
+				Selected1,
+				Selected2);
+		ResultText->SetText(FText::FromString(RequestMessage));
 	}
 
 	RefreshFromPlayerState();
@@ -534,11 +994,11 @@ void USeotdaTempWidget::RequestBetAction(EBettingAction Action)
 		return;
 	}
 
-	if (!bLocalSelectionSubmitted)
+	if (!PC->bSeotdaUiMySubmitted)
 	{
 		if (ResultText)
 		{
-			ResultText->SetText(FText::FromString(TEXT("Result: Submit 2 cards before betting.")));
+			ResultText->SetText(FText::FromString(TEXT("Result: Submit the final 2-card hand before betting.")));
 		}
 		return;
 	}
@@ -569,22 +1029,6 @@ void USeotdaTempWidget::RequestBetAction(EBettingAction Action)
 
 void USeotdaTempWidget::OnCard0Clicked()
 {
-	if (bSelected0)
-	{
-		// 선택 해제 - SelectAnim 역재생
-		if (Card0_SelectAnim)
-		{
-			PlayAnimation(Card0_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
-		}
-	}
-	else
-	{
-		// 선택 - SelectAnim 재생
-		if (Card0_SelectAnim)
-		{
-			PlayAnimation(Card0_SelectAnim);
-		}
-	}
 	ToggleCardSelection(0);
 }
 
@@ -607,22 +1051,6 @@ void USeotdaTempWidget::OnCard0Unhovered()
 
 void USeotdaTempWidget::OnCard1Clicked()
 {
-	if (bSelected1)
-	{
-		// 선택 해제 - SelectAnim 역재생
-		if (Card1_SelectAnim)
-		{
-			PlayAnimation(Card1_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
-		}
-	}
-	else
-	{
-		// 선택 - SelectAnim 재생
-		if (Card1_SelectAnim)
-		{
-			PlayAnimation(Card1_SelectAnim);
-		}
-	}
 	ToggleCardSelection(1);
 }
 
@@ -645,22 +1073,6 @@ void USeotdaTempWidget::OnCard1Unhovered()
 
 void USeotdaTempWidget::OnCard2Clicked()
 {
-	if (bSelected2)
-	{
-		// 선택 해제 - SelectAnim 역재생
-		if (Card2_SelectAnim)
-		{
-			PlayAnimation(Card2_SelectAnim, 0.0f, 1, EUMGSequencePlayMode::Reverse);
-		}
-	}
-	else
-	{
-		// 선택 - SelectAnim 재생
-		if (Card2_SelectAnim)
-		{
-			PlayAnimation(Card2_SelectAnim);
-		}
-	}
 	ToggleCardSelection(2);
 }
 

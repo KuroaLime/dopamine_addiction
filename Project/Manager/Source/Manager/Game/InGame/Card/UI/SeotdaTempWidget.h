@@ -143,15 +143,76 @@ public:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI", meta = (AllowPrivateAccess = "true"))
 	TObjectPtr<UTextBlock> LobbyText = nullptr;
 
+	// ===== Opponent Seat UI (다른 플레이어 좌석 최대 4명) =====
+	static constexpr int32 SeotdaOpponentSeatCount = 4;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTextBlock> Seat0_NameText = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTextBlock> Seat1_NameText = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTextBlock> Seat2_NameText = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTextBlock> Seat3_NameText = nullptr;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTextBlock> Seat0_ChipText = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTextBlock> Seat1_ChipText = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTextBlock> Seat2_ChipText = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UTextBlock> Seat3_ChipText = nullptr;
+
+	// 폴드(다이)한 좌석을 가리는 오버레이. 폴드 시 Visible, 아니면 Collapsed.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UWidget> Seat0_FoldedOverlay = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UWidget> Seat1_FoldedOverlay = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UWidget> Seat2_FoldedOverlay = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UWidget> Seat3_FoldedOverlay = nullptr;
+
+	// 현재 턴인 좌석을 강조하는 테두리/하이라이트. 해당 좌석 턴일 때만 Visible.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UWidget> Seat0_TurnHighlight = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UWidget> Seat1_TurnHighlight = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UWidget> Seat2_TurnHighlight = nullptr;
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|UI|Seats", meta = (AllowPrivateAccess = "true"))
+	TObjectPtr<UWidget> Seat3_TurnHighlight = nullptr;
+
+	// 전체 좌석을 감싸는 루트(있으면 통째로 접어 숨기는 용도). 위 4묶음을 인덱스로 순회하기 위한 편의 배열.
+	TObjectPtr<UTextBlock> SeatNameTexts[SeotdaOpponentSeatCount] = {};
+	TObjectPtr<UTextBlock> SeatChipTexts[SeotdaOpponentSeatCount] = {};
+	TObjectPtr<UWidget> SeatFoldedOverlays[SeotdaOpponentSeatCount] = {};
+	TObjectPtr<UWidget> SeatTurnHighlights[SeotdaOpponentSeatCount] = {};
+
+	void RefreshOpponentSeats(class AMainPlayerController* PC);
+
 	// ===== Runtime Data =====
 	bool bSelected0 = false;
 	bool bSelected1 = false;
 	bool bSelected2 = false;
 
-	bool bLocalSelectionSubmitted = false;
+	bool bLocalRevealPending = false;
+	bool bLocalSelectionPending = false;
+	int32 LastHandledRevealResultSerial = 0;
+	int32 LastHandledSelectionResultSerial = 0;
+	bool bLastKnownRevealConfirmed = false;
+	FString LocalSelectionFeedback;
+	FString LastPublicCardVisualSignature;
 	double LastBetActionTimeSeconds = -1000.0;
 
 	TArray<int32> LastSeenCardInstanceIds;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTextBlock> PublicCardsTitleText = nullptr;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UHorizontalBox> PublicCardsBox = nullptr;
 
 	// ===== Card Textures (공용 DataAsset) =====
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Seotda|Images", meta = (AllowPrivateAccess = "true"))
@@ -193,6 +254,9 @@ private:
 	void ResetLocalRoundUiState(const TArray<FOwnedCardInfo>& Cards);
 	void SetCardSelectionButtonsEnabled(bool bEnabled);
 	void SetBetButtonsEnabled(bool bEnabled);
+	void ClearLocalCardSelection();
+	void EnsurePublicCardsPanel();
+	void RefreshPublicCardVisuals();
 
 	void ToggleCardSelection(int32 CardIndex);
 	int32 GetSelectedCount() const;
@@ -201,6 +265,7 @@ private:
 	void RequestBetAction(EBettingAction Action);
 
 	FString BuildCardIdListString(const TArray<int32>& Ids) const;
+	FString BuildPublicCardSummary() const;
 
 	// ===== Card Button Events =====
 	UFUNCTION()

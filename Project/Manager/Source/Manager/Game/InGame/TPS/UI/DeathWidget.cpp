@@ -14,6 +14,10 @@ const FName UDeathWidget::RadialWipeParamName(TEXT("Radial_wipe"));
 void UDeathWidget::NativeConstruct()
 {
     Super::NativeConstruct();
+    if (!CardTextures)
+    {
+        CardTextures = UCardTextureSet::LoadDefault();
+    }
 
     DisplayTime = 0.f;
     TargetTime = 0.f;

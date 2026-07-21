@@ -1,6 +1,5 @@
 #include "Game/InGame/TPS/UI/TpsPlayerMainHUD.h"
 #include "Game/InGame/Card/Data/CardTextureSet.h"
-#include "Game/InGame/MainPlayerController.h"
 #include "Default/Data/CharacterStateComponent.h"
 #include "Components/ProgressBar.h"
 #include "Components/TextBlock.h"
@@ -15,7 +14,6 @@
 #include "Game/InGame/TPS/UI/CRoundandTimerWidget.h"
 #include "Game/InGame/MainPlayerController.h"
 
-const FName UTpsPlayerMainHUD::HPRadialWipeParamName(TEXT("Radial_wipe"));
 const FName UTpsPlayerMainHUD::LvLinearWipeParamName(TEXT("Linear_wipe"));
 
 void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacterState)
@@ -41,37 +39,45 @@ void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacte
 void UTpsPlayerMainHUD::NativeConstruct()
 {
     Super::NativeConstruct();
-
-    HP_Image = Cast<UImage>(GetWidgetFromName(TEXT("HP_Circle")));
-    if (HP_Image)
+    if (!CardTextures)
     {
-        UMaterialInterface* BaseMaterial = HP_Image->GetDynamicMaterial();
-        HPCircleMID = Cast<UMaterialInstanceDynamic>(BaseMaterial);
-
-        if (HPCircleMID)
-        {
-            HPCircleMID->SetScalarParameterValue(HPRadialWipeParamName, 0.f);
-        }
+        CardTextures = UCardTextureSet::LoadDefault();
     }
-    MaxHPTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("MaxHP_Text")));
-    HPTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("HP_Text")));
 
-    WEAPONImage = Cast<UImage>(GetWidgetFromName(TEXT("Weapon_Icon")));
+    // BindWidget으로 자동 해석된 포인터를, 인덱스 순회가 필요한 로직을 위해 편의 배열에 채워 넣는다.
+    CardImage[0] = Card00;
+    CardImage[1] = Card01;
+    CardImage[2] = Card02;
 
-    CardImage[0] = Cast<UImage>(GetWidgetFromName(TEXT("Card00")));
-    CardImage[1] = Cast<UImage>(GetWidgetFromName(TEXT("Card01")));
-    CardImage[2] = Cast<UImage>(GetWidgetFromName(TEXT("Card02")));
+    CardHighlightImage[0] = CardHighlight00;
+    CardHighlightImage[1] = CardHighlight01;
+    CardHighlightImage[2] = CardHighlight02;
+    UpdateCardSelectionHighlight();
 
-    Lv_Image[0] = Cast<UImage>(GetWidgetFromName(TEXT("LvHealth")));
-    Lv_Image[1] = Cast<UImage>(GetWidgetFromName(TEXT("LvHealthRegen")));
-    Lv_Image[2] = Cast<UImage>(GetWidgetFromName(TEXT("LvMoveSpeed")));
-    Lv_Image[3] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponDamage")));
-    Lv_Image[4] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponFireRate")));
-    Lv_Image[5] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponRange")));
-    Lv_Image[6] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponMagazine")));
-    Lv_Image[7] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponReload")));
+    if (HitMarker) HitMarker->SetVisibility(ESlateVisibility::Collapsed);
+
+    Lv_Image[0] = LvHealth;
+    Lv_Image[1] = LvHealthRegen;
+    Lv_Image[2] = LvMoveSpeed;
+    Lv_Image[3] = LvWeaponDamage;
+    Lv_Image[4] = LvWeaponFireRate;
+    Lv_Image[5] = LvWeaponRange;
+    Lv_Image[6] = LvWeaponMagazine;
+    Lv_Image[7] = LvWeaponReload;
+
+    LvText[0] = LvHealthText;
+    LvText[1] = LvHealthRegenText;
+    LvText[2] = LvMoveSpeedText;
+    LvText[3] = LvWeaponDamageText;
+    LvText[4] = LvWeaponFireRateText;
+    LvText[5] = LvWeaponRangeText;
+    LvText[6] = LvWeaponMagazineText;
+    LvText[7] = LvWeaponReloadText;
+
     for (int32 i = 0; i < LvTotalNumber; ++i)
     {
+        if (!Lv_Image[i]) continue;
+
         UMaterialInterface* BaseMaterial = Lv_Image[i]->GetDynamicMaterial();
         LvLinearMID[i] = Cast<UMaterialInstanceDynamic>(BaseMaterial);
 
@@ -81,18 +87,23 @@ void UTpsPlayerMainHUD::NativeConstruct()
         }
     }
 
+    UE_LOG(LogTemp, Warning, TEXT("[DS] AimBind: Up=%d(Vis=%d) Down=%d(Vis=%d) Left=%d(Vis=%d) Right=%d(Vis=%d)"),
+        AimDash_Up != nullptr, AimDash_Up ? (int32)AimDash_Up->GetVisibility() : -1,
+        AimDash_Down != nullptr, AimDash_Down ? (int32)AimDash_Down->GetVisibility() : -1,
+        AimDash_Left != nullptr, AimDash_Left ? (int32)AimDash_Left->GetVisibility() : -1,
+        AimDash_Right != nullptr, AimDash_Right ? (int32)AimDash_Right->GetVisibility() : -1);
 
-    Aim_Image = Cast<UImage>(GetWidgetFromName(TEXT("Aim_Icon")));
-
-    TPS_Compass = Cast<UUserWidget>(GetWidgetFromName(TEXT("Compass")));
+    // 디자이너에서 기본값이 Collapsed/Hidden으로 되어 있으면 RenderTranslation을 줘도 안 보이므로,
+    // 처음부터 확실하게 보이는 상태로 강제한다.
+    if (AimDash_Up)    AimDash_Up->SetVisibility(ESlateVisibility::HitTestInvisible);
+    if (AimDash_Down)  AimDash_Down->SetVisibility(ESlateVisibility::HitTestInvisible);
+    if (AimDash_Left)  AimDash_Left->SetVisibility(ESlateVisibility::HitTestInvisible);
+    if (AimDash_Right) AimDash_Right->SetVisibility(ESlateVisibility::HitTestInvisible);
 
     for (int32 i = 0; i < CardTotalNumber; i++)
     {
         Cards[i] = ECardID::None;
     }
-    WEAPONMAXTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("WEAPONMAXTxt")));
-    WEAPONCountxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("WEAPONCountxt")));
-
 }
 
 void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -100,6 +111,7 @@ void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
     Super::NativeTick(MyGeometry, InDeltaTime);
     UpdateCompass();
     UpdateWeaponCountWidget();
+    UpdateAim(InDeltaTime);
     if (bNeedPlayerStateBind)
         TryBindPlayerState();
     UpdateNameWidget();
@@ -107,16 +119,15 @@ void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 
 void UTpsPlayerMainHUD::StaticUI()
 {
-    UpdateWeaponIconWidget();
 }
 
 void UTpsPlayerMainHUD::UpdateHPWidget()
 {
     if (CurrentCharacterState.IsValid())
     {
-        if (HP_Image)      HPCircleMID->SetScalarParameterValue(HPRadialWipeParamName, CurrentCharacterState->GetHPRatio());
-        if (HPTxt)         HPTxt->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentHP()));
-        if (MaxHPTxt)      MaxHPTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
+        if (HP_Bar)        HP_Bar->SetPercent(CurrentCharacterState->GetHPRatio());
+        if (HP_Text)       HP_Text->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentHP()));
+        if (MaxHP_Text)    MaxHP_Text->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
     }
 }
 
@@ -161,10 +172,14 @@ void UTpsPlayerMainHUD::OnOwnedCardsChanged(const TArray<FOwnedCardInfo>& NewCar
         {
             Cards[i] = ECardID::None;
 
-            // 빈 슬롯: 기존 맵의 None 키 대신 EmptyCardTexture 사용 (DA는 앞면 전용)
-            if (EmptyCardTexture)
+            UTexture2D* BackTexture = EmptyCardTexture;
+            if (!BackTexture && CardTextures)
             {
-                CardImage[i]->SetBrushFromTexture(EmptyCardTexture);
+                BackTexture = CardTextures->BackTexture;
+            }
+            if (BackTexture)
+            {
+                CardImage[i]->SetBrushFromTexture(BackTexture);
                 CardImage[i]->SetVisibility(ESlateVisibility::Visible);
             }
         }
@@ -179,12 +194,6 @@ void UTpsPlayerMainHUD::TryBindPlayerState()
 
     APlayerController* PC = GetOwningPlayer();
     if (!PC) return;
-
-    // 명중 확인(히트마커) 바인딩 — PS 준비 여부와 무관하게 PC만 있으면 연결
-    if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(PC))
-    {
-        MainPC->OnHitConfirmed.AddUniqueDynamic(this, &UTpsPlayerMainHUD::HandleHitConfirmed);
-    }
 
     AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
     if (!PS) return;
@@ -208,16 +217,10 @@ void UTpsPlayerMainHUD::TriggerCardFlip()
     PlayAnimation(CardFlipAnim);
 }
 
-void UTpsPlayerMainHUD::HandleHitConfirmed(bool bKilled)
-{
-    OnHitMarker(bKilled);
-}
-
 void UTpsPlayerMainHUD::OnCardFlipMidpoint()
 {
     for(int32 i = 0; i < CardTotalNumber; i++)
     {
-        // None(빈 슬롯)은 앞면 갱신 대상 아님 — 기존 맵 미등록 시 스킵과 동일 동작
         if (Cards[i] == ECardID::None || !CardTextures) continue;
 
         if (UTexture2D* FrontTexture = CardTextures->GetFront(Cards[i]))
@@ -233,14 +236,6 @@ void UTpsPlayerMainHUD::UpdateCardWidget()
     if (CachedPlayerState.IsValid())
     {
         OnOwnedCardsChanged(CachedPlayerState->OwnedCards);
-    }
-}
-
-void UTpsPlayerMainHUD::UpdateWeaponIconWidget()
-{
-    if (CurrentCharacterState.IsValid())
-    {
-        if (WEAPONImage) WEAPONImage->SetBrushFromTexture(UsingWeapon_Images);
     }
 }
 
@@ -265,9 +260,39 @@ void UTpsPlayerMainHUD::UpdateWeaponCountWidget()
     }
 }
 
-void UTpsPlayerMainHUD::UpdateAim()
+void UTpsPlayerMainHUD::UpdateAim(float DeltaTime)
 {
-    if (Aim_Image) Aim_Image->SetBrushFromTexture(Aim_Images);
+    if (Aim_Icon) Aim_Icon->SetBrushFromTexture(Aim_Images);
+
+    // 무기별 실제 블룸 각도(도)를 픽셀로 환산한 목표치. 무기마다 MaxBloomAngle이 다르므로
+    // 퍼지는 정도(끝까지 벌어졌을 때 거리)도 무기마다 자연히 달라진다.
+    float TargetOffset = 0.f;
+    AMainCharacter* Character = Cast<AMainCharacter>(GetOwningPlayerPawn());
+    AWeapon* Weapon = Character ? Character->GetEquippedGun() : nullptr;
+    if (Weapon && Weapon->Setting)
+    {
+        constexpr float PixelsPerBloomDegree = 6.f; // 1도당 픽셀 거리. 취향껏 조정.
+        TargetOffset = Weapon->Setting->GetCurrentBloomDegrees() * PixelsPerBloomDegree;
+    }
+    else
+    {
+        AimDebugLogAccumulator += DeltaTime;
+        if (AimDebugLogAccumulator >= 0.5f)
+        {
+            AimDebugLogAccumulator = 0.f;
+            UE_LOG(LogTemp, Warning, TEXT("[DS] UpdateAim: 조회 실패 Character=%d Weapon=%d Setting=%d"),
+                Character != nullptr, Weapon != nullptr, (Weapon && Weapon->Setting));
+        }
+    }
+
+    // 목표치로 순간이동하지 않고 매 프레임 부드럽게 따라가게 한다(끊기듯 튀거나 훅 줄어드는 느낌 방지).
+    constexpr float InterpSpeed = 10.f;
+    CurrentDisplayedAimOffset = FMath::FInterpTo(CurrentDisplayedAimOffset, TargetOffset, DeltaTime, InterpSpeed);
+
+    if (AimDash_Up)    AimDash_Up->SetRenderTranslation(FVector2D(0.f, -CurrentDisplayedAimOffset));
+    if (AimDash_Down)  AimDash_Down->SetRenderTranslation(FVector2D(0.f, CurrentDisplayedAimOffset));
+    if (AimDash_Left)  AimDash_Left->SetRenderTranslation(FVector2D(-CurrentDisplayedAimOffset, 0.f));
+    if (AimDash_Right) AimDash_Right->SetRenderTranslation(FVector2D(CurrentDisplayedAimOffset, 0.f));
 }
 
 void UTpsPlayerMainHUD::UpdateLevel()
@@ -276,16 +301,29 @@ void UTpsPlayerMainHUD::UpdateLevel()
     {
         const FAccumulatedUpgrades& Upgrades = CachedPlayerState->GetAccumulatedUpgrades();
 
-        // 각 레벨 아이콘 업데이트
         // 0: Health, 1: HealthRegen, 2: MoveSpeed, 3: WeaponDamage, 4: FireRate, 5: Range, 6: Magazine, 7: Reload
-        if (Lv_Image[0]) LvLinearMID[0]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvHealth + Upgrades.LvHealth) * 0.2f);
-        if (Lv_Image[1]) LvLinearMID[1]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvHealthRegeneration + Upgrades.LvHealthRegen) * 0.2f);
-        if (Lv_Image[2]) LvLinearMID[2]->SetScalarParameterValue(LvLinearWipeParamName, (CachedPlayerState->PlayerData.LvMovementSpeed + Upgrades.LvMoveSpeed) * 0.2f);
-        if (Lv_Image[3]) LvLinearMID[3]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponDamage * 0.2f);
-        if (Lv_Image[4]) LvLinearMID[4]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponFireRate * 0.2f);
-        if (Lv_Image[5]) LvLinearMID[5]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponRange * 0.2f);
-        if (Lv_Image[6]) LvLinearMID[6]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponMagazine * 0.2f);
-        if (Lv_Image[7]) LvLinearMID[7]->SetScalarParameterValue(LvLinearWipeParamName, Upgrades.LvWeaponReload * 0.2f);
+        const int32 Levels[LvTotalNumber] = {
+            CachedPlayerState->PlayerData.LvHealth + Upgrades.LvHealth,
+            CachedPlayerState->PlayerData.LvHealthRegeneration + Upgrades.LvHealthRegen,
+            CachedPlayerState->PlayerData.LvMovementSpeed + Upgrades.LvMoveSpeed,
+            Upgrades.LvWeaponDamage,
+            Upgrades.LvWeaponFireRate,
+            Upgrades.LvWeaponRange,
+            Upgrades.LvWeaponMagazine,
+            Upgrades.LvWeaponReload
+        };
+
+        for (int32 i = 0; i < LvTotalNumber; ++i)
+        {
+            if (Lv_Image[i] && LvLinearMID[i])
+            {
+                LvLinearMID[i]->SetScalarParameterValue(LvLinearWipeParamName, Levels[i] * 0.2f);
+            }
+            if (LvText[i])
+            {
+                LvText[i]->SetText(FText::FromString(FString::Printf(TEXT("LV. %d"), Levels[i])));
+            }
+        }
     }
 }
 
@@ -300,9 +338,9 @@ void UTpsPlayerMainHUD::ChangeCompassSize(float ZRotation, UImage* PSU_Compass)
 
 void UTpsPlayerMainHUD::UpdateCompass()
 {
-    if (!CurrentCharacterState.IsValid()) return;
+    if (!CurrentCharacterState.IsValid() || !Compass) return;
 
-    UImage* PSU_Compass = Cast<UImage>(TPS_Compass->GetWidgetFromName(TEXT("IMG_CompassImage")));
+    UImage* PSU_Compass = Cast<UImage>(Compass->GetWidgetFromName(TEXT("IMG_CompassImage")));
     APlayerController* PC = GetOwningPlayer();
 
     if (PC)
@@ -335,27 +373,49 @@ void UTpsPlayerMainHUD::CycleDiscardSelection()
     }
     else DiscradSelectionIndex = -1;
 
-
+    UpdateCardSelectionHighlight();
 }
 
 void UTpsPlayerMainHUD::ConfirmDiscardSelectedCard()
 {
     AMainPlayerController* PC = Cast<AMainPlayerController>(GetOwningPlayer());
-    if (PC)
+    if (PC && DiscradSelectionIndex != -1)
     {
         AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
         if (!PS) return;
-
-        // 버림 직후 인덱스가 -1로 리셋되므로, 마지막 1장은 "짧게 눌러 선택" 없이
-        // 바로 길게 누르는 실사용 흐름에서 조용히 무시됐다. 1장뿐이면 모호하지 않으니 자동 선택.
-        // (여러 장일 때는 기존대로 짧게 눌러 선택해야 버려짐)
-        if (DiscradSelectionIndex == -1 && PS->OwnedCards.Num() == 1)
-        {
-            DiscradSelectionIndex = 0;
-        }
-
-        if (DiscradSelectionIndex != -1 && PS->OwnedCards.IsValidIndex(DiscradSelectionIndex))
+        if (PS->OwnedCards.IsValidIndex(DiscradSelectionIndex))
             PC->Server_RequestDiscardCard(PS->OwnedCards[DiscradSelectionIndex].CardInstanceId);
     }
     DiscradSelectionIndex = -1;
+    UpdateCardSelectionHighlight();
+}
+
+void UTpsPlayerMainHUD::UpdateCardSelectionHighlight()
+{
+    for (int32 i = 0; i < CardTotalNumber; i++)
+    {
+        if (!CardHighlightImage[i]) continue;
+
+        CardHighlightImage[i]->SetVisibility(i == DiscradSelectionIndex
+            ? ESlateVisibility::HitTestInvisible
+            : ESlateVisibility::Collapsed);
+    }
+}
+
+void UTpsPlayerMainHUD::ShowHitMarker()
+{
+    if (!HitMarker) return;
+
+    HitMarker->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+    if (UWorld* World = GetWorld())
+    {
+        constexpr float HitMarkerDisplaySeconds = 0.15f;
+        World->GetTimerManager().SetTimer(HitMarkerTimerHandle, this, &UTpsPlayerMainHUD::HideHitMarker, HitMarkerDisplaySeconds, false);
+    }
+}
+
+void UTpsPlayerMainHUD::HideHitMarker()
+{
+    if (HitMarker) HitMarker->SetVisibility(ESlateVisibility::Collapsed);
 }

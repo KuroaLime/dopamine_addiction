@@ -12,6 +12,9 @@ class MANAGER_API UCardTextureSet : public UDataAsset
 	GENERATED_BODY()
 
 public:
+	/** 프로젝트 기본 카드 텍스처 세트. BP가 명시적으로 지정하지 않은 최신 위젯도 안전하게 공유한다. */
+	static UCardTextureSet* LoadDefault();
+
 	/** ECardID(1~20) → 앞면 텍스처. 20행 전부 채울 것 */
 	UPROPERTY(EditDefaultsOnly, BlueprintReadOnly, Category = "Card")
 	TMap<ECardID, TObjectPtr<UTexture2D>> FrontTextures;
