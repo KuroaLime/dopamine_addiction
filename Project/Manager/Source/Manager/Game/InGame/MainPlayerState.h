@@ -33,6 +33,8 @@ class MANAGER_API AMainPlayerState : public APlayerState,
 	GENERATED_BODY()
 	
 public:
+	static constexpr float BaseMaxHealth = 150.0f;
+
 	AMainPlayerState();
 private:
 	float HoldingGold;
@@ -137,6 +139,7 @@ public:
 	FAccumulatedUpgrades GetAccumulatedUpgrades() const { return AccumulatedUpgrades; };
 public:
 	float GetFinalMaxHP(float BaseMaxHP) const;
+	float GetCurrentMaxHP() const { return GetFinalMaxHP(BaseMaxHealth); }
 	float GetFinalRegenRate(float BaseRegen) const;
 	float GetFinalMoveSpeed(float BaseMoveSpeed) const;
 	float GetFinalWeaponDamageMultiplier() const;

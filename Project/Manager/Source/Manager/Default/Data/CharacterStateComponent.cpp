@@ -114,15 +114,12 @@ int32 UCharacterStateComponent::GetMaxAmmoCount() {
 }
 
 float UCharacterStateComponent::GetMaxHP() {
-	if (CurrentStateData == nullptr) return 100.0f;
-	float BaseHP = CurrentStateData->MaxHP;
-
-	if (APawn* Pawn = Cast<APawn>(GetOwner())) {
-		if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {
-			return PS->GetFinalMaxHP(BaseHP);
-		}
-	}
-	return BaseHP;
+    if (APawn* Pawn = Cast<APawn>(GetOwner())) {
+        if (AMainPlayerState* PS = Cast<AMainPlayerState>(Pawn->GetPlayerState())) {
+            return PS->GetCurrentMaxHP();
+        }
+    }
+    return AMainPlayerState::BaseMaxHealth;
 }
 
 int UCharacterStateComponent::GetLevel() {
@@ -162,6 +159,7 @@ void UCharacterStateComponent::BindToPlayerState(AMainPlayerState* PS)
 {
 	if (PS) {
 		PS->OnGoldChnageNative.RemoveAll(this);
+		PS->OnHPChnageNative.RemoveAll(this);
 		PS->OnGoldChnageNative.AddUObject(this, &UCharacterStateComponent::OnRep_HoldingGold);
 		PS->OnHPChnageNative.AddUObject(this, &UCharacterStateComponent::OnRep_ChangeCurrentHP);
 

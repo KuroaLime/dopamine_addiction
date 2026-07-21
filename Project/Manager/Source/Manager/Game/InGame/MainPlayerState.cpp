@@ -10,7 +10,7 @@
 AMainPlayerState::AMainPlayerState()
 {
 	CurPlayerData.HoldingGold = 10000;
-	CurPlayerData.CurrentHP = 150;
+	CurPlayerData.CurrentHP = FMath::RoundToInt(BaseMaxHealth);
 
 
 	//하드 코딩 바꾸자
@@ -92,6 +92,8 @@ EWeaponType AMainPlayerState::GetWeaponID() const
 
 void AMainPlayerState::SetWeaponID(EWeaponType WeaponID)
 {
+	if (!HasAuthority()) return;
+
 	WeaponData.weaponID = WeaponID;
 	ForceNetUpdate();
 }
@@ -215,13 +217,19 @@ void AMainPlayerState::ClearRevealedCard()
 
 void AMainPlayerState::ResetState()
 {
-	if (!HasAuthority())
-	{
-		return;
-	}
+    if (!HasAuthority())
+    {
+        return;
+    }
 
-	CurPlayerData.CurrentHP = 150;
-	ForceNetUpdate();
+    const int32 RestoredHP = FMath::RoundToInt(GetCurrentMaxHP());
+    const bool bChanged = CurPlayerData.CurrentHP != RestoredHP;
+    CurPlayerData.CurrentHP = RestoredHP;
+    if (bChanged)
+    {
+        OnHPChnageNative.Broadcast(CurPlayerData.CurrentHP);
+    }
+    ForceNetUpdate();
 }
 
 void AMainPlayerState::CaptureReconnectSnapshot(FMainPlayerReconnectSnapshot& OutSnapshot) const
@@ -374,7 +382,11 @@ void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 		if (PlayerData.LvHealth < MaxUpgradeLevel)
 		{
 			PlayerData.LvHealth++;
-			CurPlayerData.CurrentHP += 1;
+			CurPlayerData.CurrentHP += 20;
+			if (OnHPChnageNative.IsBound())
+			{
+				OnHPChnageNative.Broadcast(CurPlayerData.CurrentHP);
+			}
 		}
 		break;
 	case EUpgradeType::Player_MoveSpeed:

@@ -44,6 +44,7 @@ protected:
 	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Weapon Setting")
 	EWeaponType WeaponType = EWeaponType::SMG;
 public:
+	void SetWeaponType(EWeaponType NewWeaponType) { WeaponType = NewWeaponType; }
 
 	UFUNCTION(NetMulticast,Reliable)
 	virtual void Multicast_PlayReloadFeedback();
@@ -76,6 +77,9 @@ public:
 
 	// 서버: Duration초 동안 "장전 중"으로 잠금 (그 사이 사격 불가). 끝나면 자동 해제.
 	void StartReloadLock(float Duration);
+
+	// Server lifecycle cleanup for death, phase exit and respawn.
+	void CancelReloadLock();
 
 	// 연사 중 탄퍼짐(블룸) 각도(도, 실제 SpreadAngle에 더해지는 양). 복제 안 됨 — 로컬 클라이언트가
 	// 자기 자신의 조준점 UI 표시용으로만 씀. 무기마다 MaxBloomAngle이 다르므로 값 자체로 무기별 차이가 자연히 반영됨.

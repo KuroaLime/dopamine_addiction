@@ -12,6 +12,7 @@ class UPhaseStrategy;
 class APlayerController;
 class AController;
 class AMainPlayerController;
+class AMainCharacter;
 class ACardDropActor;
 class AGoldDropActor;
 class USpawnManagerComponent;
@@ -121,6 +122,7 @@ public:
 
 public:
     bool IsBattleRoyalePhase() const;
+    bool TryRespawnPlayerAuthoritatively(AMainCharacter* Character, const TCHAR* Context);
     bool IsShopRequestAllowed() const;
     bool DropGoldFromPlayer(AMainPlayerState* TargetPS, AActor* SourceActor);
     bool IsPreBattleShopPhase() const;

@@ -33,6 +33,8 @@
 #include "Game/InGame/MainGameMode.h"
 #include "Game/InGame/TPS/Actor/Spawn/Ability/SpawnManagerComponent.h"
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
+#include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
+#include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
 
 // Sets default values
 AMainCharacter::AMainCharacter()
@@ -217,7 +219,8 @@ void AMainCharacter::UnPossessed()
 	{
 		HealthRegen->UnregisterComponent();
 	}
-	
+
+	Super::UnPossessed();
 }
 
 void AMainCharacter::OnRep_PlayerState()
@@ -229,36 +232,35 @@ void AMainCharacter::OnRep_PlayerState()
 
 void AMainCharacter::InitPlayerData()
 {
-	APlayerState* CurrentPS = GetPlayerState();
-	if (!CurrentPS) return;
+    APlayerState* CurrentPS = GetPlayerState();
+    if (!CurrentPS) return;
 
-	if (IPhasePlayerStateInterface* PS_Interface = Cast<IPhasePlayerStateInterface>(CurrentPS))
-	{
-		if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
-		{
-			PS_Interface->SetWeaponID(GS->GetWeaponID());
-		}
-	}
+    if (HasAuthority())
+    {
+        if (IPhasePlayerStateInterface* PSInterface = Cast<IPhasePlayerStateInterface>(CurrentPS))
+        {
+            if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
+            {
+                PSInterface->SetWeaponID(GS->GetWeaponID());
+            }
+        }
+    }
 
-	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>())
-	{
-		if (CharacterState){
-			CharacterState->BindToPlayerState(PS);
-		}
-	}
-	if (AMainPlayerState* PS = GetPlayerState<AMainPlayerState>())
-	{
-		if (CharacterState) {
-			CharacterState->BindToPlayerState(PS);
-		}
-		PS->OnPlayerDataChangedNative.AddUObject(this, &AMainCharacter::OnPlayerDataChanged);
-		PS->OnAccumulatedUpgradesChangedNative.AddUObject(this, &AMainCharacter::OnAccumulatedUpgradesChanged);
+    if (AMainPlayerState* PS = Cast<AMainPlayerState>(CurrentPS))
+    {
+        if (CharacterState)
+        {
+            CharacterState->BindToPlayerState(PS);
+        }
 
-		UpdateCharacterStats();
-	}
+        PS->OnPlayerDataChangedNative.RemoveAll(this);
+        PS->OnAccumulatedUpgradesChangedNative.RemoveAll(this);
+        PS->OnPlayerDataChangedNative.AddUObject(this, &AMainCharacter::OnPlayerDataChanged);
+        PS->OnAccumulatedUpgradesChangedNative.AddUObject(this, &AMainCharacter::OnAccumulatedUpgradesChanged);
+        UpdateCharacterStats();
+    }
 }
 
-// Called to bind functionality to input
 void AMainCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
 	Super::SetupPlayerInputComponent(PlayerInputComponent);
@@ -330,29 +332,59 @@ bool AMainCharacter::IsCharacterDeath() const
 
 void AMainCharacter::EquipWeapon(EWeaponType NewWeaponID)
 {
-	TSubclassOf<AWeapon> WeaponClassToSpawn = nullptr;
-	if (WeaponClasses.Contains(NewWeaponID)){
-		WeaponClassToSpawn = WeaponClasses[NewWeaponID];
-	}
-	if (!WeaponClassToSpawn){
-		WeaponClassToSpawn = m_cGun;
-	}
-	if (!WeaponClassToSpawn)return;
+    if (!HasAuthority() || !GetWorld()) return;
 
-	if (m_pEquippedGun){
-		m_pEquippedGun->Destroy();
-		m_pEquippedGun = nullptr;
-	}
-	FActorSpawnParameters SpawnParams;
-	SpawnParams.Owner = this;
-	SpawnParams.Instigator = GetInstigator();
-	
-	m_pEquippedGun = GetWorld()->SpawnActor<AWeapon>(WeaponClassToSpawn, FVector::ZeroVector, FRotator::ZeroRotator, SpawnParams);
-	
-	if (m_pEquippedGun){
-		const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
-		m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
-	}
+    TSubclassOf<AWeapon> WeaponClassToSpawn = nullptr;
+    if (const TSubclassOf<AWeapon>* FoundClass = WeaponClasses.Find(NewWeaponID))
+    {
+        WeaponClassToSpawn = *FoundClass;
+    }
+
+    if (!WeaponClassToSpawn)
+    {
+        UE_LOG(LogTemp, Warning,
+            TEXT("[DS] EquipWeapon missing mapped class WeaponType=%d Character=%s; using fallback class."),
+            static_cast<int32>(NewWeaponID),
+            *GetNameSafe(this));
+        WeaponClassToSpawn = m_cGun;
+    }
+    if (!WeaponClassToSpawn)
+    {
+        UE_LOG(LogTemp, Error,
+            TEXT("[DS] EquipWeapon failed: mapped and fallback classes are null WeaponType=%d Character=%s"),
+            static_cast<int32>(NewWeaponID),
+            *GetNameSafe(this));
+        return;
+    }
+
+    if (m_pEquippedGun)
+    {
+        m_pEquippedGun->Destroy();
+        m_pEquippedGun = nullptr;
+    }
+
+    FActorSpawnParameters SpawnParams;
+    SpawnParams.Owner = this;
+    SpawnParams.Instigator = GetInstigator();
+    m_pEquippedGun = GetWorld()->SpawnActor<AWeapon>(
+        WeaponClassToSpawn,
+        FVector::ZeroVector,
+        FRotator::ZeroRotator,
+        SpawnParams);
+
+    if (m_pEquippedGun)
+    {
+        if (m_pEquippedGun->Setting)
+        {
+            m_pEquippedGun->Setting->SetWeaponType(NewWeaponID);
+            m_pEquippedGun->Setting->SetCurrentAmmo(
+                m_pEquippedGun->Setting->GetMaxMagazineCapacity());
+        }
+
+        const FAttachmentTransformRules AttachmentRules(EAttachmentRule::SnapToTarget, true);
+        m_pEquippedGun->AttachToComponent(GetMesh(), AttachmentRules, TEXT("HandGun_R"));
+        m_pEquippedGun->ForceNetUpdate();
+    }
 }
 
 void AMainCharacter::Move(const FInputActionValue& Value)
@@ -434,11 +466,18 @@ void AMainCharacter::OnCharacterDeath()
 	// Release crouch state
 	UnCrouch();
 
-	// Release aim state (cancel aiming ability)
-	static const FGameplayTag AimTag = FGameplayTag::RequestGameplayTag(FName("Ability.Action.Aim"));
-	FGameplayTagContainer AimTags;
-	AimTags.AddTag(AimTag);
-	AbilitySystemComponent->CancelAbilitiesWithTag(AimTags);
+	// Death must terminate every held TPS action, not only aiming.
+	FGameplayTagContainer ActionTags;
+	ActionTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Fire")));
+	ActionTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Aim")));
+	ActionTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.Crouch")));
+	ActionTags.AddTag(FGameplayTag::RequestGameplayTag(FName("Ability.Action.CardDiscard")));
+	AbilitySystemComponent->CancelAbilitiesWithTag(ActionTags);
+
+	if (m_pEquippedGun && m_pEquippedGun->Setting)
+	{
+		m_pEquippedGun->Setting->CancelReloadLock();
+	}
 
 	// Stop playing any montages immediately so the death state machine/animation plays cleanly
 	UAnimInstance* AnimInstance = GetMesh() ? GetMesh()->GetAnimInstance() : nullptr;

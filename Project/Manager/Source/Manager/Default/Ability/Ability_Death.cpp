@@ -64,6 +64,10 @@ void UAbility_Death::ActivateAbility()
 
 void UAbility_Death::EndAbility(bool bWasCancelled)
 {
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(ServerRespawnTimerHandle);
+	}
 	Super::EndAbility(bWasCancelled);
 }
 

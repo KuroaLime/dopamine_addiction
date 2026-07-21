@@ -88,7 +88,7 @@ void USpawnManagerComponent::InitializeSpawnPoints() {
 //아이디를 받아서 위치를 얻어내는 함수
 bool USpawnManagerComponent::GetSpawnLocation(int32 ID, FVector& OutLocation) {
 	AA_Spawn** FoundPoint = SpawnPointMap.Find(ID);
-	if (FoundPoint && *FoundPoint) {
+	if (FoundPoint && IsValid(*FoundPoint)) {
 		OutLocation = (*FoundPoint)->GetActorLocation();
 		return true;
 	}
@@ -96,52 +96,120 @@ bool USpawnManagerComponent::GetSpawnLocation(int32 ID, FVector& OutLocation) {
 }
 //랜덤하게 아이디를 받아가는 함수
 int32 USpawnManagerComponent::GetRandomSpawnID() const{
-	if (SpawnPointMap.Num() == 0)
-		return -1;
+    TArray<int32> Keys;
+    for (const TPair<int32, AA_Spawn*>& Pair : SpawnPointMap)
+    {
+        if (IsValid(Pair.Value)) Keys.Add(Pair.Key);
+    }
+    if (Keys.IsEmpty()) return -1;
 
-	TArray<int32> Keys;
-	SpawnPointMap.GetKeys(Keys);
-	int32 RandomIndex = FMath::RandRange(0, Keys.Num() - 1);
-
-	return Keys[RandomIndex];
+    return Keys[FMath::RandRange(0, Keys.Num() - 1)];
 }
 
 AA_Spawn* USpawnManagerComponent::GetUniqueRandomSpawnActor() {
-	if (AvailableSpawns.Num() == 0) return nullptr;
+    AvailableSpawns.RemoveAll([](const AA_Spawn* SpawnPoint) {
+        return !IsValid(SpawnPoint);
+    });
 
-	if (UniqueSpawnCursor == 0)
-	{
-		// 새 사이클 시작 시점(최초 호출 포함)마다 매번 재셔플. 원소를 제거하지 않으므로 풀이 고갈되지 않는다.
-		Algo::RandomShuffle(AvailableSpawns);
-	}
+    if (AvailableSpawns.IsEmpty())
+    {
+        InitializeSpawnPoints();
+        AvailableSpawns.RemoveAll([](const AA_Spawn* SpawnPoint) {
+            return !IsValid(SpawnPoint);
+        });
+    }
 
-	AA_Spawn* Picked = AvailableSpawns[UniqueSpawnCursor];
-	UniqueSpawnCursor = (UniqueSpawnCursor + 1) % AvailableSpawns.Num();
-	return Picked;
+    if (AvailableSpawns.IsEmpty()) return nullptr;
+    if (!AvailableSpawns.IsValidIndex(UniqueSpawnCursor)) UniqueSpawnCursor = 0;
+
+    if (UniqueSpawnCursor == 0)
+    {
+        Algo::RandomShuffle(AvailableSpawns);
+    }
+
+    AA_Spawn* Picked = AvailableSpawns[UniqueSpawnCursor];
+    UniqueSpawnCursor = (UniqueSpawnCursor + 1) % AvailableSpawns.Num();
+    return Picked;
 }
+
 int32 USpawnManagerComponent::GetAvailableSpawnCount() const {
 	return AvailableSpawns.Num();
 }
 
 void USpawnManagerComponent::ShuffleAvailableSpawns() {
-	Algo::RandomShuffle(AvailableSpawns);
+    AvailableSpawns.RemoveAll([](const AA_Spawn* SpawnPoint) {
+        return !IsValid(SpawnPoint);
+    });
+    if (AvailableSpawns.IsEmpty())
+    {
+        InitializeSpawnPoints();
+        AvailableSpawns.RemoveAll([](const AA_Spawn* SpawnPoint) {
+            return !IsValid(SpawnPoint);
+        });
+    }
+    UniqueSpawnCursor = 0;
+    Algo::RandomShuffle(AvailableSpawns);
 }
 
 AA_Spawn* USpawnManagerComponent::GetRandomCenterSpawnActor() {
-	if (CenterSpawns.Num() == 0) {
-		UE_LOG(LogTemp, Error, TEXT("[SpawnManager] GetRandomCenterSpawnActor (Owner: %s): CenterSpawns is EMPTY! Falling back to any spawner."), *GetOwner()->GetName());
-		if (SpawnPointMap.Num() == 0) return nullptr;
-		TArray<int32> Keys;
-		SpawnPointMap.GetKeys(Keys);
-		int32 RandomIndex = FMath::RandRange(0, Keys.Num() - 1);
-		return SpawnPointMap[Keys[RandomIndex]];
-	}
+    CenterSpawns.RemoveAll([](const AA_Spawn* SpawnPoint) {
+        return !IsValid(SpawnPoint);
+    });
+    AvailableSpawns.RemoveAll([](const AA_Spawn* SpawnPoint) {
+        return !IsValid(SpawnPoint);
+    });
+    for (auto It = SpawnPointMap.CreateIterator(); It; ++It)
+    {
+        if (!IsValid(It.Value())) It.RemoveCurrent();
+    }
 
-	int32 RandomIndex = FMath::RandRange(0, CenterSpawns.Num() - 1);
-	return CenterSpawns[RandomIndex];
+    if (CenterSpawns.IsEmpty())
+    {
+        // The streamed spawn level may not have existed when BeginPlay first scanned the world.
+        InitializeSpawnPoints();
+        CenterSpawns.RemoveAll([](const AA_Spawn* SpawnPoint) {
+            return !IsValid(SpawnPoint);
+        });
+        AvailableSpawns.RemoveAll([](const AA_Spawn* SpawnPoint) {
+            return !IsValid(SpawnPoint);
+        });
+    }
+
+    if (!CenterSpawns.IsEmpty())
+    {
+        return CenterSpawns[FMath::RandRange(0, CenterSpawns.Num() - 1)];
+    }
+
+    UE_LOG(LogTemp, Warning,
+        TEXT("[SpawnManager] CenterSpawns is empty after rescan (Owner: %s). Falling back to a valid regular spawn."),
+        *GetNameSafe(GetOwner()));
+    if (!AvailableSpawns.IsEmpty())
+    {
+        return AvailableSpawns[FMath::RandRange(0, AvailableSpawns.Num() - 1)];
+    }
+
+    TArray<AA_Spawn*> ValidFallbacks;
+    for (const TPair<int32, AA_Spawn*>& Pair : SpawnPointMap)
+    {
+        if (IsValid(Pair.Value)) ValidFallbacks.AddUnique(Pair.Value);
+    }
+    return ValidFallbacks.IsEmpty()
+        ? nullptr
+        : ValidFallbacks[FMath::RandRange(0, ValidFallbacks.Num() - 1)];
 }
 
 void USpawnManagerComponent::SetShopBarriersActive(bool bActive) {
+	AvailableSpawns.RemoveAll([](const AA_Spawn* SpawnPoint) {
+		return !IsValid(SpawnPoint);
+	});
+	CenterSpawns.RemoveAll([](const AA_Spawn* SpawnPoint) {
+		return !IsValid(SpawnPoint);
+	});
+	for (auto It = SpawnPointMap.CreateIterator(); It; ++It)
+	{
+		if (!IsValid(It.Value())) It.RemoveCurrent();
+	}
+
 	if (AvailableSpawns.Num() == 0 && CenterSpawns.Num() == 0)
 	{
 		// 첫 라운드 등, BeginPlay 시점엔 스폰 지점 레벨이 아직 스트리밍 안 되어 있었을 수 있음 -> 재스캔.
@@ -153,10 +221,10 @@ void USpawnManagerComponent::SetShopBarriersActive(bool bActive) {
 
 	for (AA_Spawn* SP : AvailableSpawns)
 	{
-		if (SP) SP->SetBarrierActive(bActive);
+		if (IsValid(SP)) SP->SetBarrierActive(bActive);
 	}
 	for (AA_Spawn* SP : CenterSpawns)
 	{
-		if (SP) SP->SetBarrierActive(bActive);
+		if (IsValid(SP)) SP->SetBarrierActive(bActive);
 	}
 }
