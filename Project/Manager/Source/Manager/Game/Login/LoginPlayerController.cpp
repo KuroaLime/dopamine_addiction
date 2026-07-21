@@ -4,11 +4,31 @@
 #include "Game/Login/LoginPlayerController.h"
 #include "Kismet/GameplayStatics.h"
 #include "Blueprint/UserWidget.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 #include "Default/System/UManagerGameInstance.h"
 
 
 void ALoginPlayerController::BeginPlay() {
 	Super::BeginPlay();
+
+    if (IsLocalController())
+    {
+        UWidgetLayoutLibrary::RemoveAllWidgets(this);
+
+        if (UUManagerGameInstance* GI = GetGameInstance<UUManagerGameInstance>())
+        {
+            if (GI->IsReturnToRoomAfterMatchPending())
+            {
+                UE_LOG(LogTemp, Warning,
+                    TEXT("[LOBBY_RETURN] Login fallback intercepted -> Lobby_Stage"));
+                UGameplayStatics::OpenLevel(
+                    this,
+                    FName(TEXT("/Game/Lobby/System/Lobby_Stage")),
+                    true);
+                return;
+            }
+        }
+    }
 	
     if (IsLocalController() && LoginWidgetClass)
     {

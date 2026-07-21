@@ -243,6 +243,10 @@ public:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestDiscardCard(int32 CardInstanceId);
 
+	// 서버가 이 클라이언트의 사격이 플레이어에게 명중했음을 확인해줄 때 호출.
+	UFUNCTION(Client, Reliable)
+	void Client_NotifyHitConfirmed();
+
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SetUITimer(int32 time);
 

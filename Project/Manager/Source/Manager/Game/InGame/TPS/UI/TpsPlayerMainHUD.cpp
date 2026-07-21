@@ -13,7 +13,6 @@
 #include "Game/InGame/TPS/UI/CRoundandTimerWidget.h"
 #include "Game/InGame/MainPlayerController.h"
 
-const FName UTpsPlayerMainHUD::HPRadialWipeParamName(TEXT("Radial_wipe"));
 const FName UTpsPlayerMainHUD::LvLinearWipeParamName(TEXT("Linear_wipe"));
 
 void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacterState)
@@ -40,36 +39,30 @@ void UTpsPlayerMainHUD::NativeConstruct()
 {
     Super::NativeConstruct();
 
-    HP_Image = Cast<UImage>(GetWidgetFromName(TEXT("HP_Circle")));
-    if (HP_Image)
-    {
-        UMaterialInterface* BaseMaterial = HP_Image->GetDynamicMaterial();
-        HPCircleMID = Cast<UMaterialInstanceDynamic>(BaseMaterial);
+    // BindWidget으로 자동 해석된 포인터를, 인덱스 순회가 필요한 로직을 위해 편의 배열에 채워 넣는다.
+    CardImage[0] = Card00;
+    CardImage[1] = Card01;
+    CardImage[2] = Card02;
 
-        if (HPCircleMID)
-        {
-            HPCircleMID->SetScalarParameterValue(HPRadialWipeParamName, 0.f);
-        }
-    }
-    MaxHPTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("MaxHP_Text")));
-    HPTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("HP_Text")));
+    CardHighlightImage[0] = CardHighlight00;
+    CardHighlightImage[1] = CardHighlight01;
+    CardHighlightImage[2] = CardHighlight02;
+    UpdateCardSelectionHighlight();
 
-    WEAPONImage = Cast<UImage>(GetWidgetFromName(TEXT("Weapon_Icon")));
+    if (HitMarker) HitMarker->SetVisibility(ESlateVisibility::Collapsed);
 
-    CardImage[0] = Cast<UImage>(GetWidgetFromName(TEXT("Card00")));
-    CardImage[1] = Cast<UImage>(GetWidgetFromName(TEXT("Card01")));
-    CardImage[2] = Cast<UImage>(GetWidgetFromName(TEXT("Card02")));
-
-    Lv_Image[0] = Cast<UImage>(GetWidgetFromName(TEXT("LvHealth")));
-    Lv_Image[1] = Cast<UImage>(GetWidgetFromName(TEXT("LvHealthRegen")));
-    Lv_Image[2] = Cast<UImage>(GetWidgetFromName(TEXT("LvMoveSpeed")));
-    Lv_Image[3] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponDamage")));
-    Lv_Image[4] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponFireRate")));
-    Lv_Image[5] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponRange")));
-    Lv_Image[6] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponMagazine")));
-    Lv_Image[7] = Cast<UImage>(GetWidgetFromName(TEXT("LvWeaponReload")));
+    Lv_Image[0] = LvHealth;
+    Lv_Image[1] = LvHealthRegen;
+    Lv_Image[2] = LvMoveSpeed;
+    Lv_Image[3] = LvWeaponDamage;
+    Lv_Image[4] = LvWeaponFireRate;
+    Lv_Image[5] = LvWeaponRange;
+    Lv_Image[6] = LvWeaponMagazine;
+    Lv_Image[7] = LvWeaponReload;
     for (int32 i = 0; i < LvTotalNumber; ++i)
     {
+        if (!Lv_Image[i]) continue;
+
         UMaterialInterface* BaseMaterial = Lv_Image[i]->GetDynamicMaterial();
         LvLinearMID[i] = Cast<UMaterialInstanceDynamic>(BaseMaterial);
 
@@ -79,35 +72,23 @@ void UTpsPlayerMainHUD::NativeConstruct()
         }
     }
 
-
-    Aim_Image = Cast<UImage>(GetWidgetFromName(TEXT("Aim_Icon")));
-    Aim_Up = Cast<UImage>(GetWidgetFromName(TEXT("AimDash_Up")));
-    Aim_Down = Cast<UImage>(GetWidgetFromName(TEXT("AimDash_Down")));
-    Aim_Left = Cast<UImage>(GetWidgetFromName(TEXT("AimDash_Left")));
-    Aim_Right = Cast<UImage>(GetWidgetFromName(TEXT("AimDash_Right")));
-
     UE_LOG(LogTemp, Warning, TEXT("[DS] AimBind: Up=%d(Vis=%d) Down=%d(Vis=%d) Left=%d(Vis=%d) Right=%d(Vis=%d)"),
-        Aim_Up != nullptr, Aim_Up ? (int32)Aim_Up->GetVisibility() : -1,
-        Aim_Down != nullptr, Aim_Down ? (int32)Aim_Down->GetVisibility() : -1,
-        Aim_Left != nullptr, Aim_Left ? (int32)Aim_Left->GetVisibility() : -1,
-        Aim_Right != nullptr, Aim_Right ? (int32)Aim_Right->GetVisibility() : -1);
+        AimDash_Up != nullptr, AimDash_Up ? (int32)AimDash_Up->GetVisibility() : -1,
+        AimDash_Down != nullptr, AimDash_Down ? (int32)AimDash_Down->GetVisibility() : -1,
+        AimDash_Left != nullptr, AimDash_Left ? (int32)AimDash_Left->GetVisibility() : -1,
+        AimDash_Right != nullptr, AimDash_Right ? (int32)AimDash_Right->GetVisibility() : -1);
 
     // 디자이너에서 기본값이 Collapsed/Hidden으로 되어 있으면 RenderTranslation을 줘도 안 보이므로,
     // 처음부터 확실하게 보이는 상태로 강제한다.
-    if (Aim_Up)    Aim_Up->SetVisibility(ESlateVisibility::HitTestInvisible);
-    if (Aim_Down)  Aim_Down->SetVisibility(ESlateVisibility::HitTestInvisible);
-    if (Aim_Left)  Aim_Left->SetVisibility(ESlateVisibility::HitTestInvisible);
-    if (Aim_Right) Aim_Right->SetVisibility(ESlateVisibility::HitTestInvisible);
-
-    TPS_Compass = Cast<UUserWidget>(GetWidgetFromName(TEXT("Compass")));
+    if (AimDash_Up)    AimDash_Up->SetVisibility(ESlateVisibility::HitTestInvisible);
+    if (AimDash_Down)  AimDash_Down->SetVisibility(ESlateVisibility::HitTestInvisible);
+    if (AimDash_Left)  AimDash_Left->SetVisibility(ESlateVisibility::HitTestInvisible);
+    if (AimDash_Right) AimDash_Right->SetVisibility(ESlateVisibility::HitTestInvisible);
 
     for (int32 i = 0; i < CardTotalNumber; i++)
     {
         Cards[i] = ECardID::None;
     }
-    WEAPONMAXTxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("WEAPONMAXTxt")));
-    WEAPONCountxt = Cast<UTextBlock>(GetWidgetFromName(TEXT("WEAPONCountxt")));
-
 }
 
 void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -123,16 +104,15 @@ void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
 
 void UTpsPlayerMainHUD::StaticUI()
 {
-    UpdateWeaponIconWidget();
 }
 
 void UTpsPlayerMainHUD::UpdateHPWidget()
 {
     if (CurrentCharacterState.IsValid())
     {
-        if (HP_Image)      HPCircleMID->SetScalarParameterValue(HPRadialWipeParamName, CurrentCharacterState->GetHPRatio());
-        if (HPTxt)         HPTxt->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentHP()));
-        if (MaxHPTxt)      MaxHPTxt->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
+        if (HP_Bar)        HP_Bar->SetPercent(CurrentCharacterState->GetHPRatio());
+        if (HP_Text)       HP_Text->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentHP()));
+        if (MaxHP_Text)    MaxHP_Text->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
     }
 }
 
@@ -239,14 +219,6 @@ void UTpsPlayerMainHUD::UpdateCardWidget()
     }
 }
 
-void UTpsPlayerMainHUD::UpdateWeaponIconWidget()
-{
-    if (CurrentCharacterState.IsValid())
-    {
-        if (WEAPONImage) WEAPONImage->SetBrushFromTexture(UsingWeapon_Images);
-    }
-}
-
 void UTpsPlayerMainHUD::UpdateWeaponCountWidget()
 {
     AMainCharacter* Character = Cast<AMainCharacter>(GetOwningPlayerPawn());
@@ -270,7 +242,7 @@ void UTpsPlayerMainHUD::UpdateWeaponCountWidget()
 
 void UTpsPlayerMainHUD::UpdateAim(float DeltaTime)
 {
-    if (Aim_Image) Aim_Image->SetBrushFromTexture(Aim_Images);
+    if (Aim_Icon) Aim_Icon->SetBrushFromTexture(Aim_Images);
 
     // 무기별 실제 블룸 각도(도)를 픽셀로 환산한 목표치. 무기마다 MaxBloomAngle이 다르므로
     // 퍼지는 정도(끝까지 벌어졌을 때 거리)도 무기마다 자연히 달라진다.
@@ -297,10 +269,10 @@ void UTpsPlayerMainHUD::UpdateAim(float DeltaTime)
     constexpr float InterpSpeed = 10.f;
     CurrentDisplayedAimOffset = FMath::FInterpTo(CurrentDisplayedAimOffset, TargetOffset, DeltaTime, InterpSpeed);
 
-    if (Aim_Up)    Aim_Up->SetRenderTranslation(FVector2D(0.f, -CurrentDisplayedAimOffset));
-    if (Aim_Down)  Aim_Down->SetRenderTranslation(FVector2D(0.f, CurrentDisplayedAimOffset));
-    if (Aim_Left)  Aim_Left->SetRenderTranslation(FVector2D(-CurrentDisplayedAimOffset, 0.f));
-    if (Aim_Right) Aim_Right->SetRenderTranslation(FVector2D(CurrentDisplayedAimOffset, 0.f));
+    if (AimDash_Up)    AimDash_Up->SetRenderTranslation(FVector2D(0.f, -CurrentDisplayedAimOffset));
+    if (AimDash_Down)  AimDash_Down->SetRenderTranslation(FVector2D(0.f, CurrentDisplayedAimOffset));
+    if (AimDash_Left)  AimDash_Left->SetRenderTranslation(FVector2D(-CurrentDisplayedAimOffset, 0.f));
+    if (AimDash_Right) AimDash_Right->SetRenderTranslation(FVector2D(CurrentDisplayedAimOffset, 0.f));
 }
 
 void UTpsPlayerMainHUD::UpdateLevel()
@@ -333,9 +305,9 @@ void UTpsPlayerMainHUD::ChangeCompassSize(float ZRotation, UImage* PSU_Compass)
 
 void UTpsPlayerMainHUD::UpdateCompass()
 {
-    if (!CurrentCharacterState.IsValid()) return;
+    if (!CurrentCharacterState.IsValid() || !Compass) return;
 
-    UImage* PSU_Compass = Cast<UImage>(TPS_Compass->GetWidgetFromName(TEXT("IMG_CompassImage")));
+    UImage* PSU_Compass = Cast<UImage>(Compass->GetWidgetFromName(TEXT("IMG_CompassImage")));
     APlayerController* PC = GetOwningPlayer();
 
     if (PC)
@@ -368,7 +340,7 @@ void UTpsPlayerMainHUD::CycleDiscardSelection()
     }
     else DiscradSelectionIndex = -1;
 
-
+    UpdateCardSelectionHighlight();
 }
 
 void UTpsPlayerMainHUD::ConfirmDiscardSelectedCard()
@@ -382,4 +354,35 @@ void UTpsPlayerMainHUD::ConfirmDiscardSelectedCard()
             PC->Server_RequestDiscardCard(PS->OwnedCards[DiscradSelectionIndex].CardInstanceId);
     }
     DiscradSelectionIndex = -1;
+    UpdateCardSelectionHighlight();
+}
+
+void UTpsPlayerMainHUD::UpdateCardSelectionHighlight()
+{
+    for (int32 i = 0; i < CardTotalNumber; i++)
+    {
+        if (!CardHighlightImage[i]) continue;
+
+        CardHighlightImage[i]->SetVisibility(i == DiscradSelectionIndex
+            ? ESlateVisibility::HitTestInvisible
+            : ESlateVisibility::Collapsed);
+    }
+}
+
+void UTpsPlayerMainHUD::ShowHitMarker()
+{
+    if (!HitMarker) return;
+
+    HitMarker->SetVisibility(ESlateVisibility::HitTestInvisible);
+
+    if (UWorld* World = GetWorld())
+    {
+        constexpr float HitMarkerDisplaySeconds = 0.15f;
+        World->GetTimerManager().SetTimer(HitMarkerTimerHandle, this, &UTpsPlayerMainHUD::HideHitMarker, HitMarkerDisplaySeconds, false);
+    }
+}
+
+void UTpsPlayerMainHUD::HideHitMarker()
+{
+    if (HitMarker) HitMarker->SetVisibility(ESlateVisibility::Collapsed);
 }

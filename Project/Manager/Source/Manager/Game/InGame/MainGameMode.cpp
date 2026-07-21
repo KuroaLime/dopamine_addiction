@@ -568,15 +568,30 @@ void AMainGameMode::PostLogin(APlayerController* NewPlayer)
 
     if (bGameStarted)
     {
-        if (const AMainPlayerState* PS = NewPlayer
+        AMainPlayerState* PS = NewPlayer
             ? NewPlayer->GetPlayerState<AMainPlayerState>()
-            : nullptr)
+            : nullptr;
+        if (PS)
         {
             RecordMatchParticipantGold(
                 Ticket,
                 PS->GetPlayerName(),
                 PS->CurPlayerData.HoldingGold);
         }
+
+        if (PS && CardGameService && CurrentServerPhase == EDediServerPhase::CardGame)
+        {
+            const bool bCardsReady = CardGameService->EnsureCardsForReconnectedPlayer(
+                PS,
+                TEXT("PostLoginCardPhase"));
+            DS_LOG(TEXT("[DS] Reconnect CardCatchUpPostLogin Ticket=%lld Player=%s Ready=%d Count=%d Round=%d"),
+                Ticket,
+                *PS->GetPlayerName(),
+                bCardsReady ? 1 : 0,
+                PS->OwnedCards.Num(),
+                CurrentRound);
+        }
+
         SynchronizePlayerWithCurrentServerPhase(Cast<AMainPlayerController>(NewPlayer));
     }
 
@@ -598,8 +613,16 @@ void AMainGameMode::Logout(AController* Exiting)
         CountConnectedHumanPlayers(),
         RequiredPlayerCount);
 
+    const bool bReturningAfterMatchEnd = bGameEndReached && !bMatchAbortRequested;
+    const int32 RemainingPlayersAfterLogout = FMath::Max(
+        0,
+        CountConnectedHumanPlayers() - (Exiting ? 1 : 0));
+
     const int64 Ticket = GetDediTicketForController(Exiting);
-    SaveDisconnectedPlayerSnapshot(Exiting, Ticket);
+    if (!bGameEndReached)
+    {
+        SaveDisconnectedPlayerSnapshot(Exiting, Ticket);
+    }
 
     if (AMainPlayerController* MainPC = Cast<AMainPlayerController>(Exiting))
     {
@@ -626,6 +649,11 @@ void AMainGameMode::Logout(AController* Exiting)
     if (CardGameService)
     {
         CardGameService->HandlePlayerDisconnectedAfterLogout(Ticket, TEXT("Logout"));
+    }
+
+    if (bReturningAfterMatchEnd && RemainingPlayersAfterLogout <= 0)
+    {
+        FinalizeMatchEndAndShutdown(TEXT("AllClientsReturned"));
     }
 
     TrySpawnBattleRoyaleCardsWhenStreamReady();
@@ -2896,6 +2924,10 @@ void AMainGameMode::StartGameEndPhase()
     FString MoneySummary = TEXT("None");
     BuildFinalGoldRanking(WinnerName, MoneySummary);
 
+    PendingMatchEndWinnerName = WinnerName;
+    PendingMatchEndMoneySummary = MoneySummary;
+    bMatchEndFinalizationStarted = false;
+
     ClearGoldDrops(TEXT("GameEnd"));
     CardGameService->ClearCardDrops();
     CardGameService->ClearRoundCardsForAllPlayers();
@@ -2927,8 +2959,6 @@ void AMainGameMode::StartGameEndPhase()
         *WinnerName,
         *MoneySummary);
 
-    NotifyIocpMatchEnd(WinnerName, MoneySummary);
-
     const FString FinalResultText = FString::Printf(
         TEXT("[MATCH END]\nWinner=%s\nRound=%d/%d\nRanking=%s"),
         *WinnerName,
@@ -2949,19 +2979,83 @@ void AMainGameMode::StartGameEndPhase()
         }
     }
 
+    const float ReturnTimeoutSeconds = FMath::Max(5.0f, MatchEndReturnTimeoutSeconds);
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(MatchEndReturnWaitTimerHandle);
+        World->GetTimerManager().SetTimer(
+            MatchEndReturnWaitTimerHandle,
+            this,
+            &AMainGameMode::HandleMatchEndReturnTimeout,
+            ReturnTimeoutSeconds,
+            false);
+    }
+
+    DS_LOG(TEXT("[DS] MatchEndReturnWait Started RoomId=%d Round=%d ConnectedPlayers=%d Timeout=%.1f"),
+        DediRoomId,
+        CurrentRound,
+        CountConnectedHumanPlayers(),
+        ReturnTimeoutSeconds);
+
+    if (CountConnectedHumanPlayers() <= 0)
+    {
+        FinalizeMatchEndAndShutdown(TEXT("NoConnectedClients"));
+    }
+}
+
+
+void AMainGameMode::HandleMatchEndReturnTimeout()
+{
+    UE_LOG(LogManager, Warning,
+        TEXT("[DS] MatchEndReturnWait Timeout RoomId=%d Round=%d RemainingPlayers=%d Timeout=%.1f Action=Finalize"),
+        DediRoomId,
+        CurrentRound,
+        CountConnectedHumanPlayers(),
+        MatchEndReturnTimeoutSeconds);
+
+    FinalizeMatchEndAndShutdown(TEXT("ReturnTimeout"));
+}
+
+void AMainGameMode::FinalizeMatchEndAndShutdown(const TCHAR* Reason)
+{
+    if (!bGameEndReached || bMatchAbortRequested || bMatchEndFinalizationStarted)
+    {
+        DS_LOG(TEXT("[DS] MatchEndFinalize ignored RoomId=%d GameEnd=%d Abort=%d Started=%d Reason=%s"),
+            DediRoomId,
+            bGameEndReached ? 1 : 0,
+            bMatchAbortRequested ? 1 : 0,
+            bMatchEndFinalizationStarted ? 1 : 0,
+            Reason ? Reason : TEXT("<NULL>"));
+        return;
+    }
+
+    bMatchEndFinalizationStarted = true;
+    if (UWorld* World = GetWorld())
+    {
+        World->GetTimerManager().ClearTimer(MatchEndReturnWaitTimerHandle);
+    }
+
+    DS_LOG(TEXT("[DS] MatchEndFinalize RoomId=%d Round=%d RemainingPlayers=%d Winner=%s Reason=%s"),
+        DediRoomId,
+        CurrentRound,
+        CountConnectedHumanPlayers(),
+        *PendingMatchEndWinnerName,
+        Reason ? Reason : TEXT("<NULL>"));
+
+    NotifyIocpMatchEnd(PendingMatchEndWinnerName, PendingMatchEndMoneySummary);
+
     if (UWorld* World = GetWorld())
     {
         World->GetTimerManager().SetTimer(
             MatchEndShutdownTimerHandle,
             this,
             &AMainGameMode::ShutdownDedicatedServerAfterMatchEnd,
-            10.0f,
-            false
-        );
-
-        DS_LOG(TEXT("[DS] MatchEndShutdownScheduled Delay=10.0 RoomId=%d Round=%d"),
-            DediRoomId,
-            CurrentRound);
+            1.0f,
+            false);
+    }
+    else
+    {
+        FPlatformMisc::RequestExit(false);
     }
 }
 
@@ -4525,6 +4619,7 @@ void AMainGameMode::AbortMatchAndShutdown(const FString& Reason)
     {
         FTimerManager& TimerManager = World->GetTimerManager();
         TimerManager.ClearTimer(MatchEndShutdownTimerHandle);
+        TimerManager.ClearTimer(MatchEndReturnWaitTimerHandle);
         TimerManager.ClearTimer(CardSeatMoveRetryTimerHandle);
         TimerManager.ClearTimer(BattleRoyaleCardSpawnGateTimerHandle);
         TimerManager.ClearTimer(ReconnectGraceTimerHandle);

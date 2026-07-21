@@ -53,8 +53,13 @@ void UCRoundandTimerWidget::NativeDestruct()
 }
 
 void UCRoundandTimerWidget::UpdateTimer_TextImage(int32 NewTime) {
-	UE_LOG(LogTemp, Warning, TEXT("Timer Text set.."));
-	if (nullptr != Timer_Text) Timer_Text->SetText(FText::AsNumber(NewTime));
+	if (nullptr != Timer_Text)
+	{
+		const int32 ClampedTime = FMath::Max(NewTime, 0);
+		const int32 Minutes = ClampedTime / 60;
+		const int32 Seconds = ClampedTime % 60;
+		Timer_Text->SetText(FText::FromString(FString::Printf(TEXT("%02d:%02d"), Minutes, Seconds)));
+	}
 }
 
 void UCRoundandTimerWidget::OnRoundChanged(int32 NewRound)

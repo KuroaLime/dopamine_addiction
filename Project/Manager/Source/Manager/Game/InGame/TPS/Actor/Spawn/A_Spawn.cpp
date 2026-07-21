@@ -87,7 +87,8 @@ void AA_Spawn::ApplyBarrierVisualState()
 	{
 		if (Comp)
 		{
-			Comp->SetVisibility(bBarrierActive, false);
+			// The shop barrier is collision-only and must stay invisible in game.
+			Comp->SetVisibility(false, false);
 			Comp->SetCollisionEnabled(bBarrierActive ? ECollisionEnabled::QueryAndPhysics : ECollisionEnabled::NoCollision);
 			UE_LOG(LogTemp, Warning, TEXT("[A_Spawn]   -> %s Visible=%d CollisionEnabled=%d"),
 				*Comp->GetName(), Comp->IsVisible() ? 1 : 0, (int32)Comp->GetCollisionEnabled());

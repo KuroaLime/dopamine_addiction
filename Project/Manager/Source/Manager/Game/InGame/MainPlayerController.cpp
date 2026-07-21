@@ -26,6 +26,7 @@
 #include "Blueprint/WidgetBlueprintLibrary.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Game/InGame/TPS/UI/Shop/ShopWidget.h"
+#include "Game/InGame/TPS/UI/TpsPlayerMainHUD.h"
 #include "HAL/PlatformTime.h"
 #include "TimerManager.h"
 
@@ -138,6 +139,11 @@ void AMainPlayerController::BeginPlay()
 
 void AMainPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	if (IsLocalController())
+	{
+		UWidgetLayoutLibrary::RemoveAllWidgets(this);
+	}
+
 	ClearPendingServerPositionCorrection();
 
 	if (UWorld* World = GetWorld())
@@ -1334,6 +1340,17 @@ void AMainPlayerController::Server_RequestDiscardCard_Implementation(int32 CardI
 	}
 }
 
+void AMainPlayerController::Client_NotifyHitConfirmed_Implementation()
+{
+	TObjectPtr<UUIHandler>* Handler = UIHandlerMap.Find(EGamePhase::TPS);
+	if (!Handler || !*Handler) return;
+
+	if (UTpsPlayerMainHUD* HUD = Cast<UTpsPlayerMainHUD>((*Handler)->GetWidget()))
+	{
+		HUD->ShowHitMarker();
+	}
+}
+
 EUpgradeType AMainPlayerController::GetStaticUpgradeTypeFromIndex(int32 Index)
 {
 	// UI에 고정 능력치 상승 버튼들이 배치된 순서대로 대응시킵니다.
@@ -1610,6 +1627,14 @@ UE_LOG(LogTemp, Warning, TEXT("[CL] Seotda Result: %s"), *ResultText);
 
     SeotdaUiLastResultText = ResultText;
     bSeotdaUiMatchEnded = ResultText.Contains(TEXT("[MATCH END]"));
+
+    if (bSeotdaUiMatchEnded)
+    {
+        if (UUManagerGameInstance* GI = GetGameInstance<UUManagerGameInstance>())
+        {
+            GI->MarkReturnToRoomAfterMatch();
+        }
+    }
 
 if (GEngine)
 {

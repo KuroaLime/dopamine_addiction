@@ -86,6 +86,7 @@ public:
     // ----- 페이즈/매치 흐름에서 호출 -----
     bool SpawnRoundCardBundleForBattleRoyale(TArray<int32>& OutSpawnedCardInstanceIds);
     void EnsureThreeCardsForCardGame();
+    bool EnsureCardsForReconnectedPlayer(AMainPlayerState* PlayerState, const TCHAR* Context);
     void ResetSeotdaRoundStates();
     void StartSeotdaSelectionTimeout();
     void ClearCardDrops();
