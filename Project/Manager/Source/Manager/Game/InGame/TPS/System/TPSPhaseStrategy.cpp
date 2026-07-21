@@ -56,8 +56,10 @@ void UTPSPhaseStrategy::LoadStage()
 
 	DS_LOG(TEXT("[DS] TPSPhase LoadStage"));
 
-	int32 RandomIndex = FMath::RandRange(1, 5);
-	EWeaponType RoundWeapon = static_cast<EWeaponType>(RandomIndex);
+	// TODO: 테스트용으로 SMG 고정. 테스트 끝나면 아래 두 줄을 지우고 랜덤 배정으로 되돌릴 것.
+	EWeaponType RoundWeapon = EWeaponType::SMG;
+	//int32 RandomIndex = FMath::RandRange(1, 5);
+	//EWeaponType RoundWeapon = static_cast<EWeaponType>(RandomIndex);
 
 	if (IPhaseGameStateInterface* GS = Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()))
 	{
