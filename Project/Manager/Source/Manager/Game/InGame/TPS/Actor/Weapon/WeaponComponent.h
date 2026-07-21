@@ -77,7 +77,35 @@ public:
 	// 서버: Duration초 동안 "장전 중"으로 잠금 (그 사이 사격 불가). 끝나면 자동 해제.
 	void StartReloadLock(float Duration);
 
+	// 연사 중 탄퍼짐(블룸) 각도(도, 실제 SpreadAngle에 더해지는 양). 복제 안 됨 — 로컬 클라이언트가
+	// 자기 자신의 조준점 UI 표시용으로만 씀. 무기마다 MaxBloomAngle이 다르므로 값 자체로 무기별 차이가 자연히 반영됨.
+	UFUNCTION(BlueprintPure, Category = "Weapon | Bloom")
+	float GetCurrentBloomDegrees() const { return CurrentBloomDegrees; }
+	void SetCurrentBloomDegrees(float NewDegrees) { CurrentBloomDegrees = NewDegrees; }
+
+	// 클라이언트 발사 예측(Ability_Fire::LocalActivateWithOwner/Client_ExecuteFire) 전용 상태.
+	// 이 무기 액터(캐릭터별로 따로 존재)에 저장해야 한다 — UPFGAbility는 클라이언트에서
+	// AbilityInstance가 복제되지 않아(PFGASC.h의 NotReplicated) CDO(클래스 전체에 하나뿐인 객체)로
+	// LocalActivateWithOwner를 호출하므로, 여기 대신 어빌리티 멤버에 저장하면 모든 캐릭터/세션이
+	// 상태를 공유해버려 발사 도중 꼬인다.
+	bool IsClientFiring() const { return bIsClientFiring; }
+	void SetClientFiring(bool bFiring) { bIsClientFiring = bFiring; }
+	int32 GetClientShotsFiredInBurst() const { return ClientShotsFiredInBurst; }
+	void SetClientShotsFiredInBurst(int32 NewCount) { ClientShotsFiredInBurst = NewCount; }
+	float GetLastClientFireTime() const { return LastClientFireTime; }
+	void SetLastClientFireTime(float NewTime) { LastClientFireTime = NewTime; }
+	FTimerHandle& GetClientFireTimerHandle() { return ClientFireTimerHandle; }
+	FTimerHandle& GetClientFireRetryTimerHandle() { return ClientFireRetryTimerHandle; }
+
 private:
+	float CurrentBloomDegrees = 0.f;
+
+	bool bIsClientFiring = false;
+	int32 ClientShotsFiredInBurst = 0;
+	float LastClientFireTime = 0.f;
+	FTimerHandle ClientFireTimerHandle;
+	FTimerHandle ClientFireRetryTimerHandle;
+
 	// 소유 폰의 MainAnimInstance를 찾고, 컴포넌트의 WeaponType을 PlayerState 값과 동기화한다.
 	// (Fire/Reload 피드백 멀티캐스트가 공유하는 보일러플레이트)
 	UMainAnimInstance* ResolveOwnerAnimAndSyncWeapon();

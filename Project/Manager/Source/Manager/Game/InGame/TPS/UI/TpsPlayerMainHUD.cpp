@@ -81,6 +81,23 @@ void UTpsPlayerMainHUD::NativeConstruct()
 
 
     Aim_Image = Cast<UImage>(GetWidgetFromName(TEXT("Aim_Icon")));
+    Aim_Up = Cast<UImage>(GetWidgetFromName(TEXT("AimDash_Up")));
+    Aim_Down = Cast<UImage>(GetWidgetFromName(TEXT("AimDash_Down")));
+    Aim_Left = Cast<UImage>(GetWidgetFromName(TEXT("AimDash_Left")));
+    Aim_Right = Cast<UImage>(GetWidgetFromName(TEXT("AimDash_Right")));
+
+    UE_LOG(LogTemp, Warning, TEXT("[DS] AimBind: Up=%d(Vis=%d) Down=%d(Vis=%d) Left=%d(Vis=%d) Right=%d(Vis=%d)"),
+        Aim_Up != nullptr, Aim_Up ? (int32)Aim_Up->GetVisibility() : -1,
+        Aim_Down != nullptr, Aim_Down ? (int32)Aim_Down->GetVisibility() : -1,
+        Aim_Left != nullptr, Aim_Left ? (int32)Aim_Left->GetVisibility() : -1,
+        Aim_Right != nullptr, Aim_Right ? (int32)Aim_Right->GetVisibility() : -1);
+
+    // 디자이너에서 기본값이 Collapsed/Hidden으로 되어 있으면 RenderTranslation을 줘도 안 보이므로,
+    // 처음부터 확실하게 보이는 상태로 강제한다.
+    if (Aim_Up)    Aim_Up->SetVisibility(ESlateVisibility::HitTestInvisible);
+    if (Aim_Down)  Aim_Down->SetVisibility(ESlateVisibility::HitTestInvisible);
+    if (Aim_Left)  Aim_Left->SetVisibility(ESlateVisibility::HitTestInvisible);
+    if (Aim_Right) Aim_Right->SetVisibility(ESlateVisibility::HitTestInvisible);
 
     TPS_Compass = Cast<UUserWidget>(GetWidgetFromName(TEXT("Compass")));
 
@@ -98,6 +115,7 @@ void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
     Super::NativeTick(MyGeometry, InDeltaTime);
     UpdateCompass();
     UpdateWeaponCountWidget();
+    UpdateAim(InDeltaTime);
     if (bNeedPlayerStateBind)
         TryBindPlayerState();
     UpdateNameWidget();
@@ -250,9 +268,39 @@ void UTpsPlayerMainHUD::UpdateWeaponCountWidget()
     }
 }
 
-void UTpsPlayerMainHUD::UpdateAim()
+void UTpsPlayerMainHUD::UpdateAim(float DeltaTime)
 {
     if (Aim_Image) Aim_Image->SetBrushFromTexture(Aim_Images);
+
+    // 무기별 실제 블룸 각도(도)를 픽셀로 환산한 목표치. 무기마다 MaxBloomAngle이 다르므로
+    // 퍼지는 정도(끝까지 벌어졌을 때 거리)도 무기마다 자연히 달라진다.
+    float TargetOffset = 0.f;
+    AMainCharacter* Character = Cast<AMainCharacter>(GetOwningPlayerPawn());
+    AWeapon* Weapon = Character ? Character->GetEquippedGun() : nullptr;
+    if (Weapon && Weapon->Setting)
+    {
+        constexpr float PixelsPerBloomDegree = 6.f; // 1도당 픽셀 거리. 취향껏 조정.
+        TargetOffset = Weapon->Setting->GetCurrentBloomDegrees() * PixelsPerBloomDegree;
+    }
+    else
+    {
+        AimDebugLogAccumulator += DeltaTime;
+        if (AimDebugLogAccumulator >= 0.5f)
+        {
+            AimDebugLogAccumulator = 0.f;
+            UE_LOG(LogTemp, Warning, TEXT("[DS] UpdateAim: 조회 실패 Character=%d Weapon=%d Setting=%d"),
+                Character != nullptr, Weapon != nullptr, (Weapon && Weapon->Setting));
+        }
+    }
+
+    // 목표치로 순간이동하지 않고 매 프레임 부드럽게 따라가게 한다(끊기듯 튀거나 훅 줄어드는 느낌 방지).
+    constexpr float InterpSpeed = 10.f;
+    CurrentDisplayedAimOffset = FMath::FInterpTo(CurrentDisplayedAimOffset, TargetOffset, DeltaTime, InterpSpeed);
+
+    if (Aim_Up)    Aim_Up->SetRenderTranslation(FVector2D(0.f, -CurrentDisplayedAimOffset));
+    if (Aim_Down)  Aim_Down->SetRenderTranslation(FVector2D(0.f, CurrentDisplayedAimOffset));
+    if (Aim_Left)  Aim_Left->SetRenderTranslation(FVector2D(-CurrentDisplayedAimOffset, 0.f));
+    if (Aim_Right) Aim_Right->SetRenderTranslation(FVector2D(CurrentDisplayedAimOffset, 0.f));
 }
 
 void UTpsPlayerMainHUD::UpdateLevel()
