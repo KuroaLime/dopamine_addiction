@@ -52,6 +52,34 @@ private:
 
 	static const FName LvLinearWipeParamName;
 
+	UPROPERTY(meta = (BindWidget))
+	class UShopButton* Rand_UpgradeBTN00 = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	class UShopButton* Rand_UpgradeBTN01 = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	class UShopButton* Rand_UpgradeBTN02 = nullptr;
+
+	UPROPERTY(meta = (BindWidget))
+	class UImage* Rand_UpgradeIMG00 = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	class UImage* Rand_UpgradeIMG01 = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	class UImage* Rand_UpgradeIMG02 = nullptr;
+
+	// 총기 개조 상품 슬롯(0~2)에 표시할 무기 스탯별 이름/아이콘. 아이콘은 아직 준비 안 됐으면 비워둬도 됨.
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shop | WeaponUpgrade", meta = (AllowPrivateAccess = "true"))
+	TMap<EUpgradeType, FText> WeaponUpgradeNameMap;
+
+	UPROPERTY(EditAnywhere, BlueprintReadWrite, Category = "Shop | WeaponUpgrade", meta = (AllowPrivateAccess = "true"))
+	TMap<EUpgradeType, class UTexture2D*> WeaponUpgradeIconMap;
+
+	UFUNCTION()
+	void HandleWeaponUpgradePurchase(int32 SlotIndex);
+	void UpdateWeaponUpgradeButtons();
+
+	void TryBindGameStateDelegate();
+	bool bBoundGameStateDelegate = false;
+
 protected:
 	UFUNCTION()
 	void HandleUpgradePurchase(int32 ItemID);

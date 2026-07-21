@@ -39,6 +39,11 @@ void AMainGameState::GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLi
 	DOREPLIFETIME(AMainGameState, CurrentRoundWeapon);
 	DOREPLIFETIME(AMainGameState, CurrentRound);
 	DOREPLIFETIME(AMainGameState, bShopAvailable);
+	DOREPLIFETIME(AMainGameState, ShopWeaponUpgradeOptions);
+}
+void AMainGameState::OnRep_ShopWeaponUpgradeOptions()
+{
+	OnShopWeaponUpgradeOptionsChangedNative.Broadcast();
 }
 void AMainGameState::OnRep_CurrentRound()
 {

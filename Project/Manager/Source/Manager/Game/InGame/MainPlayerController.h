@@ -87,6 +87,7 @@ private:
 	FServerRpcRateLimitState ShopRandomRollRateLimitState;
 	FServerRpcRateLimitState ShopRandomSelectionRateLimitState;
 	FServerRpcRateLimitState ShopStaticUpgradeRateLimitState;
+	FServerRpcRateLimitState ShopWeaponUpgradeRateLimitState;
 	FTimerHandle ServerPositionCorrectionRetryTimerHandle;
 	FVector PendingServerPositionCorrectionLocation = FVector::ZeroVector;
 	FRotator PendingServerPositionCorrectionRotation = FRotator::ZeroRotator;
@@ -239,6 +240,11 @@ public:
 	
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_SelectStaticUpgradeOption(int32 SelectedIndex);
+
+	UFUNCTION(Server, Reliable, WithValidation)
+	void Server_PurchaseWeaponUpgrade(int32 SlotIndex);
+
+	int32 GetWeaponUpgradePurchaseCost() const;
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestDiscardCard(int32 CardInstanceId);
