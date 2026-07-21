@@ -139,6 +139,27 @@ private:
 	// 0: Health, 1: HealthRegen, 2: MoveSpeed, 3: WeaponDamage, 4: FireRate, 5: Range, 6: Magazine, 7: Reload
 	UImage* Lv_Image[LvTotalNumber] = {};
 
+	//Level Text (아이콘 위에 "LV. n" 형태로 표시)
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* LvHealthText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* LvHealthRegenText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* LvMoveSpeedText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* LvWeaponDamageText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* LvWeaponFireRateText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* LvWeaponRangeText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* LvWeaponMagazineText = nullptr;
+	UPROPERTY(meta = (BindWidget))
+	UTextBlock* LvWeaponReloadText = nullptr;
+
+	// LvHealthText~LvWeaponReloadText를 인덱스로 순회하기 위한 편의 배열(NativeConstruct에서 채움). 순서는 Lv_Image와 동일.
+	UTextBlock* LvText[LvTotalNumber] = {};
+
 	//Compass
 	UPROPERTY(meta = (BindWidget))
 	UUserWidget* Compass = nullptr;
