@@ -2,6 +2,7 @@
 
 
 #include "Game/InGame/TPS/UI/DeathWidget.h"
+#include "Game/InGame/Card/Data/CardTextureSet.h"
 #include "Components/TextBlock.h"
 #include "Components/Image.h"
 #include "Materials/MaterialInstanceDynamic.h"
@@ -79,10 +80,12 @@ void UDeathWidget::UpdateTime(int32 time) const
 void UDeathWidget::SetRandomCardFrontImage()
 {
     if (!CardFrontImage) return;
-    if (CardFrontImages.Num() == 0) return;
+    if (!CardTextures) return;
 
-    const int32 RandIndex = FMath::RandRange(0, CardFrontImages.Num() - 1);
-    CardFrontImage->SetBrushFromTexture(CardFrontImages[RandIndex]);
+    if (UTexture2D* FrontTexture = CardTextures->GetRandomFront())
+    {
+        CardFrontImage->SetBrushFromTexture(FrontTexture);
+    }
 }
 
 void UDeathWidget::UpdateCircle(float CurrentTime) const
