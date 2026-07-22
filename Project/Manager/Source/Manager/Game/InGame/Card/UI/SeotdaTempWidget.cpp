@@ -464,6 +464,35 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 
 	SetCardSelectionButtonsEnabled(bCanSelect);
 
+	UButton* CardBtns[] = { Card0Btn, Card1Btn, Card2Btn };
+	UImage* CardImgs[] = { Card0Img, Card1Img, Card2Img };
+	UTextBlock* CardTxts[] = { Card0Txt, Card1Txt, Card2Txt };
+	const bool bSelectedFlags[] = { bSelected0, bSelected1, bSelected2 };
+	for (int32 i = 0; i < 3; ++i)
+	{
+		float TargetOpacity = 0.5f;
+
+		if (bSelectionLocked || !bHasThreeCards)
+		{
+			// 제출 대기 중/제출 완료/3장 미만 시 모든 카드 불꺼짐 (35% opacity)
+			TargetOpacity = 0.35f;
+		}
+		else if (bSelectedFlags[i])
+		{
+			// 선택된 카드는 불 켜짐 (100% opacity)
+			TargetOpacity = 1.0f;
+		}
+		else
+		{
+			// 라운드 시작 직후(미선택) 및 미선택 카드는 기본 불꺼짐 (50% opacity)
+			TargetOpacity = 0.5f;
+		}
+
+		if (CardBtns[i]) CardBtns[i]->SetRenderOpacity(TargetOpacity);
+		if (CardImgs[i]) CardImgs[i]->SetRenderOpacity(TargetOpacity);
+		if (CardTxts[i]) CardTxts[i]->SetRenderOpacity(TargetOpacity);
+	}
+
 	if (SubmitBtn)
 	{
 		SubmitBtn->SetIsEnabled(bCanSubmit);
@@ -699,6 +728,12 @@ void USeotdaTempWidget::OnCard0Clicked()
 
 void USeotdaTempWidget::OnCard0Hovered()
 {
+	if (!bSelected0 && !bLocalRevealPending && !bLocalSelectionPending)
+	{
+		if (Card0Btn) Card0Btn->SetRenderOpacity(1.0f);
+		if (Card0Img) Card0Img->SetRenderOpacity(1.0f);
+		if (Card0Txt) Card0Txt->SetRenderOpacity(1.0f);
+	}
 	if (Card0Hover)
 	{
 		PlayAnimation(Card0Hover);
@@ -707,11 +742,11 @@ void USeotdaTempWidget::OnCard0Hovered()
 
 void USeotdaTempWidget::OnCard0Unhovered()
 {
-	// HoverAnim 역재생
 	if (Card0Hover)
 	{
 		PlayAnimation(Card0Hover, 0.0f, 1, EUMGSequencePlayMode::Reverse);
 	}
+	RefreshFromPlayerState();
 }
 
 void USeotdaTempWidget::OnCard1Clicked()
@@ -721,6 +756,12 @@ void USeotdaTempWidget::OnCard1Clicked()
 
 void USeotdaTempWidget::OnCard1Hovered()
 {
+	if (!bSelected1 && !bLocalRevealPending && !bLocalSelectionPending)
+	{
+		if (Card1Btn) Card1Btn->SetRenderOpacity(1.0f);
+		if (Card1Img) Card1Img->SetRenderOpacity(1.0f);
+		if (Card1Txt) Card1Txt->SetRenderOpacity(1.0f);
+	}
 	if (Card1Hover)
 	{
 		PlayAnimation(Card1Hover);
@@ -729,11 +770,11 @@ void USeotdaTempWidget::OnCard1Hovered()
 
 void USeotdaTempWidget::OnCard1Unhovered()
 {
-	// HoverAnim 역재생
 	if (Card1Hover)
 	{
 		PlayAnimation(Card1Hover, 0.0f, 1, EUMGSequencePlayMode::Reverse);
 	}
+	RefreshFromPlayerState();
 }
 
 void USeotdaTempWidget::OnCard2Clicked()
@@ -743,6 +784,12 @@ void USeotdaTempWidget::OnCard2Clicked()
 
 void USeotdaTempWidget::OnCard2Hovered()
 {
+	if (!bSelected2 && !bLocalRevealPending && !bLocalSelectionPending)
+	{
+		if (Card2Btn) Card2Btn->SetRenderOpacity(1.0f);
+		if (Card2Img) Card2Img->SetRenderOpacity(1.0f);
+		if (Card2Txt) Card2Txt->SetRenderOpacity(1.0f);
+	}
 	if (Card2Hover)
 	{
 		PlayAnimation(Card2Hover);
@@ -751,11 +798,11 @@ void USeotdaTempWidget::OnCard2Hovered()
 
 void USeotdaTempWidget::OnCard2Unhovered()
 {
-	// HoverAnim 역재생
 	if (Card2Hover)
 	{
 		PlayAnimation(Card2Hover, 0.0f, 1, EUMGSequencePlayMode::Reverse);
 	}
+	RefreshFromPlayerState();
 }
 
 void USeotdaTempWidget::OnSubmitClicked()
