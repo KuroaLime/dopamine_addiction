@@ -14,8 +14,10 @@ void UCardPhaseStrategy::OnPhaseStart()
 	if (AMainGameMode* GM = GetMainGameMode())
 	{
 		GM->ClearPlayerPawnMovementBases(TEXT("CardGame"));
-		GM->RequestMovePlayersToCardIslandSeats(TEXT("CardGame"));
+		// Lock movement/look input before the authoritative seat transform arrives.
+		// This prevents the final look input from overwriting the table-facing rotation.
 		GM->SetPlayerPawnGameplayState(true, false, true, TEXT("CardGame"));
+		GM->RequestMovePlayersToCardIslandSeats(TEXT("CardGame"));
 		GM->GetCardGameService()->EnsureThreeCardsForCardGame();
 		GM->GetCardGameService()->ResetSeotdaRoundStates();
 		GM->BroadcastSwitchMode(EGamePhase::Card);

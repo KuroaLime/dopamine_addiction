@@ -2,6 +2,7 @@
 #include "Game/InGame/Card/Data/CardTextureSet.h"
 
 #include "Components/Button.h"
+#include "Components/Border.h"
 #include "Components/Image.h"
 #include "Components/TextBlock.h"
 #include "Engine/Engine.h"
@@ -15,6 +16,27 @@
 
 namespace
 {
+	constexpr int32 MaxDisplayedPlayerNameLength = 10;
+
+	FString TruncateDisplayName(const FString& PlayerName)
+	{
+		return PlayerName.Left(MaxDisplayedPlayerNameLength);
+	}
+
+	UTexture2D* GetRoundIconTexture(int32 Round)
+	{
+		static TSoftObjectPtr<UTexture2D> RoundIcons[] = {
+			TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/InGame/TPS/Resource/Round/Round_01.Round_01"))),
+			TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/InGame/TPS/Resource/Round/Round_02.Round_02"))),
+			TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/InGame/TPS/Resource/Round/Round_03.Round_03"))),
+			TSoftObjectPtr<UTexture2D>(FSoftObjectPath(TEXT("/Game/InGame/TPS/Resource/Round/Round_04.Round_04")))
+		};
+
+		return Round >= 1 && Round <= UE_ARRAY_COUNT(RoundIcons)
+			? RoundIcons[Round - 1].LoadSynchronous()
+			: nullptr;
+	}
+
 	// "8월", "1월 광"처럼 짧게 — Gwang(광)은 이 20장짜리 섯다패에서 1/3/8월 셋뿐이다.
 	FString FormatCardShortLabel(ECardID CardID)
 	{
@@ -36,6 +58,11 @@ namespace
 void USeotdaTempWidget::NativeConstruct()
 {
 	Super::NativeConstruct();
+	if (RoundTxt)
+	{
+		RoundTxt->SetVisibility(ESlateVisibility::Collapsed);
+	}
+
 	if (!CardTextures)
 	{
 		CardTextures = UCardTextureSet::LoadDefault();
@@ -323,7 +350,7 @@ void USeotdaTempWidget::RefreshOpponentSeats(AMainPlayerController* PC)
 		if (SeatNameTexts[i])
 		{
 			SeatNameTexts[i]->SetVisibility(ESlateVisibility::Visible);
-			SeatNameTexts[i]->SetText(FText::FromString(Info.PlayerName));
+			SeatNameTexts[i]->SetText(FText::FromString(TruncateDisplayName(Info.PlayerName)));
 			SeatNameTexts[i]->SetRenderOpacity(SeatOpacity);
 		}
 		if (SeatChipTexts[i])
@@ -446,7 +473,19 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 
 	if (RoundTxt)
 	{
-		RoundTxt->SetText(FText::FromString(FString::Printf(TEXT("%d라운드"), PC->SeotdaUiRound)));
+		RoundTxt->SetVisibility(ESlateVisibility::Collapsed);
+	}
+	if (UBorder* RoundIcon = Cast<UBorder>(GetWidgetFromName(TEXT("Border_209"))))
+	{
+		if (UTexture2D* Texture = GetRoundIconTexture(PC->SeotdaUiRound))
+		{
+			RoundIcon->SetBrushFromTexture(Texture);
+			RoundIcon->SetVisibility(ESlateVisibility::HitTestInvisible);
+		}
+		else
+		{
+			RoundIcon->SetVisibility(ESlateVisibility::Collapsed);
+		}
 	}
 	if (PotTxt)
 	{
@@ -454,7 +493,8 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 	}
 	if (TurnTxt)
 	{
-		TurnTxt->SetText(FText::FromString(FString::Printf(TEXT("현재 턴: %s"), *PC->SeotdaUiCurrentTurnPlayerName)));
+		const FString DisplayTurnName = TruncateDisplayName(PC->SeotdaUiCurrentTurnPlayerName);
+		TurnTxt->SetText(FText::FromString(FString::Printf(TEXT("현재 턴: %s"), *DisplayTurnName)));
 	}
 
 }

@@ -3315,8 +3315,10 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
 
     const int32 TaggedSeatCount = SeatTransforms.Num();
     const float SafeSpacing = FMath::Max(100.0f, CardPlayerSeatSpacing);
+    // Keep a real seat offset even in single-player debug sessions. The sole tagged
+    // marker in Card_Game_Stage represents the table centre, not a player position.
     const float Radius = RequiredCount <= 1
-        ? 0.0f
+        ? SafeSpacing
         : FMath::Max(SafeSpacing, (SafeSpacing * RequiredCount) / (2.0f * PI));
     auto ProjectPointToSeatNavWithExtent = [World](const FVector& QueryLocation, FVector& OutNavLocation, const FVector& ProjectExtent, float Max2DDistance) -> bool
     {
@@ -3386,7 +3388,23 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
             CardPlayerSeatZOffset);
     };
 
-    if (RequiredCount <= 0 || TaggedSeatCount >= RequiredCount)
+    if (RequiredCount <= 0)
+    {
+        return SeatTransforms;
+    }
+
+    // A single CardPlayerSeat marker is the table centre. Build seats around it even
+    // when only one debug player is present, so that player can face the table.
+    if (TaggedSeatCount == 1)
+    {
+        const FTransform CenterTransform = SeatTransforms[0];
+        const FVector CenterLocation = CenterTransform.GetLocation() - FVector(0.0f, 0.0f, CardPlayerSeatZOffset);
+        const FRotator CenterRotation = CenterTransform.GetRotation().Rotator();
+        BuildSeatRingFromCenter(CenterLocation, CenterRotation, TEXT("TaggedCenter"));
+        return SeatTransforms;
+    }
+
+    if (TaggedSeatCount >= RequiredCount)
     {
         DS_LOG(TEXT("[DS] Card SeatBuild Required=%d Tagged=%d ComponentTagged=%d GeneratedFromCenter=0 Fallback=0 FallbackEnabled=%d Tag=%s Spacing=%.1f ZOffset=%.1f"),
             RequiredCount,
@@ -3396,15 +3414,6 @@ TArray<FTransform> AMainGameMode::BuildCardPlayerSeatTransforms(int32 RequiredCo
             *CardPlayerSeatTag.ToString(),
             SafeSpacing,
             CardPlayerSeatZOffset);
-        return SeatTransforms;
-    }
-
-    if (TaggedSeatCount == 1)
-    {
-        const FTransform CenterTransform = SeatTransforms[0];
-        const FVector CenterLocation = CenterTransform.GetLocation() - FVector(0.0f, 0.0f, CardPlayerSeatZOffset);
-        const FRotator CenterRotation = CenterTransform.GetRotation().Rotator();
-        BuildSeatRingFromCenter(CenterLocation, CenterRotation, TEXT("TaggedCenter"));
         return SeatTransforms;
     }
 
@@ -3691,6 +3700,16 @@ bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
     const TArray<FTransform> SeatTransforms = BuildCardPlayerSeatTransforms(Controllers.Num());
     int32 MovedCount = 0;
 
+    FVector CardTableFocus = FVector::ZeroVector;
+    for (const FTransform& SeatTransform : SeatTransforms)
+    {
+        CardTableFocus += SeatTransform.GetLocation();
+    }
+    if (!SeatTransforms.IsEmpty())
+    {
+        CardTableFocus /= static_cast<float>(SeatTransforms.Num());
+    }
+
     for (int32 Index = 0; Index < Controllers.Num(); ++Index)
     {
         AMainPlayerController* MainPC = Controllers[Index];
@@ -3706,8 +3725,18 @@ bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
             continue;
         }
 
-        const FTransform& TargetTransform = SeatTransforms[Index];
+        FTransform TargetTransform = SeatTransforms[Index];
         const FVector TargetLocation = TargetTransform.GetLocation();
+
+        // Always derive the final yaw from the actual seat layout. This handles both
+        // generated rings and maps that provide multiple authored seat markers whose
+        // rotations may not have been aligned manually.
+        const FVector LookDirection = (CardTableFocus - TargetLocation).GetSafeNormal2D();
+        if (!LookDirection.IsNearlyZero())
+        {
+            TargetTransform.SetRotation(LookDirection.Rotation().Quaternion());
+        }
+
         const FRotator TargetRotation = TargetTransform.GetRotation().Rotator();
         const bool bMoved = TeleportPlayerAuthoritatively(MainPC, TargetTransform, Context);
         if (bMoved)
@@ -3715,12 +3744,13 @@ bool AMainGameMode::MovePlayersToCardIslandSeats(const TCHAR* Context)
             ++MovedCount;
         }
 
-        DS_LOG(TEXT("[DS] Card SeatMove Player=%s Index=%d Moved=%d Location=%s Rotation=%s Context=%s"),
+        DS_LOG(TEXT("[DS] Card SeatMove Player=%s Index=%d Moved=%d Location=%s Rotation=%s TableFocus=%s Context=%s"),
             *GetNameSafe(MainPC->PlayerState),
             Index,
             bMoved ? 1 : 0,
             *TargetLocation.ToString(),
             *TargetRotation.ToString(),
+            *CardTableFocus.ToString(),
             Context ? Context : TEXT("<NULL>"));
     }
 

@@ -16,6 +16,16 @@
 
 const FName UTpsPlayerMainHUD::LvLinearWipeParamName(TEXT("Linear_wipe"));
 
+namespace
+{
+    constexpr int32 MaxHudPlayerNameLength = 10;
+
+    FString MakeHudPlayerName(const FString& PlayerName)
+    {
+        return PlayerName.Left(MaxHudPlayerNameLength);
+    }
+}
+
 void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacterState)
 {
     CurrentCharacterState = NewCharacterState;
@@ -123,12 +133,34 @@ void UTpsPlayerMainHUD::StaticUI()
 
 void UTpsPlayerMainHUD::UpdateHPWidget()
 {
-    if (CurrentCharacterState.IsValid())
-    {
-        if (HP_Bar)        HP_Bar->SetPercent(CurrentCharacterState->GetHPRatio());
-        if (HP_Text)       HP_Text->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentHP()));
-        if (MaxHP_Text)    MaxHP_Text->SetText(FText::AsNumber(CurrentCharacterState->GetMaxHP()));
-    }
+	if (CurrentCharacterState.IsValid())
+	{
+		const float HPRatio = FMath::Clamp(CurrentCharacterState->GetHPRatio(), 0.0f, 1.0f);
+		const int32 CurrentHP = FMath::RoundToInt(CurrentCharacterState->GetCurrentHP());
+		const int32 MaxHP = FMath::RoundToInt(CurrentCharacterState->GetMaxHP());
+
+		if (HP_Bar)
+		{
+			HP_Bar->SetPercent(HPRatio);
+
+			// Keep the lacquer-red texture intact, but make critical health read brighter.
+			const FLinearColor FillTint = HPRatio <= 0.3f
+				? FLinearColor(1.0f, 0.55f, 0.45f, 1.0f)
+				: FLinearColor::White;
+			HP_Bar->SetFillColorAndOpacity(FillTint);
+		}
+
+		if (HP_Text)
+		{
+			HP_Text->SetText(FText::FromString(FString::Printf(TEXT("%d / %d"), CurrentHP, MaxHP)));
+		}
+
+		if (MaxHP_Text)
+		{
+			MaxHP_Text->SetText(FText::GetEmpty());
+			MaxHP_Text->SetVisibility(ESlateVisibility::Collapsed);
+		}
+	}
 }
 
 void UTpsPlayerMainHUD::UpdateNameWidget()
@@ -140,7 +172,7 @@ void UTpsPlayerMainHUD::UpdateNameWidget()
 
     if (CachedPlayerState.IsValid())
     {
-        NAMETxt->SetText(FText::FromString(CachedPlayerState->GetPlayerName()));
+        NAMETxt->SetText(FText::FromString(MakeHudPlayerName(CachedPlayerState->GetPlayerName())));
         return;
     }
 
@@ -148,13 +180,13 @@ void UTpsPlayerMainHUD::UpdateNameWidget()
     AMainPlayerState* PS = PC ? PC->GetPlayerState<AMainPlayerState>() : nullptr;
     if (PS)
     {
-        NAMETxt->SetText(FText::FromString(PS->GetPlayerName()));
+        NAMETxt->SetText(FText::FromString(MakeHudPlayerName(PS->GetPlayerName())));
         return;
     }
 
     if (CurrentCharacterState.IsValid() && CurrentCharacterState->GetOwner())
     {
-        NAMETxt->SetText(FText::FromString(CurrentCharacterState->GetOwner()->GetName()));
+        NAMETxt->SetText(FText::FromString(MakeHudPlayerName(CurrentCharacterState->GetOwner()->GetName())));
     }
 }
 
