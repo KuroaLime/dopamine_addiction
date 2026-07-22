@@ -4360,6 +4360,66 @@
 			"Type": "RequiredResource"
 		},
 		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertMain/Binaries/Win64/UnrealEditor-Concert.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertMain/Binaries/Win64/UnrealEditor-Concert.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertMain/Binaries/Win64/UnrealEditor-ConcertClient.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertMain/Binaries/Win64/UnrealEditor-ConcertClient.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertMain/Binaries/Win64/UnrealEditor-ConcertServer.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertMain/Binaries/Win64/UnrealEditor-ConcertServer.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertMain/Binaries/Win64/UnrealEditor-ConcertTransport.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertMain/Binaries/Win64/UnrealEditor-ConcertTransport.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertMain/Binaries/Win64/UnrealEditor.modules",
+			"Type": "RequiredResource"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertSync/ConcertSyncClient/Binaries/Win64/UnrealEditor-ConcertSyncClient.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertSync/ConcertSyncClient/Binaries/Win64/UnrealEditor-ConcertSyncClient.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertSync/ConcertSyncClient/Binaries/Win64/UnrealEditor.modules",
+			"Type": "RequiredResource"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertSync/ConcertSyncCore/Binaries/Win64/UnrealEditor-ConcertSyncCore.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertSync/ConcertSyncCore/Binaries/Win64/UnrealEditor-ConcertSyncCore.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertSync/ConcertSyncCore/Binaries/Win64/UnrealEditor.modules",
+			"Type": "RequiredResource"
+		},
+		{
 			"Path": "$(EngineDir)/Plugins/Developer/DumpGPUServices/Binaries/Win64/UnrealEditor-DumpGPUServices.dll",
 			"Type": "DynamicLibrary"
 		},
@@ -5824,6 +5884,18 @@
 			"Type": "RequiredResource"
 		},
 		{
+			"Path": "$(EngineDir)/Plugins/Experimental/WebSocketNetworking/Binaries/Win64/UnrealEditor-WebSocketNetworking.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Experimental/WebSocketNetworking/Binaries/Win64/UnrealEditor-WebSocketNetworking.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Experimental/WebSocketNetworking/Binaries/Win64/UnrealEditor.modules",
+			"Type": "RequiredResource"
+		},
+		{
 			"Path": "$(EngineDir)/Plugins/FX/Cascade/Binaries/Win64/UnrealEditor-Cascade.dll",
 			"Type": "DynamicLibrary"
 		},
@@ -6888,6 +6960,18 @@
 			"Type": "RequiredResource"
 		},
 		{
+			"Path": "$(EngineDir)/Plugins/Runtime/Database/SQLiteCore/Binaries/Win64/UnrealEditor-SQLiteCore.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Runtime/Database/SQLiteCore/Binaries/Win64/UnrealEditor-SQLiteCore.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Runtime/Database/SQLiteCore/Binaries/Win64/UnrealEditor.modules",
+			"Type": "RequiredResource"
+		},
+		{
 			"Path": "$(EngineDir)/Plugins/Runtime/ExampleDeviceProfileSelector/Binaries/Win64/UnrealEditor-ExampleDeviceProfileSelector.dll",
 			"Type": "DynamicLibrary"
 		},
@@ -7553,6 +7637,86 @@
 		},
 		{
 			"Path": "$(EngineDir)/Plugins/UbaController/Binaries/Win64/UnrealEditor.modules",
+			"Type": "RequiredResource"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControlInterception/Binaries/Win64/UnrealEditor-RemoteControlInterception.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControlInterception/Binaries/Win64/UnrealEditor-RemoteControlInterception.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControlInterception/Binaries/Win64/UnrealEditor.modules",
+			"Type": "RequiredResource"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControl.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControl.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlCommon.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlCommon.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlLogic.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlLogic.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlMultiUser.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlMultiUser.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlProtocol.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlProtocol.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlProtocolWidgets.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlProtocolWidgets.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlUI.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-RemoteControlUI.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-WebRemoteControl.dll",
+			"Type": "DynamicLibrary"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor-WebRemoteControl.pdb",
+			"Type": "SymbolFile"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/Binaries/Win64/UnrealEditor.modules",
 			"Type": "RequiredResource"
 		},
 		{
@@ -31514,6 +31678,18 @@
 			"Type": "UFS"
 		},
 		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertMain/ConcertMain.uplugin",
+			"Type": "UFS"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertSync/ConcertSyncClient/ConcertSyncClient.uplugin",
+			"Type": "UFS"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/Developer/Concert/ConcertSync/ConcertSyncCore/ConcertSyncCore.uplugin",
+			"Type": "UFS"
+		},
+		{
 			"Path": "$(EngineDir)/Plugins/Developer/DumpGPUServices/DumpGPUServices.uplugin",
 			"Type": "UFS"
 		},
@@ -31858,6 +32034,10 @@
 			"Type": "UFS"
 		},
 		{
+			"Path": "$(EngineDir)/Plugins/Experimental/WebSocketNetworking/WebSocketNetworking.uplugin",
+			"Type": "UFS"
+		},
+		{
 			"Path": "$(EngineDir)/Plugins/FX/Cascade/Cascade.uplugin",
 			"Type": "UFS"
 		},
@@ -32078,6 +32258,10 @@
 			"Type": "UFS"
 		},
 		{
+			"Path": "$(EngineDir)/Plugins/Runtime/Database/SQLiteCore/SQLiteCore.uplugin",
+			"Type": "UFS"
+		},
+		{
 			"Path": "$(EngineDir)/Plugins/Runtime/ExampleDeviceProfileSelector/ExampleDeviceProfileSelector.uplugin",
 			"Type": "UFS"
 		},
@@ -32194,6 +32378,14 @@
 			"Type": "UFS"
 		},
 		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControlInterception/RemoteControlInterception.uplugin",
+			"Type": "UFS"
+		},
+		{
+			"Path": "$(EngineDir)/Plugins/VirtualProduction/RemoteControl/RemoteControl.uplugin",
+			"Type": "UFS"
+		},
+		{
 			"Path": "$(EngineDir)/Plugins/VirtualProduction/Takes/Takes.uplugin",
 			"Type": "UFS"
 		},
@@ -32262,6 +32454,9 @@
 		"ColorGrading",
 		"CompositeCore",
 		"ComputeFramework",
+		"ConcertMain",
+		"ConcertSyncClient",
+		"ConcertSyncCore",
 		"ContentBrowserAssetDataSource",
 		"ContentBrowserClassDataSource",
 		"ContentBrowserFileDataSource",
@@ -32377,6 +32572,8 @@
 		"PropertyBindingUtils",
 		"ProxyLODPlugin",
 		"PythonScriptPlugin",
+		"RemoteControl",
+		"RemoteControlInterception",
 		"RenderDocPlugin",
 		"RenderGraphInsights",
 		"ResonanceAudio",
@@ -32384,6 +32581,7 @@
 		"RigLogic",
 		"RigVM",
 		"RuntimeTelemetry",
+		"SQLiteCore",
 		"SequenceNavigator",
 		"SequenceValidator",
 		"SequencerAnimTools",
@@ -32416,6 +32614,7 @@
 		"WaveTable",
 		"WebMMedia",
 		"WebMMoviePlayer",
+		"WebSocketNetworking",
 		"WindowsDeviceProfileSelector",
 		"WindowsMoviePlayer",
 		"WmfMedia",

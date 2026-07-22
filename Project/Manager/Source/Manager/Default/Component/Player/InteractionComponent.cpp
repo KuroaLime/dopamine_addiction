@@ -3,6 +3,7 @@
 
 #include "Default/Component/Player/InteractionComponent.h"
 #include "DrawDebugHelpers.h"
+#include "Manager.h"
 #include "Default/Actor/InteractableInterface.h"
 #include "Game/InGame/MainCharacter.h"
 #include "Camera/CameraComponent.h"
@@ -64,7 +65,7 @@ void UInteractionComponent::PerformLineTrace() {
 	float MaxTraceLength = 1500.0f;
 	FVector End = Start + (Rotation.Vector() * MaxTraceLength);
 
-	DrawDebugLine(GetWorld(), Start, End, FColor::Green, false, -1.f, 0, 1.0f);
+	DS_DRAW_LINE(GetWorld(), Start, End, FColor::Green, false, -1.f, 0, 1.0f);
 
 	FHitResult HitResult;
 	FCollisionQueryParams Params;
@@ -72,7 +73,7 @@ void UInteractionComponent::PerformLineTrace() {
 
 	if (GetWorld()->LineTraceSingleByChannel(HitResult, Start, End, ECC_Visibility, Params))
 	{
-		DrawDebugPoint(GetWorld(), HitResult.ImpactPoint, 10.f, FColor::Red, false, -1.f);
+		DS_DRAW_POINT(GetWorld(), HitResult.ImpactPoint, 10.f, FColor::Red, false, -1.f);
 
 		// 4. [�ٽ�] ī�޶� �������� ���� ������ 'ĳ������ ��ġ'�κ��� ��ȣ�ۿ� ������ �Ÿ�(TraceDistance) ���� �ִ��� �˻��մϴ�.
 		float DistanceToPlayer = FVector::Dist(Owner->GetActorLocation(), HitResult.ImpactPoint);
