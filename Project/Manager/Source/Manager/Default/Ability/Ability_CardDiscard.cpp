@@ -15,20 +15,11 @@ UAbility_CardDiscard::UAbility_CardDiscard()
 
 void UAbility_CardDiscard::LocalActivateWithOwner(AActor* InOwner)
 {
-
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Yellow, TEXT("LocalActivateWithOwner"));
-    }
     StartHold(InOwner, InOwner->GetWorld());
 }
 
 void UAbility_CardDiscard::ActivateAbility()
 {
-    if (GEngine)
-    {
-        GEngine->AddOnScreenDebugMessage(-1, 2.f, FColor::Yellow, TEXT("ActivateAbility"));
-    }
     if (OwnerCharacter && OwnerCharacter->HasAuthority())
     {
         StartHold(OwnerCharacter, GetWorld());
