@@ -2,7 +2,64 @@
 
 2026-08-11 기준. 측정 환경을 세우는 과정에서 얻은 사실과, 아직 열려 있는 질문을 남긴다.
 
-## 0. ⭐ 최우선 결론 — 이 게임은 **렌더 스레드 바운드**다 (2026-08-11 Standalone 측정)
+## 00. 🎯 근본 원인 — 씬 전체가 Movable이다 (2026-08-11 확정)
+
+`stat dumpframe -ms=0 -root=initviews` 로그:
+```
+Num Dynamic Instances : 3,543
+Num Static Instances  :     1     ← 씬 전체에서 단 1개
+Scene Instance Count  : 3,549
+GPU IA Primitives     : 1,428,590
+Triangles in BLAS     :   334,185
+```
+
+`UFloatingMotionComponent`로 섬을 띄우려면 섬 루트가 `Mobility = Movable`이어야 하고
+(컴포넌트 헤더에 명시), 그 아래 붙은 나무·바위·풀·구조물이 전부 Movable을 상속한다.
+그 결과:
+- 정적 컬링 캐시·프리컴퓨티드 비지빌리티 사용 불가 → 매 프레임 relevance 재계산
+- 정적 메시 드로우 커맨드 캐싱 불가
+- 레이트레이싱 dynamic update primitives 3,730개가 매 프레임 갱신 (Dynamic 인스턴스 수와 일치)
+- 렌더 스레드가 병렬 visibility 태스크와 RHI 펜스를 기다리며 **약 4ms 스톨**
+
+**부유 "모션"을 멈추는 건 소용없다** — A/B/B/A로 이미 검증됨. 비용은 움직임이 아니라 Mobility 타입에서 나온다.
+
+**개선 방향 (효과 순):**
+1. 섬별 정적 장식물을 **ISM/HISM으로 병합**해 인스턴스 수를 줄인다 (`CardRoom_Floor_ISM` 선례 있음)
+2. 부유와 함께 움직일 필요가 없는 오브젝트는 섬 BP 밖으로 빼서 Static으로
+3. 부유 폭이 `HeightRange 50` / `IdleBobAmplitude 5`로 작은데 씬 전체를 Movable로 만들 값어치가 있는지 재검토
+
+---
+
+## 0. 렌더 스레드 14ms의 분해 (`stat dumpframe`)
+
+```
+14.000  RenderThread
+ 13.299   SceneRenderBuilder_Render
+  11.089     RenderViewFamily
+   3.725       Self                        ← 실제 작업 중 최대
+   2.519       InitViews
+    2.364        View Visibility
+     2.334          CPU Stall - Wait For Event   ← 대기(작업 아님)
+   2.281       UpdatePrimitive
+    1.724        OcclusionSubmittedFence Wait
+     1.683          CPU Stall - Wait For Event   ← RHI 스레드 대기
+   0.520       Lighting / 0.304 PostProcess / 0.239 LumenSceneLighting
+  1.066     RDG Collect Resources
+  0.419     RDG Execute
+ 0.359   SlateDrawWindowsCommand          ← UI 렌더는 싸다 (0.36ms)
+```
+
+렌더 스레드 14ms 중 **약 4ms가 작업이 아니라 CPU 스톨**이다. 렌더 스레드가 스스로 바쁜 게 아니라
+병렬 visibility 워커와 RHI 스레드(RHIT 7.6ms)를 기다린다.
+
+> ⚠️ 앞서 "Draw 16.6 − RenderViewFamily 12.1 = 약 4ms가 바깥"이라고 적었던 것은 **틀렸다**.
+> `stat unit`과 `stat scenerendering`은 평활화 방식이 달라 그대로 빼면 안 되고,
+> `Exclusive`는 "바깥"이 아니라 Inclusive 내부의 자기 시간이다.
+> dumpframe 기준 실제 바깥은 0.7ms(Slate 0.36 + 기타 0.34)뿐이고, 4ms 스톨은 RenderViewFamily **안쪽**에 있다.
+
+---
+
+## 0-1. 이 게임은 **렌더 스레드 바운드**다 (2026-08-11 Standalone 측정)
 
 Standalone(`-game`, 1600x900)에서 `stat unit` A→B→A 측정:
 
