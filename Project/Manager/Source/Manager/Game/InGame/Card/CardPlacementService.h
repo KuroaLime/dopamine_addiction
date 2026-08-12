@@ -88,6 +88,27 @@ public:
     bool IsInsideNoDropZone(const FVector& Candidate) const;
     bool HasOverheadClearance(const FVector& Candidate) const;
 
+    // Why a candidate was turned down, so each caller can keep its own diagnostic counters.
+    enum class ECardDropReject : uint8
+    {
+        Accepted,
+        ZOutOfRange,
+        InsideNoDropZone,
+        TooCloseToOtherCards,
+        Blocked,
+        NoOverheadClearance,
+    };
+
+    // The island placement path and its ground-trace fallback ran the same five checks in the same
+    // order, written out twice; the death-drop path repeats a subset twice more. Keeping the order and
+    // the set of checks in one place stops the copies from drifting when a check is added or reordered.
+    // Callers still choose their own control flow (return vs continue) and bump their own counters.
+    ECardDropReject ClassifyIslandCandidate(
+        const FCardIslandDropZone& DropZone,
+        float ReferenceZ,
+        const FVector& Candidate,
+        const TArray<FVector>& ExistingIslandLocations) const;
+
     bool PickIslandCardDropLocation(
         const FCardIslandDropZone& DropZone,
         const TArray<FVector>& ExistingIslandLocations,

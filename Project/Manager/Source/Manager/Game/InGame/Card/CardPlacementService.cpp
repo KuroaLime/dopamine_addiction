@@ -557,6 +557,40 @@ bool FCardPlacementService::HasOverheadClearance(const FVector& Candidate) const
     return !bBlocked;
 }
 
+FCardPlacementService::ECardDropReject FCardPlacementService::ClassifyIslandCandidate(
+    const FCardIslandDropZone& DropZone,
+    float ReferenceZ,
+    const FVector& Candidate,
+    const TArray<FVector>& ExistingIslandLocations) const
+{
+    if (!IsCardDropZSane(DropZone, ReferenceZ, Candidate))
+    {
+        return ECardDropReject::ZOutOfRange;
+    }
+
+    if (IsInsideNoDropZone(Candidate))
+    {
+        return ECardDropReject::InsideNoDropZone;
+    }
+
+    if (!IsFarEnoughFromIslandCards(Candidate, ExistingIslandLocations))
+    {
+        return ECardDropReject::TooCloseToOtherCards;
+    }
+
+    if (!IsCardDropLocationClear(Candidate))
+    {
+        return ECardDropReject::Blocked;
+    }
+
+    if (!HasOverheadClearance(Candidate))
+    {
+        return ECardDropReject::NoOverheadClearance;
+    }
+
+    return ECardDropReject::Accepted;
+}
+
 bool FCardPlacementService::PickIslandCardDropLocation(
     const FCardIslandDropZone& DropZone,
     const TArray<FVector>& ExistingIslandLocations,
@@ -708,34 +742,14 @@ bool FCardPlacementService::PickIslandCardDropLocation(
         const FVector Candidate = NavLocation.Location + FVector(0.0f, 0.0f, CardIslandGroundOffsetZ);
 
         const float CandidateReferenceNavZ = bHasNavReference ? ReferenceNavZ : NavLocation.Location.Z;
-        if (!IsCardDropZSane(DropZone, CandidateReferenceNavZ, Candidate))
+        switch (ClassifyIslandCandidate(DropZone, CandidateReferenceNavZ, Candidate, ExistingIslandLocations))
         {
-            ++ZFail;
-            return false;
-        }
-
-        if (IsInsideNoDropZone(Candidate))
-        {
-            ++NoDropFail;
-            return false;
-        }
-
-        if (!IsFarEnoughFromIslandCards(Candidate, ExistingIslandLocations))
-        {
-            ++DistFail;
-            return false;
-        }
-
-        if (!IsCardDropLocationClear(Candidate))
-        {
-            ++OverlapFail;
-            return false;
-        }
-
-        if (!HasOverheadClearance(Candidate))
-        {
-            ++OverheadFail;
-            return false;
+        case ECardDropReject::ZOutOfRange:          ++ZFail;        return false;
+        case ECardDropReject::InsideNoDropZone:     ++NoDropFail;   return false;
+        case ECardDropReject::TooCloseToOtherCards: ++DistFail;     return false;
+        case ECardDropReject::Blocked:              ++OverlapFail;  return false;
+        case ECardDropReject::NoOverheadClearance:  ++OverheadFail; return false;
+        case ECardDropReject::Accepted:             break;
         }
 
         OutLocation = Candidate;
@@ -908,33 +922,19 @@ bool FCardPlacementService::PickIslandCardDropLocation(
             const FVector Candidate = Hit.ImpactPoint + FVector(0.0f, 0.0f, CardIslandGroundOffsetZ);
 
             const float GroundReferenceZ = bHasNavReference ? ReferenceNavZ : Hit.ImpactPoint.Z;
-            if (!IsCardDropZSane(DropZone, GroundReferenceZ, Candidate))
+            const ECardDropReject Rejection =
+                ClassifyIslandCandidate(DropZone, GroundReferenceZ, Candidate, ExistingIslandLocations);
+            if (Rejection != ECardDropReject::Accepted)
             {
-                ++ZReject;
-                continue;
-            }
-
-            if (IsInsideNoDropZone(Candidate))
-            {
-                ++NoDropReject;
-                continue;
-            }
-
-            if (!IsFarEnoughFromIslandCards(Candidate, ExistingIslandLocations))
-            {
-                ++DistReject;
-                continue;
-            }
-
-            if (!IsCardDropLocationClear(Candidate))
-            {
-                ++OverlapReject;
-                continue;
-            }
-
-            if (!HasOverheadClearance(Candidate))
-            {
-                ++OverheadReject;
+                switch (Rejection)
+                {
+                case ECardDropReject::ZOutOfRange:          ++ZReject;        break;
+                case ECardDropReject::InsideNoDropZone:     ++NoDropReject;   break;
+                case ECardDropReject::TooCloseToOtherCards: ++DistReject;     break;
+                case ECardDropReject::Blocked:              ++OverlapReject;  break;
+                case ECardDropReject::NoOverheadClearance:  ++OverheadReject; break;
+                default: break;
+                }
                 continue;
             }
 
