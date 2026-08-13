@@ -58,13 +58,20 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "GoldenGoblin", meta = (ClampMin = "0.5"))
 	float CheckIntervalSeconds = 2.f;
 
+	// 동시에 살아있을 수 있는 최대 고블린 수. 이보다 적게 살아있으면 주기적으로 계속 스폰을 시도한다.
+	UPROPERTY(EditDefaultsOnly, Category = "GoldenGoblin", meta = (ClampMin = "1"))
+	int32 MaxConcurrentGoblins = 2;
+
 private:
 	void TrySpawnGoblin();
 
 	bool bActive = false;
-	bool bSpawnedThisPhase = false;
 	double PhaseStartTimeSeconds = 0.0;
 	double LastCombatEventTimeSeconds = 0.0;
+
+	// 죽거나 무효화된 항목은 TrySpawnGoblin에서 주기적으로 정리한다.
+	UPROPERTY(Transient)
+	TArray<TWeakObjectPtr<AGoldenGoblinCharacter>> ActiveGoblins;
 
 	FTimerHandle CheckTimerHandle;
 };

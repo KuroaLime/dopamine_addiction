@@ -29,7 +29,7 @@ void UGoldenGoblinDirectorComponent::ActivateForBattleRoyale()
 	}
 
 	bActive = true;
-	bSpawnedThisPhase = false;
+	ActiveGoblins.Empty();
 	PhaseStartTimeSeconds = World->GetTimeSeconds();
 	LastCombatEventTimeSeconds = PhaseStartTimeSeconds;
 
@@ -61,13 +61,23 @@ void UGoldenGoblinDirectorComponent::NotifyCombatEvent()
 
 void UGoldenGoblinDirectorComponent::TrySpawnGoblin()
 {
-	if (!bActive || bSpawnedThisPhase || !GetOwner() || !GetOwner()->HasAuthority())
+	if (!bActive || !GetOwner() || !GetOwner()->HasAuthority())
 	{
 		return;
 	}
 
 	UWorld* World = GetWorld();
 	if (!World || !GoblinClass)
+	{
+		return;
+	}
+
+	// 죽었거나(HandleDeath로 bIsDead=true) 이미 파괴된 개체는 카운트에서 제외.
+	ActiveGoblins.RemoveAll([](const TWeakObjectPtr<AGoldenGoblinCharacter>& Goblin)
+	{
+		return !Goblin.IsValid() || Goblin->IsGoblinDead();
+	});
+	if (ActiveGoblins.Num() >= MaxConcurrentGoblins)
 	{
 		return;
 	}
@@ -134,10 +144,10 @@ void UGoldenGoblinDirectorComponent::TrySpawnGoblin()
 		FActorSpawnParameters Params;
 		Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 
-		if (World->SpawnActor<AGoldenGoblinCharacter>(GoblinClass, CandidateLocation.Location, FRotator::ZeroRotator, Params))
+		if (AGoldenGoblinCharacter* NewGoblin = World->SpawnActor<AGoldenGoblinCharacter>(GoblinClass, CandidateLocation.Location, FRotator::ZeroRotator, Params))
 		{
-			bSpawnedThisPhase = true;
-			World->GetTimerManager().ClearTimer(CheckTimerHandle);
+			ActiveGoblins.Add(NewGoblin);
+			// 타이머는 계속 돌려서 이 개체가 죽어 슬롯이 비면 다음 체크 주기에 다시 채운다.
 		}
 		return;
 	}

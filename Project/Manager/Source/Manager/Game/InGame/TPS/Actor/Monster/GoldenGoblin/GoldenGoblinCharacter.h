@@ -27,7 +27,7 @@ public:
 	virtual float TakeDamage(float DamageAmount, struct FDamageEvent const& DamageEvent, class AController* EventInstigator, AActor* DamageCauser) override;
 
 	bool IsGoblinDead() const { return bIsDead; }
-	int32 GetGoldRewardAmount() const { return GoldRewardAmount; }
+	int32 GetGoldRewardAmount() const { return RolledGoldRewardAmount; }
 
 	float GetPatrolMoveSpeed() const { return PatrolMoveSpeed; }
 	float GetEvasiveMoveSpeed() const { return EvasiveMoveSpeed; }
@@ -72,8 +72,13 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Stats")
 	float EvasiveMoveSpeed = 700.f;
 
-	UPROPERTY(EditAnywhere, Category = "Reward")
-	int32 GoldRewardAmount = 5000;
+	// 이 범위 내에서 무작위 골드 보상을 굴린다. 고정값이면 "이 몬스터만 잡으면 확정으로 이긴다"는
+	// 식으로 공략이 고정돼버리는 걸 막기 위함.
+	UPROPERTY(EditAnywhere, Category = "Reward", meta = (ClampMin = "0"))
+	int32 MinGoldRewardAmount = 100;
+
+	UPROPERTY(EditAnywhere, Category = "Reward", meta = (ClampMin = "0"))
+	int32 MaxGoldRewardAmount = 3000;
 
 private:
 	void HandleDeath();
@@ -83,4 +88,7 @@ private:
 
 	bool bIsDead = false;
 	FTimerHandle HealthBindRetryTimer;
+
+	// BeginPlay(서버)에서 Min~MaxGoldRewardAmount 사이로 한 번 굴려서 고정해둔 값.
+	int32 RolledGoldRewardAmount = 0;
 };
