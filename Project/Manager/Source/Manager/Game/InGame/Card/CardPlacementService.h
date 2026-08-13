@@ -115,6 +115,7 @@ public:
         int32 IslandIndex,
         int32 SlotIndex,
         FVector& OutLocation,
-        ECardDropPlacementSource* OutSource = nullptr) const;
+        ECardDropPlacementSource* OutSource = nullptr,
+        FString* OutFailureReason = nullptr) const;
     bool PickDeathCardDropLocation(const FVector& DeathLocation, const TArray<FVector>& ExistingDropLocations, int32 CardIndex, FVector& OutLocation) const;
 };

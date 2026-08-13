@@ -2071,6 +2071,7 @@ bool UCardGameService::SpawnRoundCardBundleForBattleRoyale(TArray<int32>& OutSpa
     int32 UnknownSourcePlacedCount = 0;
     int32 LocationFailedCount = 0;
     int32 SpawnFailedCount = 0;
+    TMap<FString, int32> LocationFailureCounts;
     TMap<int32, TArray<FVector>> ExistingLocationsByZoneIndex;
     TArray<FPlannedCardDrop> PlannedDrops;
     PlannedDrops.Reserve(PlannedCount);
@@ -2104,20 +2105,26 @@ bool UCardGameService::SpawnRoundCardBundleForBattleRoyale(TArray<int32>& OutSpa
 
             FVector SpawnLocation = FVector::ZeroVector;
             ECardDropPlacementSource PlacementSource = ECardDropPlacementSource::None;
+            FString PlacementFailureReason;
             const bool bPicked = CardPlacement.PickIslandCardDropLocation(
                 DropZone,
                 ExistingIslandLocations,
                 IslandIndex,
                 SlotIndex,
                 SpawnLocation,
-                &PlacementSource);
+                &PlacementSource,
+                &PlacementFailureReason);
 
             if (!bPicked)
             {
                 ++LocationFailedCount;
-                // 자리를 못 잡으면 겹쳐 놓지 않고 이 카드는 건너뛴다. 실패 사유는 PickIslandCardDropLocation 로그에 남는다.
-                UE_LOG(LogManagerCard, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Card=%d Name=%s Reason=NoValidLocation Result=RejectWholeBundle"),
-                    IslandIndex, SlotIndex, static_cast<int32>(CardID), *CardDebug::ToString(CardID));
+                if (PlacementFailureReason.IsEmpty())
+                {
+                    PlacementFailureReason = TEXT("UnknownPlacementFailure");
+                }
+                ++LocationFailureCounts.FindOrAdd(PlacementFailureReason);
+                UE_LOG(LogManagerCard, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Card=%d Name=%s Reason=%s Result=RejectWholeBundle"),
+                    IslandIndex, SlotIndex, static_cast<int32>(CardID), *CardDebug::ToString(CardID), *PlacementFailureReason);
                 continue;
             }
 
@@ -2152,11 +2159,27 @@ bool UCardGameService::SpawnRoundCardBundleForBattleRoyale(TArray<int32>& OutSpa
 
     if (LocationFailedCount > 0 || PlannedDrops.Num() != PlannedCount)
     {
+        TArray<FString> FailureReasons;
+        LocationFailureCounts.GenerateKeyArray(FailureReasons);
+        FailureReasons.Sort();
+
+        TArray<FString> FailureBreakdownParts;
+        FailureBreakdownParts.Reserve(FailureReasons.Num());
+        for (const FString& FailureReason : FailureReasons)
+        {
+            FailureBreakdownParts.Add(FString::Printf(
+                TEXT("%s=%d"),
+                *FailureReason,
+                LocationFailureCounts.FindRef(FailureReason)));
+        }
+        const FString FailureBreakdown = FString::Join(FailureBreakdownParts, TEXT(","));
+
         UE_LOG(LogManagerCard, Error,
-            TEXT("[DS] CardBundlePlanRejected Reason=IncompletePlacement PlannedCards=%d Locations=%d LocationFailed=%d Zones=%d Islands=%d Result=NoActorsSpawned"),
+            TEXT("[DS] CardBundlePlanRejected Reason=IncompletePlacement PlannedCards=%d Locations=%d LocationFailed=%d FailureBreakdown=%s Zones=%d Islands=%d Result=NoActorsSpawned"),
             PlannedCount,
             PlannedDrops.Num(),
             LocationFailedCount,
+            FailureBreakdown.IsEmpty() ? TEXT("None") : *FailureBreakdown,
             IslandDropZones.Num(),
             IslandCardGroups.Num());
         return false;

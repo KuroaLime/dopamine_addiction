@@ -597,15 +597,24 @@ bool FCardPlacementService::PickIslandCardDropLocation(
     int32 IslandIndex,
     int32 SlotIndex,
     FVector& OutLocation,
-    ECardDropPlacementSource* OutSource) const
+    ECardDropPlacementSource* OutSource,
+    FString* OutFailureReason) const
 {
     if (OutSource)
     {
         *OutSource = ECardDropPlacementSource::None;
     }
+    if (OutFailureReason)
+    {
+        OutFailureReason->Reset();
+    }
 
     if (!World)
     {
+        if (OutFailureReason)
+        {
+            *OutFailureReason = TEXT("NoWorld");
+        }
         UE_LOG(LogManagerCard, Error, TEXT("[DS] Card DropFail Island=%d Slot=%d Reason=NoWorld"), IslandIndex, SlotIndex);
         return false;
     }
@@ -722,6 +731,16 @@ bool FCardPlacementService::PickIslandCardDropLocation(
     int32 OverlapFail = 0;
     int32 OverheadFail = 0;
     int32 TotalCandidates = 0;
+
+    const int32 GroundFallbackAttempts = 32;
+    int32 GroundTraceFail = 0;
+    int32 GroundBoundsReject = 0;
+    int32 GroundWalkableReject = 0;
+    int32 GroundZReject = 0;
+    int32 GroundNoDropReject = 0;
+    int32 GroundDistReject = 0;
+    int32 GroundOverlapReject = 0;
+    int32 GroundOverheadReject = 0;
 
     auto TryAcceptNavLocation = [&](const FNavLocation& NavLocation, const TCHAR* Source, int32 Attempt) -> bool
     {
@@ -866,18 +885,8 @@ bool FCardPlacementService::PickIslandCardDropLocation(
     {
         const float TraceHalfHeight = FMath::Max(1000.0f, CardIslandGroundTraceHalfHeight);
         const float FallbackRadius = FMath::Clamp(FMath::Min(Extent.X, Extent.Y) * 0.30f, 250.0f, VisibleRadius);
-        const int32 FallbackAttempts = 32;
 
-        int32 TraceFail = 0;
-        int32 BoundsReject = 0;
-        int32 WalkableReject = 0;
-        int32 ZReject = 0;
-        int32 NoDropReject = 0;
-        int32 DistReject = 0;
-        int32 OverlapReject = 0;
-        int32 OverheadReject = 0;
-
-        for (int32 Attempt = 0; Attempt < FallbackAttempts; ++Attempt)
+        for (int32 Attempt = 0; Attempt < GroundFallbackAttempts; ++Attempt)
         {
             const float RingAlpha = static_cast<float>((Attempt / 8) + 1) / 4.0f;
             const float Radius = FMath::Clamp(FallbackRadius * RingAlpha, 0.0f, FallbackRadius);
@@ -891,7 +900,7 @@ bool FCardPlacementService::PickIslandCardDropLocation(
 
             if (!DropZone.Bounds.IsInsideXY(TraceXY))
             {
-                ++BoundsReject;
+                ++GroundBoundsReject;
                 continue;
             }
 
@@ -903,19 +912,19 @@ bool FCardPlacementService::PickIslandCardDropLocation(
             const bool bHit = World->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, QueryParams);
             if (!bHit || !Hit.bBlockingHit)
             {
-                ++TraceFail;
+                ++GroundTraceFail;
                 continue;
             }
 
             if (!DropZone.Bounds.IsInsideXY(Hit.ImpactPoint))
             {
-                ++BoundsReject;
+                ++GroundBoundsReject;
                 continue;
             }
 
             if (!IsCardIslandSurfaceWalkable(Hit))
             {
-                ++WalkableReject;
+                ++GroundWalkableReject;
                 continue;
             }
 
@@ -928,11 +937,11 @@ bool FCardPlacementService::PickIslandCardDropLocation(
             {
                 switch (Rejection)
                 {
-                case ECardDropReject::ZOutOfRange:          ++ZReject;        break;
-                case ECardDropReject::InsideNoDropZone:     ++NoDropReject;   break;
-                case ECardDropReject::TooCloseToOtherCards: ++DistReject;     break;
-                case ECardDropReject::Blocked:              ++OverlapReject;  break;
-                case ECardDropReject::NoOverheadClearance:  ++OverheadReject; break;
+                case ECardDropReject::ZOutOfRange:          ++GroundZReject;        break;
+                case ECardDropReject::InsideNoDropZone:     ++GroundNoDropReject;   break;
+                case ECardDropReject::TooCloseToOtherCards: ++GroundDistReject;     break;
+                case ECardDropReject::Blocked:              ++GroundOverlapReject;  break;
+                case ECardDropReject::NoOverheadClearance:  ++GroundOverheadReject; break;
                 default: break;
                 }
                 continue;
@@ -998,10 +1007,34 @@ bool FCardPlacementService::PickIslandCardDropLocation(
             return true;
         }
 
+        const TCHAR* GroundPrimaryReject = TEXT("None");
+        int32 GroundPrimaryCount = 0;
+        const TPair<const TCHAR*, int32> GroundRejectCounts[] =
+        {
+            { TEXT("TraceMiss"), GroundTraceFail },
+            { TEXT("OutsideBounds"), GroundBoundsReject },
+            { TEXT("SurfaceNotWalkable"), GroundWalkableReject },
+            { TEXT("ZOutOfRange"), GroundZReject },
+            { TEXT("TooCloseToOtherCards"), GroundDistReject },
+            { TEXT("Blocked"), GroundOverlapReject },
+            { TEXT("NoOverheadClearance"), GroundOverheadReject },
+            { TEXT("InsideNoDropZone"), GroundNoDropReject },
+        };
+        for (const TPair<const TCHAR*, int32>& RejectCount : GroundRejectCounts)
+        {
+            if (RejectCount.Value > GroundPrimaryCount)
+            {
+                GroundPrimaryReject = RejectCount.Key;
+                GroundPrimaryCount = RejectCount.Value;
+            }
+        }
+
         UE_LOG(LogManagerCard, Warning,
-            TEXT("[DS] Card GroundTraceFallbackRejected Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Attempts=%d TraceFail=%d BoundsReject=%d WalkableReject=%d ZReject=%d DistReject=%d OverlapReject=%d OverheadReject=%d NoDropReject=%d"),
+            TEXT("[DS] Card GroundTraceFallbackRejected Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Attempts=%d PrimaryReject=%s PrimaryCount=%d TraceFail=%d BoundsReject=%d WalkableReject=%d ZReject=%d DistReject=%d OverlapReject=%d OverheadReject=%d NoDropReject=%d"),
             IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
-            FallbackAttempts, TraceFail, BoundsReject, WalkableReject, ZReject, DistReject, OverlapReject, OverheadReject, NoDropReject);
+            GroundFallbackAttempts, GroundPrimaryReject, GroundPrimaryCount,
+            GroundTraceFail, GroundBoundsReject, GroundWalkableReject, GroundZReject, GroundDistReject,
+            GroundOverlapReject, GroundOverheadReject, GroundNoDropReject);
         return false;
     };
 
@@ -1010,12 +1043,77 @@ bool FCardPlacementService::PickIslandCardDropLocation(
         return true;
     }
 
+    const int32 GroundHitCount = GroundFallbackAttempts - GroundTraceFail - GroundBoundsReject;
+    FString FailureReason;
+    if (!NavSystem)
+    {
+        FailureReason = TEXT("NoNavigationSystemAndGroundFallbackRejected");
+    }
+    else if (NavAnchors.Num() == 0)
+    {
+        if (GroundTraceFail >= FMath::Max(1, (GroundFallbackAttempts * 3) / 4))
+        {
+            FailureReason = TEXT("NoNavAnchorsAndGroundTraceMostlyMissed");
+        }
+        else if (GroundWalkableReject > 0 && GroundWalkableReject >= GroundDistReject && GroundWalkableReject >= GroundOverlapReject)
+        {
+            FailureReason = TEXT("NoNavAnchorsAndGroundSurfaceNotWalkable");
+        }
+        else if (GroundDistReject > 0 && GroundDistReject >= GroundOverlapReject)
+        {
+            FailureReason = TEXT("NoNavAnchorsAndGroundCandidatesTooClose");
+        }
+        else if (GroundOverlapReject > 0)
+        {
+            FailureReason = TEXT("NoNavAnchorsAndGroundCandidatesBlocked");
+        }
+        else
+        {
+            FailureReason = TEXT("NoNavAnchorsAndGroundFallbackRejected");
+        }
+    }
+    else
+    {
+        const TCHAR* DominantReject = TEXT("Unknown");
+        int32 DominantCount = 0;
+        const TPair<const TCHAR*, int32> RejectCounts[] =
+        {
+            { TEXT("NavProjection"), NavFail },
+            { TEXT("Bounds"), BoundsFail + GroundBoundsReject },
+            { TEXT("ZRange"), ZFail + GroundZReject },
+            { TEXT("Distance"), DistFail + GroundDistReject },
+            { TEXT("Collision"), OverlapFail + GroundOverlapReject },
+            { TEXT("Overhead"), OverheadFail + GroundOverheadReject },
+            { TEXT("NoDropZone"), NoDropFail + GroundNoDropReject },
+            { TEXT("GroundTrace"), GroundTraceFail },
+            { TEXT("Walkability"), GroundWalkableReject },
+        };
+        for (const TPair<const TCHAR*, int32>& RejectCount : RejectCounts)
+        {
+            if (RejectCount.Value > DominantCount)
+            {
+                DominantReject = RejectCount.Key;
+                DominantCount = RejectCount.Value;
+            }
+        }
+        FailureReason = FString::Printf(TEXT("AllCandidatesRejectedMostlyBy%s"), DominantReject);
+    }
+
+    if (OutFailureReason)
+    {
+        *OutFailureReason = FailureReason;
+    }
+
     UE_LOG(LogManagerCard, Error,
-        TEXT("[DS] Card DropFail Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Reason=%s Anchors=%d MaxAttempts=%d SpiralCandidates=%d VisibleRadius=%.0f RandomRadius=%.0f RefNavZ=%.1f NavFail=%d BoundsFail=%d ZFail=%d DistFail=%d OverlapFail=%d OverheadFail=%d NoDrop=%d ExistingCards=%d TotalCandidates=%d"),
+        TEXT("[DS] Card DropFail Island=%d Slot=%d Zone=%s Key=%s ZoneSource=%s Reason=%s Anchors=%d AnchorNavFail=%d AnchorBoundsFail=%d MaxAttempts=%d SpiralCandidates=%d VisibleRadius=%.0f RandomRadius=%.0f RefNavZ=%.1f NavFail=%d BoundsFail=%d ZFail=%d DistFail=%d OverlapFail=%d OverheadFail=%d NoDrop=%d GroundAttempts=%d GroundHits=%d GroundTraceFail=%d GroundBounds=%d GroundWalkable=%d GroundZ=%d GroundDist=%d GroundOverlap=%d GroundOverhead=%d GroundNoDrop=%d ExistingCards=%d TotalCandidates=%d"),
         IslandIndex, SlotIndex, *GetNameSafe(DropZone.ZoneActor.Get()), *DropZone.IslandKey.ToString(), *DropZone.Source,
-        NavSystem ? TEXT("AllNavCandidatesRejected") : TEXT("NoNavSystemGroundTraceRejected"),
-        NavAnchors.Num(), MaxAttempts, SpiralRings * PointsPerRing, VisibleRadius, RandomRadius, ReferenceNavZ,
-        NavFail, BoundsFail, ZFail, DistFail, OverlapFail, OverheadFail, NoDropFail, ExistingIslandLocations.Num(), TotalCandidates);
+        *FailureReason,
+        NavAnchors.Num(), AnchorNavFail, AnchorBoundsFail, MaxAttempts, SpiralRings * PointsPerRing,
+        VisibleRadius, RandomRadius, ReferenceNavZ,
+        NavFail, BoundsFail, ZFail, DistFail, OverlapFail, OverheadFail, NoDropFail,
+        GroundFallbackAttempts, GroundHitCount, GroundTraceFail, GroundBoundsReject, GroundWalkableReject,
+        GroundZReject, GroundDistReject, GroundOverlapReject, GroundOverheadReject, GroundNoDropReject,
+        ExistingIslandLocations.Num(), TotalCandidates);
     return false;
 }
 
