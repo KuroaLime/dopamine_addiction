@@ -9,10 +9,17 @@
 #include "Animation/WidgetAnimation.h"
 #include "Camera/CameraComponent.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
-#include "Game/InGame/MainPlayerState.h"      
+#include "Game/InGame/MainPlayerState.h"
 #include "Game/InGame/MainCharacter.h"
 #include "Game/InGame/TPS/UI/CRoundandTimerWidget.h"
 #include "Game/InGame/MainPlayerController.h"
+#include "Game/InGame/Interface/PhasePlayerStateInterface.h"
+#include "Game/InGame/Interface/PhaseGameStateInterface.h"
+#include "GameFramework/GameStateBase.h"
+#include "Camera/PlayerCameraManager.h"
+#include "Engine/Engine.h"
+#include "Engine/GameViewportClient.h"
+#include "Blueprint/WidgetLayoutLibrary.h"
 
 const FName UTpsPlayerMainHUD::LvLinearWipeParamName(TEXT("Linear_wipe"));
 
@@ -303,8 +310,60 @@ void UTpsPlayerMainHUD::UpdateAim(float DeltaTime)
     AWeapon* Weapon = Character ? Character->GetEquippedGun() : nullptr;
     if (Weapon && Weapon->Setting)
     {
-        constexpr float PixelsPerBloomDegree = 6.f; // 1도당 픽셀 거리. 취향껏 조정.
-        TargetOffset = Weapon->Setting->GetCurrentBloomDegrees() * PixelsPerBloomDegree;
+        // 크로스헤어는 실제 탄 원뿔과 같은 총 각도(기본 퍼짐 + 누적 블룸)를 그린다.
+        // 서버 Server_ExecuteFire의 VRandCone(SpreadAngle = base + CurrentBloomAngle)와 일치.
+        // 대기 상태(블룸=0)에서는 기본 퍼짐만 표시되므로 크로스헤어 = 첫 탄이 갈 수 있는 범위가 된다.
+        float BaseSpreadDegrees = 0.f;
+        if (Character)
+        {
+            IPhasePlayerStateInterface* PS = Cast<IPhasePlayerStateInterface>(Character->GetPlayerState());
+            IPhaseGameStateInterface* GS = GetWorld() ? Cast<IPhaseGameStateInterface>(GetWorld()->GetGameState()) : nullptr;
+            if (PS && GS)
+            {
+                float Spread = 0.f;
+                int32 PelletCount = 1;
+                float TraceRadius = 0.f;
+                GS->GetWeaponFireProfile(PS->GetWeaponID(), Spread, PelletCount, TraceRadius);
+                BaseSpreadDegrees = Spread;
+            }
+        }
+
+        const float TotalSpreadDegrees = BaseSpreadDegrees + Weapon->Setting->GetCurrentBloomDegrees();
+
+        // 임의 상수(px/도)가 아니라 실제 탄 원뿔을 화면 픽셀 반지름으로 투영한다.
+        // 서버 탄은 VRandCone(카메라 forward, TotalSpreadDegrees)로 흩어지므로,
+        // 그 반각을 현재 FOV·뷰포트로 투영하면 "탄이 화면에서 벗어날 수 있는 최대 거리(px)"가 나온다.
+        // 대시는 이 반지름보다 기본 간격만큼 더 바깥이라, 탄은 크로스헤어 안쪽 간격에 떨어진다.
+        float FovDegrees = 90.f;
+        if (APlayerController* OwningPC = GetOwningPlayer())
+        {
+            if (OwningPC->PlayerCameraManager)
+            {
+                FovDegrees = OwningPC->PlayerCameraManager->GetFOVAngle();
+            }
+        }
+
+        FVector2D ViewportSize(1920.f, 1080.f);
+        if (GEngine && GEngine->GameViewport)
+        {
+            GEngine->GameViewport->GetViewportSize(ViewportSize);
+        }
+
+        const float HalfFovRad = FMath::DegreesToRadians(FMath::Clamp(FovDegrees, 1.f, 170.f) * 0.5f);
+        const float HalfFovTan = FMath::Tan(HalfFovRad);
+        if (HalfFovTan > KINDA_SMALL_NUMBER)
+        {
+            // 수평 FOV 기준 투영(FieldOfView=수평). 카메라 스프레드 반각을 화면 raw 픽셀 반지름으로 환산.
+            const float SpreadPixelRadius = FMath::Tan(FMath::DegreesToRadians(TotalSpreadDegrees)) / HalfFovTan * (ViewportSize.X * 0.5f);
+
+            // SetRenderTranslation은 UMG의 DPI 스케일된 단위이므로 raw 픽셀을 DPI 스케일로 나눠 맞춘다.
+            // (이 보정이 없으면 크로스헤어가 실제 탄 반지름보다 작게 벌어져 가장자리 탄이 밖으로 삐져나온다.)
+            const float DpiScale = UWidgetLayoutLibrary::GetViewportScale(this);
+            const float SafeDpiScale = (DpiScale > KINDA_SMALL_NUMBER) ? DpiScale : 1.f;
+
+            // 크로스헤어는 대칭이라 이 반지름을 4방향에 동일 적용. CrosshairSpreadScale로 미세 보정.
+            TargetOffset = (SpreadPixelRadius / SafeDpiScale) * CrosshairSpreadScale;
+        }
     }
     else
     {
