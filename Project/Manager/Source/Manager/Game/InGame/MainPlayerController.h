@@ -12,6 +12,7 @@
 class UInputHandler;
 class UUIHandler;
 class ACardDropActor;
+class UEscapeMenuWidget;
 
 UCLASS()
 class MANAGER_API AMainPlayerController : public APlayerController,
@@ -43,6 +44,10 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Category = "Controller|Setup")
 	TMap<EGamePhase, TSubclassOf<UUIHandler>> UIHandlerClassMap;
 
+	// ESC 메뉴로 띄울 위젯 클래스. BP_MainPlayerController 기본값에서 WBP_EscapeMenu를 지정한다.
+	UPROPERTY(EditDefaultsOnly, Category = "Controller|Setup")
+	TSubclassOf<UEscapeMenuWidget> EscapeMenuClass;
+
 	UPROPERTY(BlueprintReadOnly, Category = "Controller|State")
 	EGamePhase CurrentPhase = EGamePhase::TPS;
 
@@ -54,6 +59,17 @@ protected:
 	TMap<EGamePhase, TObjectPtr<UUIHandler>> UIHandlerMap;
 
 	TArray<EGamePhase> PhaseStack;
+
+	// ESC 메뉴 상태.
+	UPROPERTY(Transient)
+	TObjectPtr<UEscapeMenuWidget> EscapeMenuWidget = nullptr;
+
+	bool bEscapeMenuOpen = false;
+	// 메뉴를 열기 직전의 게임입력 잠금 상태(닫을 때 원상 복구용).
+	bool bGameplayInputLockedBeforeEscapeMenu = false;
+	// 한 번의 ESC 입력이 두 경로(TPS의 IA_Quit + 컨트롤러 BindKey)로 중복 도착해도
+	// 토글이 두 번 일어나지 않도록 마지막 토글 시각을 기록해 짧은 창 안의 재호출을 무시한다.
+	double LastEscapeToggleSeconds = 0.0;
 
 private:
 	struct FServerRpcRateLimitState
@@ -268,6 +284,13 @@ public:
 
     UFUNCTION(BlueprintCallable, Category = "Seotda")
     void ReturnToLobbyFromMatchEnd();
+
+	// ESC 인게임 메뉴 열기/닫기/토글. 로컬 컨트롤러에서만 동작한다.
+	void ToggleEscapeMenu();
+	void OpenEscapeMenu();
+
+	UFUNCTION(BlueprintCallable, Category = "UI")
+	void CloseEscapeMenu();
 
 UFUNCTION(Client, Reliable)
 void Client_UpdateSeotdaState(

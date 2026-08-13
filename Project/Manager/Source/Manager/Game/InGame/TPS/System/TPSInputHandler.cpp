@@ -252,5 +252,10 @@ void UTPSInputHandler::Input_CardDiscardEnd()
 void UTPSInputHandler::Input_Quit()
 {
 	if (!OwnerController) return;
-	UKismetSystemLibrary::QuitGame(OwnerController->GetWorld(), OwnerController, EQuitPreference::Quit, false);
+
+	// ESC는 이제 게임을 종료하지 않고 인게임 메뉴(로비로 나가기/설정/돌아가기)를 토글한다.
+	if (AMainPlayerController* PC = Cast<AMainPlayerController>(OwnerController))
+	{
+		PC->ToggleEscapeMenu();
+	}
 }

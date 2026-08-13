@@ -29,6 +29,9 @@
 #include "Blueprint/WidgetLayoutLibrary.h"
 #include "Game/InGame/TPS/UI/Shop/ShopWidget.h"
 #include "Game/InGame/TPS/UI/TpsPlayerMainHUD.h"
+#include "Game/InGame/UI/EscapeMenuWidget.h"
+#include "Components/InputComponent.h"
+#include "Blueprint/UserWidget.h"
 #include "HAL/PlatformTime.h"
 #include "TimerManager.h"
 
@@ -169,6 +172,107 @@ void AMainPlayerController::BeginDestroy()
 void AMainPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
+
+	// ESC: 모든 페이즈 공통으로 인게임 메뉴를 토글한다. Enhanced Input 매핑과 별개로
+	// 컨트롤러 InputComponent에 직접 바인딩해 어떤 페이즈에서든 항상 받도록 한다.
+	if (InputComponent)
+	{
+		InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AMainPlayerController::ToggleEscapeMenu);
+	}
+}
+
+void AMainPlayerController::ToggleEscapeMenu()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	// 같은 ESC 입력이 IA_Quit와 컨트롤러 BindKey 양쪽으로 중복 도착하면 열자마자 닫히므로,
+	// 아주 짧은 창 안의 재호출은 무시한다.
+	const double Now = FPlatformTime::Seconds();
+	if (Now - LastEscapeToggleSeconds < 0.15)
+	{
+		return;
+	}
+	LastEscapeToggleSeconds = Now;
+
+	if (bEscapeMenuOpen)
+	{
+		CloseEscapeMenu();
+	}
+	else
+	{
+		OpenEscapeMenu();
+	}
+}
+
+void AMainPlayerController::OpenEscapeMenu()
+{
+	if (!IsLocalController() || bEscapeMenuOpen)
+	{
+		return;
+	}
+
+	if (!EscapeMenuClass)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CL] OpenEscapeMenu: EscapeMenuClass가 지정되지 않았습니다. BP_MainPlayerController에서 WBP_EscapeMenu를 지정하세요."));
+		return;
+	}
+
+	if (!EscapeMenuWidget)
+	{
+		EscapeMenuWidget = CreateWidget<UEscapeMenuWidget>(this, EscapeMenuClass);
+	}
+	if (!EscapeMenuWidget)
+	{
+		return;
+	}
+
+	if (!EscapeMenuWidget->IsInViewport())
+	{
+		// 다른 HUD 위에 오도록 높은 ZOrder로 추가.
+		EscapeMenuWidget->AddToViewport(1000);
+	}
+
+	bEscapeMenuOpen = true;
+
+	// 메뉴가 열려 있는 동안 이동/시점 입력을 잠근다(닫을 때 원래 상태로 복구).
+	bGameplayInputLockedBeforeEscapeMenu = bGameplayInputLocked;
+	ApplyGameplayInputLock(true, TEXT("EscapeMenu"));
+
+	bShowMouseCursor = true;
+	SetInputMode(FInputModeGameAndUI());
+}
+
+void AMainPlayerController::CloseEscapeMenu()
+{
+	if (!bEscapeMenuOpen)
+	{
+		return;
+	}
+
+	bEscapeMenuOpen = false;
+
+	if (EscapeMenuWidget && EscapeMenuWidget->IsInViewport())
+	{
+		EscapeMenuWidget->RemoveFromParent();
+	}
+
+	// 이동/시점 입력 잠금을 메뉴 열기 직전 상태로 되돌린다.
+	ApplyGameplayInputLock(bGameplayInputLockedBeforeEscapeMenu, TEXT("EscapeMenuClose"));
+
+	// 현재 페이즈의 입력 상태(입력모드/커서)를 다시 적용해 원래대로 되돌린다.
+	if (UInputHandler* Handler = InputHandlerMap.FindRef(CurrentPhase))
+	{
+		Handler->InputActivate();
+	}
+	else
+	{
+		// 폴백: 페이즈 핸들러가 없으면 게임 전용 모드로.
+		bShowMouseCursor = false;
+		SetInputMode(FInputModeGameOnly());
+	}
 }
 
 void AMainPlayerController::SwitchMode(EGamePhase NewPhase)
