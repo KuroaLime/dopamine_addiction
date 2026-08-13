@@ -114,6 +114,12 @@ private:
 	// 현재 화면에 표시 중인 조준점 벌어짐 픽셀 값. 목표치(무기 블룸 각도 기반)를 향해 매 틱 부드럽게 보간된다.
 	float CurrentDisplayedAimOffset = 0.f;
 
+	// 크로스헤어 스프레드 보정 배수. 투영은 물리적으로 정확하지만, 대시 텍스처의 안쪽 여백/모양 등
+	// 무기와 무관한 상수 오차를 눈으로 흡수하기 위한 값. 탄이 크로스헤어 안쪽에 딱 들어올 때까지 조정.
+	// (모든 무기/거리/FOV에 동일하게 적용되므로 한 번만 맞추면 된다.)
+	UPROPERTY(EditAnywhere, Category = "Aim")
+	float CrosshairSpreadScale = 1.0f;
+
 	// 디버그: Character/Weapon 조회 실패를 스팸 없이(0.5초에 한 번) 로그로 남기기 위한 누적 타이머.
 	float AimDebugLogAccumulator = 0.f;
 

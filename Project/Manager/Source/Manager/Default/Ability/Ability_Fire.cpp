@@ -1,4 +1,5 @@
 #include "Default/Ability/Ability_Fire.h"
+#include "Manager.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Default/Ability/Interface/AbilityCheckInterface.h"
 #include "Game/InGame/Interface/PhasePlayerStateInterface.h"
@@ -546,12 +547,12 @@ void UAbility_Fire::Server_ExecuteFire()
 		// 디버그: 실제 판정 트레이스 시각화. 초록=액터 명중, 노랑=명중은 했지만 액터 없음(벽 등), 빨강=완전 미스.
 		const FColor DebugColor = (bCamHit && CamHit.GetActor()) ? FColor::Green : (bCamHit ? FColor::Yellow : FColor::Red);
 		const FVector DebugEndPoint = bCamHit ? CamHit.ImpactPoint : CamEnd;
-		DrawDebugLine(World, CamStart, DebugEndPoint, DebugColor, false, 3.f, 0, 1.5f);
+		DS_DRAW_LINE(World, CamStart, DebugEndPoint, DebugColor, false, 3.f, 0, 1.5f);
 		if (TraceRadius > 0.f)
 		{
 			// 명중 여부와 무관하게 시작/끝에 실제 스윕 반지름 그대로 그려서 판정 두께가 눈에 보이게 한다.
-			DrawDebugSphere(World, CamStart, TraceRadius, 12, DebugColor, false, 3.f);
-			DrawDebugSphere(World, DebugEndPoint, TraceRadius, 12, DebugColor, false, 3.f);
+			DS_DRAW_SPHERE(World, CamStart, TraceRadius, 12, DebugColor, false, 3.f);
+			DS_DRAW_SPHERE(World, DebugEndPoint, TraceRadius, 12, DebugColor, false, 3.f);
 		}
 
 		if (PelletIndex == 0)
