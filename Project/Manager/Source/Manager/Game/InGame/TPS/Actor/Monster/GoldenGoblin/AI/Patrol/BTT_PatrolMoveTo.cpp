@@ -1,21 +1,19 @@
 // Fill out your copyright notice in the Description page of Project Settings.
 
-
-#include "Game/InGame/TPS/Actor/Monster/GoldenGoblin/AI/Evade/BTT_EvasiveManeuver.h"
-#include "Game/InGame/TPS/Actor/Monster/GoldenGoblin/GoldenGoblinCharacter.h"
+#include "Game/InGame/TPS/Actor/Monster/GoldenGoblin/AI/Patrol/BTT_PatrolMoveTo.h"
 #include "AIController.h"
 #include "Navigation/PathFollowingComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 
-UBTT_EvasiveManeuver::UBTT_EvasiveManeuver()
+UBTT_PatrolMoveTo::UBTT_PatrolMoveTo()
 {
-	NodeName = TEXT("Evasive Maneuver");
+	NodeName = TEXT("Patrol Move To");
 	bNotifyTick = true;
-	BlackboardKey.AddVectorFilter(this, GET_MEMBER_NAME_CHECKED(UBTT_EvasiveManeuver, BlackboardKey));
+	BlackboardKey.AddVectorFilter(this, GET_MEMBER_NAME_CHECKED(UBTT_PatrolMoveTo, BlackboardKey));
 }
 
-EBTNodeResult::Type UBTT_EvasiveManeuver::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
+EBTNodeResult::Type UBTT_PatrolMoveTo::ExecuteTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory)
 {
 	AAIController* AIController = OwnerComp.GetAIOwner();
 	UBlackboardComponent* BlackboardComp = OwnerComp.GetBlackboardComponent();
@@ -24,16 +22,8 @@ EBTNodeResult::Type UBTT_EvasiveManeuver::ExecuteTask(UBehaviorTreeComponent& Ow
 		return EBTNodeResult::Failed;
 	}
 
-	AGoldenGoblinCharacter* Goblin = Cast<AGoldenGoblinCharacter>(AIController->GetPawn());
-	if (!Goblin)
-	{
-		return EBTNodeResult::Failed;
-	}
-
-	Goblin->SetGoblinMoveSpeed(Goblin->GetEvasiveMoveSpeed());
-
-	const FVector EscapeLocation = BlackboardComp->GetValueAsVector(BlackboardKey.SelectedKeyName);
-	const EPathFollowingRequestResult::Type MoveResult = AIController->MoveToLocation(EscapeLocation, AcceptanceRadius);
+	const FVector PatrolLocation = BlackboardComp->GetValueAsVector(BlackboardKey.SelectedKeyName);
+	const EPathFollowingRequestResult::Type MoveResult = AIController->MoveToLocation(PatrolLocation, AcceptanceRadius);
 
 	if (MoveResult == EPathFollowingRequestResult::Failed)
 	{
@@ -47,7 +37,7 @@ EBTNodeResult::Type UBTT_EvasiveManeuver::ExecuteTask(UBehaviorTreeComponent& Ow
 	return EBTNodeResult::InProgress;
 }
 
-void UBTT_EvasiveManeuver::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
+void UBTT_PatrolMoveTo::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* NodeMemory, float DeltaSeconds)
 {
 	Super::TickTask(OwnerComp, NodeMemory, DeltaSeconds);
 
@@ -63,4 +53,3 @@ void UBTT_EvasiveManeuver::TickTask(UBehaviorTreeComponent& OwnerComp, uint8* No
 		FinishLatentTask(OwnerComp, EBTNodeResult::Succeeded);
 	}
 }
-

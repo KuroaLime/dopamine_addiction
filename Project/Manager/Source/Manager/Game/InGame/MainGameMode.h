@@ -125,6 +125,11 @@ public:
     bool TryRespawnPlayerAuthoritatively(AMainCharacter* Character, const TCHAR* Context);
     bool IsShopRequestAllowed() const;
     bool DropGoldFromPlayer(AMainPlayerState* TargetPS, AActor* SourceActor);
+
+    // 플레이어 소지금 차감 없이 순수 보상 골드를 스폰한다 (예: 몬스터 처치 보상).
+    // DropGoldFromPlayer와 동일한 지면 트레이스/스폰 파이프라인을 재사용하되, 대상 플레이어가 없으므로
+    // 누구든 먼저 접근한 플레이어가 즉시 주울 수 있다(SourcePickupLock 없음).
+    bool SpawnGoldReward(int32 GoldAmount, FVector Location, AActor* ContextActor = nullptr);
     bool IsPreBattleShopPhase() const;
 
 
@@ -577,6 +582,10 @@ private:
     public:
         UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameMode|Spawn")
         USpawnManagerComponent* SpawnManager;
+
+        UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "GameMode|Monster")
+        class UGoldenGoblinDirectorComponent* GoldenGoblinDirector;
+
         virtual AActor* ChoosePlayerStart_Implementation(AController* Player) override;
         virtual APawn* SpawnDefaultPawnAtTransform_Implementation(AController* NewPlayer, const FTransform& SpawnTransform) override;
 };

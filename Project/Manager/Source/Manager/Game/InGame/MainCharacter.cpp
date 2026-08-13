@@ -35,6 +35,9 @@
 #include "Game/InGame/TPS/Actor/Spawn/A_Spawn.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
+#include "Game/InGame/TPS/Actor/Monster/GoldenGoblin/GoldenGoblinDirectorComponent.h"
+#include "Perception/AIPerceptionStimuliSourceComponent.h"
+#include "Perception/AISense_Sight.h"
 
 // Sets default values
 AMainCharacter::AMainCharacter()
@@ -87,6 +90,9 @@ AMainCharacter::AMainCharacter()
 	HPBarWidget->SetOwnerNoSee(true);
 
 	InteractionComponent = CreateDefaultSubobject<UInteractionComponent>(TEXT("InteractionComponent"));
+
+	AIStimuliSource = CreateDefaultSubobject<UAIPerceptionStimuliSourceComponent>(TEXT("AIStimuliSource"));
+
 	bWasAiming = false;
 	SetReplicates(true);
 }
@@ -98,6 +104,13 @@ void AMainCharacter::BeginPlay()
 	if (UPlayerManager* Manager = GetWorld()->GetSubsystem<UPlayerManager>())
 	{
 		Manager->RequestRegister(this);
+	}
+
+	if (AIStimuliSource)
+	{
+		// 몬스터(황금 고블린 등)의 AIPerceptionComponent(Sight)가 이 플레이어를 감지 대상으로 인식하게 등록.
+		AIStimuliSource->RegisterForSense(UAISense_Sight::StaticClass());
+		AIStimuliSource->RegisterWithPerceptionSystem();
 	}
 
 	if (AbilitySystemComponent)
@@ -446,6 +459,16 @@ float AMainCharacter::TakeDamage(float DamageAmount, struct FDamageEvent const& 
 	}
 
 	float ActualDamage = Super::TakeDamage(DamageAmount, DamageEvent, EventInstigator, DamageCauser);
+
+	if (ActualDamage > 0.0f)
+	{
+		// 황금 고블린 디렉터가 "전투 소강 상태"를 판단하는 데 쓰는 신호. 새 시스템을 따로 두지 않고
+		// 기존 데미지 처리 지점에 한 줄만 훅.
+		if (UGoldenGoblinDirectorComponent* Director = UGoldenGoblinDirectorComponent::GetActive(this))
+		{
+			Director->NotifyCombatEvent();
+		}
+	}
 
 	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
 	if (PS)

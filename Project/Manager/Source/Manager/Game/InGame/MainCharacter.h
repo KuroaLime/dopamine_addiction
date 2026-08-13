@@ -20,6 +20,7 @@ class UCameraStateComponent;
 class AWeapon;
 class UPFGASC;
 class UPFGAbility;
+class UAIPerceptionStimuliSourceComponent;
 struct FInputActionValue;
 
 UCLASS()
@@ -120,6 +121,11 @@ protected:
 
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = "UI")
 	UWidgetComponent* HPBarWidget;
+
+	// 몬스터 AI(황금 고블린 등)의 Sight Perception이 플레이어를 감지할 수 있게 하는 자극원.
+	// 이게 없으면 AIPerceptionComponent가 아무리 Sight를 설정해도 플레이어를 "볼" 수 없다.
+	UPROPERTY(VisibleAnywhere, Category = "AI")
+	UAIPerceptionStimuliSourceComponent* AIStimuliSource;
 public:
 	void UpdateCharacterStats();
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const override;

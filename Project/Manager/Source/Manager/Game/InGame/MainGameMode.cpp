@@ -13,6 +13,7 @@
 #include "Game/InGame/Card/Actor/CardDropActor.h"
 #include "Game/InGame/Card/CardGameService.h"
 #include "Game/InGame/TPS/Actor/GoldDropActor.h"
+#include "Game/InGame/TPS/Actor/Monster/GoldenGoblin/GoldenGoblinDirectorComponent.h"
 #include "Game/InGame/Interface/PhasePlayerControllerInterface.h"
 #include "Game/InGame/Interface/PhaseGameStateInterface.h"
 #include "Game/InGame/Interface/PhaseCharacterInterface.h"
@@ -236,6 +237,7 @@ AMainGameMode::AMainGameMode()
 {
     CurrentStrategy = nullptr;
     SpawnManager = CreateDefaultSubobject<USpawnManagerComponent>(TEXT("SpawnManager"));
+    GoldenGoblinDirector = CreateDefaultSubobject<UGoldenGoblinDirectorComponent>(TEXT("GoldenGoblinDirector"));
 }
 
 void AMainGameMode::InitGame(const FString& MapName, const FString& Options, FString& ErrorMessage)
@@ -1050,6 +1052,80 @@ bool AMainGameMode::DropGoldFromPlayer(AMainPlayerState* TargetPS, AActor* Sourc
         DropAmount,
         AvailableGold,
         TargetPS->CurPlayerData.HoldingGold,
+        *DropLocation.ToCompactString(),
+        *GoldDrop->GetActorLocation().ToCompactString());
+    return true;
+}
+
+bool AMainGameMode::SpawnGoldReward(int32 GoldAmount, FVector Location, AActor* ContextActor)
+{
+    if (!HasAuthority() || !GetWorld() || !IsBattleRoyalePhase())
+    {
+        return false;
+    }
+
+    const int32 DropAmount = FMath::Max(0, GoldAmount);
+    if (DropAmount <= 0)
+    {
+        DS_LOG(TEXT("[DS] GoldReward Skip Reason=NonPositiveAmount Requested=%d"), GoldAmount);
+        return false;
+    }
+
+    FVector DropLocation = Location + FVector(0.0f, 0.0f, DeathGoldGroundOffsetZ);
+
+    FHitResult GroundHit;
+    FCollisionQueryParams QueryParams(SCENE_QUERY_STAT(GoldRewardGround), false);
+    if (ContextActor)
+    {
+        QueryParams.AddIgnoredActor(ContextActor);
+    }
+    if (GetWorld()->LineTraceSingleByChannel(
+        GroundHit,
+        Location + FVector(0.0f, 0.0f, 200.0f),
+        Location - FVector(0.0f, 0.0f, FMath::Max(100.0f, DeathGoldGroundTraceDepth)),
+        ECC_Visibility,
+        QueryParams))
+    {
+        DropLocation = GroundHit.ImpactPoint + FVector(0.0f, 0.0f, DeathGoldGroundOffsetZ);
+    }
+
+    TSubclassOf<AGoldDropActor> SpawnClass = GoldDropActorClass;
+    if (!SpawnClass)
+    {
+        SpawnClass = AGoldDropActor::StaticClass();
+    }
+
+    FActorSpawnParameters Params;
+    Params.Owner = ContextActor;
+    Params.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
+
+    AGoldDropActor* GoldDrop = GetWorld()->SpawnActor<AGoldDropActor>(
+        SpawnClass,
+        DropLocation,
+        FRotator::ZeroRotator,
+        Params);
+    if (!GoldDrop)
+    {
+        UE_LOG(LogManager, Error,
+            TEXT("[DS] GoldReward SpawnFail Amount=%d Requested=%s"),
+            DropAmount,
+            *DropLocation.ToCompactString());
+        return false;
+    }
+
+    ActiveGoldDrops.RemoveAll([](const TObjectPtr<AGoldDropActor>& ExistingDrop)
+    {
+        return !IsValid(ExistingDrop);
+    });
+    ActiveGoldDrops.Add(GoldDrop);
+
+    // SourcePlayerState=nullptr, LockSeconds=0 → 특정 플레이어에게 귀속되지 않는 순수 보상이므로
+    // 누구든 즉시 주울 수 있다.
+    GoldDrop->InitGoldDrop(DropAmount, nullptr, 0.0f);
+
+    UE_LOG(LogManager, Display,
+        TEXT("[DS] GoldReward Spawned Amount=%d Requested=%s Actual=%s"),
+        DropAmount,
         *DropLocation.ToCompactString(),
         *GoldDrop->GetActorLocation().ToCompactString());
     return true;
@@ -2536,6 +2612,11 @@ void AMainGameMode::StartBattleRoyalePhase()
         SpawnMgr->SetShopBarriersActive(false);
     }
 
+    if (GoldenGoblinDirector)
+    {
+        GoldenGoblinDirector->ActivateForBattleRoyale();
+    }
+
     ClearGoldDrops(TEXT("BattleRoyaleStart"));
 
     if (UWorld* World = GetWorld())
@@ -2685,6 +2766,10 @@ void AMainGameMode::StartTransitionToCardPhase()
     ClearBattleRoyaleCardSpawnGate(TEXT("TransitionToCard"));
     EndPhase();
     ClearGoldDrops(TEXT("TransitionToCard"));
+    if (GoldenGoblinDirector)
+    {
+        GoldenGoblinDirector->Deactivate();
+    }
     BroadcastSwitchLevel(NAME_None, TEXT("Card_Game_Stage"));
     RequestMovePlayersToCardIslandSeats(TEXT("TransitionToCard"));
     StartTimedServerPhase(EDediServerPhase::TransitionToCard, GetTransitionDuration());

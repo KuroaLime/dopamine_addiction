@@ -8,6 +8,8 @@ UBTT_StopMovement::UBTT_StopMovement() {
 }
 EBTNodeResult::Type UBTT_StopMovement::ExecuteTask(UBehaviorTreeComponent& Owner, uint8* NodeMemory) {
 	AAIController* AIController = Owner.GetAIOwner();
+	UE_LOG(LogTemp, Warning, TEXT("[Goblin] BTT_StopMovement executing for %s"),
+		*GetNameSafe(AIController ? AIController->GetPawn() : nullptr));
 	if (AIController) {
 		AIController->StopMovement();
 		return EBTNodeResult::Succeeded;
