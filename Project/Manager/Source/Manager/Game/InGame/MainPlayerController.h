@@ -13,6 +13,9 @@ class UInputHandler;
 class UUIHandler;
 class ACardDropActor;
 class UEscapeMenuWidget;
+class UTexture2D;
+class SWidget;
+struct FSlateBrush;
 
 UCLASS()
 class MANAGER_API AMainPlayerController : public APlayerController,
@@ -371,4 +374,15 @@ bool bSeotdaUiRoundResolved = false;
 
     UPROPERTY(BlueprintReadOnly, Category = "Seotda UI")
     FString SeotdaUiLastResultText;
+
+private:
+	void ShowTemporaryResultOverlay(const FString& ResultText, bool bMatchEnded);
+	void RemoveTemporaryResultOverlay();
+
+	TSharedPtr<SWidget> TemporaryResultOverlayWidget;
+	TSharedPtr<FSlateBrush> TemporaryResultLaurelBrush;
+	FTimerHandle TemporaryResultOverlayTimerHandle;
+
+	UPROPERTY(Transient)
+	TObjectPtr<UTexture2D> TemporaryResultLaurelTexture = nullptr;
 };

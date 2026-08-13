@@ -12,6 +12,9 @@ ALobby_RoomCharacterSpawner::ALobby_RoomCharacterSpawner()
 {
  	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
 	PrimaryActorTick.bCanEverTick = false;
+	bSupportsBarrierControl = false;
+	bReplicates = false;
+	bAlwaysRelevant = false;
 
 
     SpawnArrow = CreateDefaultSubobject< UArrowComponent>(TEXT("SpawnArrow"));

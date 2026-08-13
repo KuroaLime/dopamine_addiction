@@ -19,6 +19,11 @@ protected:
 	// Called when the game starts or when spawned
 	virtual void BeginPlay() override;
 
+	// Some lobby actors inherit from AA_Spawn only for spawn-point behavior.
+	// They must not participate in the in-game shop barrier lifecycle.
+	UPROPERTY(EditDefaultsOnly, Category = "Spawn|Barrier")
+	bool bSupportsBarrierControl = true;
+
 public:	
 	// Called every frame
 	virtual void Tick(float DeltaTime) override;
@@ -40,6 +45,7 @@ private:
 	void OnRep_BarrierActive();
 
 	void ApplyBarrierVisualState();
+	bool CanApplyBarrierVisualState() const;
 
 	// BarrierComponents가 아직 비어있으면(BeginPlay보다 먼저 SetBarrierActive가 불린 경우 등) 즉시 캐싱.
 	void EnsureBarrierComponentsCached();
@@ -47,8 +53,9 @@ private:
 	static const FName BarrierComponentTag;
 
 	bool bBarrierComponentsCached = false;
+	bool bBarrierRuntimeReady = false;
 
-	UPROPERTY()
+	UPROPERTY(Transient, DuplicateTransient)
 	TArray<class UPrimitiveComponent*> BarrierComponents;
 
 	UPROPERTY(ReplicatedUsing = OnRep_BarrierActive)

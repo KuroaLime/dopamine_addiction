@@ -4,7 +4,9 @@
 #include "Components/Button.h"
 #include "Components/Border.h"
 #include "Components/Image.h"
+#include "Components/PanelWidget.h"
 #include "Components/TextBlock.h"
+#include "Components/Widget.h"
 #include "Engine/Engine.h"
 #include "Engine/Texture2D.h"
 #include "Engine/World.h"
@@ -52,6 +54,25 @@ namespace
 		return bGwang
 			? FString::Printf(TEXT("%d월 광"), Month)
 			: FString::Printf(TEXT("%d월"), Month);
+	}
+
+	void EnsureWidgetHierarchyVisible(UWidget* Widget, int32 ParentDepth)
+	{
+		if (!Widget)
+		{
+			return;
+		}
+
+		Widget->SetVisibility(ESlateVisibility::HitTestInvisible);
+		Widget->SetRenderOpacity(1.0f);
+
+		UWidget* Parent = Widget->GetParent();
+		for (int32 Depth = 0; Parent && Depth < ParentDepth; ++Depth)
+		{
+			Parent->SetVisibility(ESlateVisibility::SelfHitTestInvisible);
+			Parent->SetRenderOpacity(1.0f);
+			Parent = Parent->GetParent();
+		}
 	}
 }
 
@@ -255,6 +276,8 @@ void USeotdaTempWidget::ResetLocalRoundUiState(const TArray<FOwnedCardInfo>& Car
 	ClearLocalCardSelection();
 	bLocalRevealPending = false;
 	bLocalSelectionPending = false;
+	PendingLocalRevealCardID = ECardID::None;
+	ConfirmedLocalRevealCardID = ECardID::None;
 	bLastKnownRevealConfirmed = false;
 	LastBetActionTimeSeconds = -1000.0;
 
@@ -321,6 +344,71 @@ void USeotdaTempWidget::RefreshOpponentSeats(AMainPlayerController* PC)
 	if (!PC) return;
 
 	const TArray<FSeotdaOpponentInfo>& Opponents = PC->SeotdaUiOpponents;
+	const FSeotdaOpponentInfo* SeatInfos[SeotdaOpponentSeatCount] = {};
+
+	// The server sends absolute table seats. Compacting the opponent array here used
+	// to place cards in the wrong WBP slot, which could leave the revealed card under
+	// a hidden/local seat panel until the final two-card submission refreshed the UI.
+	for (const FSeotdaOpponentInfo& Opponent : Opponents)
+	{
+		if (Opponent.SeatIndex >= 0 &&
+			Opponent.SeatIndex < SeotdaOpponentSeatCount &&
+			SeatInfos[Opponent.SeatIndex] == nullptr)
+		{
+			SeatInfos[Opponent.SeatIndex] = &Opponent;
+		}
+	}
+
+	// Opponents intentionally exclude this client. Reconstruct the missing table seat
+	// so the locally selected public card is visible at the same time as everyone else's.
+	FSeotdaOpponentInfo LocalInfo;
+	if (AMainPlayerState* LocalPS = PC->GetPlayerState<AMainPlayerState>())
+	{
+		int32 LocalSeatIndex = INDEX_NONE;
+		const int32 OccupiedSeatCount = FMath::Clamp(Opponents.Num() + 1, 1, SeotdaOpponentSeatCount);
+		for (int32 SeatIndex = 0; SeatIndex < OccupiedSeatCount; ++SeatIndex)
+		{
+			if (SeatInfos[SeatIndex] == nullptr)
+			{
+				LocalSeatIndex = SeatIndex;
+				break;
+			}
+		}
+
+		if (LocalSeatIndex == INDEX_NONE)
+		{
+			for (int32 SeatIndex = 0; SeatIndex < SeotdaOpponentSeatCount; ++SeatIndex)
+			{
+				if (SeatInfos[SeatIndex] == nullptr)
+				{
+					LocalSeatIndex = SeatIndex;
+					break;
+				}
+			}
+		}
+
+		if (LocalSeatIndex != INDEX_NONE)
+		{
+			LocalInfo.PlayerName = LocalPS->GetPlayerName();
+			LocalInfo.SeatIndex = LocalSeatIndex;
+			LocalInfo.BetMoney = PC->SeotdaUiMyBetMoney;
+			LocalInfo.bFolded = PC->bSeotdaUiMyFolded;
+			LocalInfo.bIsCurrentTurn = PC->bSeotdaUiMyTurn;
+
+			if (LocalPS->HasRevealedCard())
+			{
+				LocalInfo.bHasRevealedCard = true;
+				LocalInfo.RevealedCardID = LocalPS->GetRevealedCard().CardID;
+			}
+			else if (PC->bSeotdaUiMyRevealConfirmed && ConfirmedLocalRevealCardID != ECardID::None)
+			{
+				LocalInfo.bHasRevealedCard = true;
+				LocalInfo.RevealedCardID = ConfirmedLocalRevealCardID;
+			}
+
+			SeatInfos[LocalSeatIndex] = &LocalInfo;
+		}
+	}
 
 	// 폴드(다이)한 좌석은 별도 가림막 없이, 기존 위젯들 투명도를 낮춰서 표현한다.
 	constexpr float FoldedOpacity = 0.35f;
@@ -328,7 +416,7 @@ void USeotdaTempWidget::RefreshOpponentSeats(AMainPlayerController* PC)
 
 	for (int32 i = 0; i < SeotdaOpponentSeatCount; ++i)
 	{
-		if (!Opponents.IsValidIndex(i))
+		if (SeatInfos[i] == nullptr)
 		{
 			// 상대가 좌석 수보다 적으면 배경까지 포함해 좌석 전체를 숨긴다.
 			if (SeatBackgrounds[i]) SeatBackgrounds[i]->SetVisibility(ESlateVisibility::Collapsed);
@@ -339,7 +427,7 @@ void USeotdaTempWidget::RefreshOpponentSeats(AMainPlayerController* PC)
 			continue;
 		}
 
-		const FSeotdaOpponentInfo& Info = Opponents[i];
+		const FSeotdaOpponentInfo& Info = *SeatInfos[i];
 		const float SeatOpacity = Info.bFolded ? FoldedOpacity : NormalOpacity;
 
 		if (SeatBackgrounds[i])
@@ -374,7 +462,9 @@ void USeotdaTempWidget::RefreshOpponentSeats(AMainPlayerController* PC)
 				{
 					SeatCardImages[i]->SetBrushFromTexture(Texture, true);
 				}
-				SeatCardImages[i]->SetVisibility(ESlateVisibility::Visible);
+				// 공개 상태는 이미 서버에서 즉시 복제된다. 기존 WBP의 카드 부모 패널도
+				// 함께 열어 최종 2장 제출 전부터 공개 카드가 보이게 한다.
+				EnsureWidgetHierarchyVisible(SeatCardImages[i], 16);
 			}
 			else
 			{
@@ -393,7 +483,14 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 		return;
 	}
 
-	RefreshOpponentSeats(PC);
+	AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+	if (!PS)
+	{
+		return;
+	}
+
+	const TArray<FOwnedCardInfo> Cards = PS->GetOwnedCards();
+	ResetLocalRoundUiState(Cards);
 
 	if (LastHandledRevealResultSerial != PC->SeotdaUiRevealResultSerial)
 	{
@@ -401,8 +498,17 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 		bLocalRevealPending = false;
 		if (PC->bSeotdaUiRevealAccepted)
 		{
+			if (PendingLocalRevealCardID != ECardID::None)
+			{
+				ConfirmedLocalRevealCardID = PendingLocalRevealCardID;
+			}
 			ClearLocalCardSelection();
 		}
+		else
+		{
+			ConfirmedLocalRevealCardID = ECardID::None;
+		}
+		PendingLocalRevealCardID = ECardID::None;
 	}
 
 	if (LastHandledSelectionResultSerial != PC->SeotdaUiSelectionResultSerial)
@@ -414,6 +520,10 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 	if (PC->bSeotdaUiMyRevealConfirmed)
 	{
 		bLocalRevealPending = false;
+		if (PS->HasRevealedCard())
+		{
+			ConfirmedLocalRevealCardID = PS->GetRevealedCard().CardID;
+		}
 	}
 
 	if (PC->bSeotdaUiMySubmitted)
@@ -422,6 +532,8 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 		bLocalSelectionPending = false;
 	}
 
+	RefreshOpponentSeats(PC);
+
 	if (LobbyBtn)
 	{
 		const bool bShowLobbyButton = PC->bSeotdaUiMatchEnded;
@@ -429,15 +541,6 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 		LobbyBtn->SetIsEnabled(bShowLobbyButton);
 	}
 
-	AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
-	if (!PS)
-	{
-		return;
-	}
-
-	const TArray<FOwnedCardInfo> Cards = PS->GetOwnedCards();
-
-	ResetLocalRoundUiState(Cards);
 	if (PC->bSeotdaUiMyRevealConfirmed != bLastKnownRevealConfirmed)
 	{
 		ClearLocalCardSelection();
@@ -446,7 +549,10 @@ void USeotdaTempWidget::RefreshFromPlayerState()
 
 	if (InfoTxt)
 	{
-		InfoTxt->SetText(FText::AsNumber(PS->CurPlayerData.HoldingGold));
+		EnsureWidgetHierarchyVisible(InfoTxt, 2);
+		InfoTxt->SetText(FText::FromString(FString::Printf(
+			TEXT("골드 %d"),
+			PS->CurPlayerData.HoldingGold)));
 	}
 
 	UpdateCardButtonText(Card0Txt, Card0Img, 0, Cards);
@@ -673,6 +779,19 @@ void USeotdaTempWidget::SubmitSelection()
 	if (GetSelectedCount() != RequiredSelectionCount)
 	{
 		return;
+	}
+
+	if (!bRevealConfirmed)
+	{
+		AMainPlayerState* PS = PC->GetPlayerState<AMainPlayerState>();
+		const TArray<FOwnedCardInfo> Cards = PS ? PS->GetOwnedCards() : TArray<FOwnedCardInfo>();
+		const int32 SelectedCardIndex = bSelected0 ? 0 : (bSelected1 ? 1 : (bSelected2 ? 2 : INDEX_NONE));
+		if (!Cards.IsValidIndex(SelectedCardIndex))
+		{
+			return;
+		}
+
+		PendingLocalRevealCardID = Cards[SelectedCardIndex].CardID;
 	}
 
 	bLocalRevealPending = !bRevealConfirmed;

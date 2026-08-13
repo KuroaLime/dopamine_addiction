@@ -154,6 +154,8 @@ public:
 
 	bool bLocalRevealPending = false;
 	bool bLocalSelectionPending = false;
+	ECardID PendingLocalRevealCardID = ECardID::None;
+	ECardID ConfirmedLocalRevealCardID = ECardID::None;
 	int32 LastHandledRevealResultSerial = 0;
 	int32 LastHandledSelectionResultSerial = 0;
 	bool bLastKnownRevealConfirmed = false;

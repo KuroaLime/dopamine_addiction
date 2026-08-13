@@ -45,6 +45,8 @@ namespace
 		{
 			if (RankText)
 			{
+				RankText->SetVisibility(ESlateVisibility::HitTestInvisible);
+				RankText->SetRenderOpacity(1.0f);
 				RankText->SetText(FText::FromString(TEXT("등수 --")));
 			}
 			return;
@@ -61,6 +63,8 @@ namespace
 			}
 		}
 
+		RankText->SetVisibility(ESlateVisibility::HitTestInvisible);
+		RankText->SetRenderOpacity(1.0f);
 		RankText->SetText(FText::FromString(FString::Printf(TEXT("등수 %d위"), CurrentRank)));
 	}
 }

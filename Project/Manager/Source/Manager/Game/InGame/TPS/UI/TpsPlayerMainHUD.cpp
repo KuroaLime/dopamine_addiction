@@ -19,7 +19,16 @@
 #include "Camera/PlayerCameraManager.h"
 #include "Engine/Engine.h"
 #include "Engine/GameViewportClient.h"
+#include "Engine/Texture2D.h"
+#include "Engine/World.h"
 #include "Blueprint/WidgetLayoutLibrary.h"
+#include "Styling/CoreStyle.h"
+#include "Styling/SlateBrush.h"
+#include "Widgets/Images/SImage.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/SOverlay.h"
+#include "Widgets/SBoxPanel.h"
+#include "Widgets/Text/STextBlock.h"
 
 const FName UTpsPlayerMainHUD::LvLinearWipeParamName(TEXT("Linear_wipe"));
 
@@ -121,6 +130,15 @@ void UTpsPlayerMainHUD::NativeConstruct()
     {
         Cards[i] = ECardID::None;
     }
+
+    CreateGoldDisplay();
+    UpdateGoldDisplay();
+}
+
+void UTpsPlayerMainHUD::NativeDestruct()
+{
+    RemoveGoldDisplay();
+    Super::NativeDestruct();
 }
 
 void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTime)
@@ -132,6 +150,114 @@ void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
     if (bNeedPlayerStateBind)
         TryBindPlayerState();
     UpdateNameWidget();
+    UpdateGoldDisplay();
+}
+
+void UTpsPlayerMainHUD::CreateGoldDisplay()
+{
+    RemoveGoldDisplay();
+
+    UGameViewportClient* GameViewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr;
+    if (!GameViewport)
+    {
+        return;
+    }
+
+    GoldDisplayIconTexture = LoadObject<UTexture2D>(
+        nullptr,
+        TEXT("/Game/InGame/UI/T_UI_Icon_Gold.T_UI_Icon_Gold"));
+
+    GoldDisplayIconBrush = MakeShared<FSlateBrush>();
+    GoldDisplayIconBrush->DrawAs = ESlateBrushDrawType::Image;
+    GoldDisplayIconBrush->SetImageSize(FVector2D(38.0f, 38.0f));
+    GoldDisplayIconBrush->SetResourceObject(GoldDisplayIconTexture);
+
+    TSharedRef<SWidget> Overlay =
+        SNew(SOverlay)
+        .Visibility(EVisibility::HitTestInvisible)
+        + SOverlay::Slot()
+        .HAlign(HAlign_Right)
+        .VAlign(VAlign_Bottom)
+        .Padding(FMargin(0.0f, 0.0f, 30.0f, 24.0f))
+        [
+            SNew(SBox)
+            .MinDesiredWidth(128.0f)
+            .MinDesiredHeight(42.0f)
+            [
+                SNew(SHorizontalBox)
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                [
+                    SNew(SImage)
+                    .Image(GoldDisplayIconBrush.Get())
+                ]
+                + SHorizontalBox::Slot()
+                .AutoWidth()
+                .VAlign(VAlign_Center)
+                .Padding(FMargin(8.0f, 0.0f, 0.0f, 0.0f))
+                [
+                    SAssignNew(GoldDisplayTextWidget, STextBlock)
+                    .Text(FText::FromString(TEXT("--")))
+                    .Font(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 26))
+                    .ColorAndOpacity(FSlateColor(FLinearColor(1.0f, 0.82f, 0.18f, 1.0f)))
+                    .ShadowColorAndOpacity(FLinearColor(0.0f, 0.0f, 0.0f, 0.9f))
+                    .ShadowOffset(FVector2D(2.0f, 2.0f))
+                ]
+            ]
+        ];
+
+    GoldDisplayOverlayWidget = Overlay;
+    GameViewport->AddViewportWidgetContent(Overlay, 60);
+}
+
+void UTpsPlayerMainHUD::UpdateGoldDisplay()
+{
+    if (!GoldDisplayTextWidget.IsValid())
+    {
+        return;
+    }
+
+    AMainPlayerState* PS = CachedPlayerState.Get();
+    if (!PS)
+    {
+        APlayerController* PC = GetOwningPlayer();
+        PS = PC ? PC->GetPlayerState<AMainPlayerState>() : nullptr;
+    }
+
+    if (!PS)
+    {
+        if (LastDisplayedGold != -1)
+        {
+            LastDisplayedGold = -1;
+            GoldDisplayTextWidget->SetText(FText::FromString(TEXT("--")));
+        }
+        return;
+    }
+
+    const int32 CurrentGold = FMath::Max(0, PS->CurPlayerData.HoldingGold);
+    if (CurrentGold != LastDisplayedGold)
+    {
+        LastDisplayedGold = CurrentGold;
+        GoldDisplayTextWidget->SetText(FText::AsNumber(CurrentGold));
+    }
+}
+
+void UTpsPlayerMainHUD::RemoveGoldDisplay()
+{
+    if (GoldDisplayOverlayWidget.IsValid())
+    {
+        if (UGameViewportClient* GameViewport = GetWorld() ? GetWorld()->GetGameViewport() : nullptr)
+        {
+            GameViewport->RemoveViewportWidgetContent(GoldDisplayOverlayWidget.ToSharedRef());
+        }
+    }
+
+    GoldDisplayOverlayWidget.Reset();
+    GoldDisplayTextWidget.Reset();
+    GoldDisplayIconBrush.Reset();
+    GoldDisplayIconTexture = nullptr;
+    LastDisplayedGold = -1;
 }
 
 void UTpsPlayerMainHUD::StaticUI()

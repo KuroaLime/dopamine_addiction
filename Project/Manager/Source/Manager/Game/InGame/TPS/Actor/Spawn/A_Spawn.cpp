@@ -25,6 +25,12 @@ void AA_Spawn::BeginPlay()
 {
 	Super::BeginPlay();
 
+	bBarrierRuntimeReady = true;
+	if (!bSupportsBarrierControl)
+	{
+		return;
+	}
+
 	EnsureBarrierComponentsCached();
 	ApplyBarrierVisualState(); // 상점 페이즈 진입 전까지는 항상 비활성 상태(bBarrierActive 기본값 false)로 시작
 }
@@ -46,29 +52,54 @@ void AA_Spawn::SetBarrierActive(bool bActive)
 {
 	// 서버(권위)에서 호출. bBarrierActive 변경은 클라이언트로 리플리케이트되어 OnRep_BarrierActive를 통해 적용됨.
 	bBarrierActive = bActive;
-	EnsureBarrierComponentsCached(); // BeginPlay보다 먼저 호출된 경우를 대비한 방어 캐싱
+	if (!CanApplyBarrierVisualState())
+	{
+		return;
+	}
+
+	EnsureBarrierComponentsCached(); // BeginPlay 이전 요청은 상태만 보존되며 여기서는 런타임 컴포넌트만 캐싱한다.
 	ApplyBarrierVisualState(); // 서버 자신은 OnRep이 호출되지 않으므로 로컬에도 즉시 적용
 }
 
 void AA_Spawn::OnRep_BarrierActive()
 {
+	if (!CanApplyBarrierVisualState())
+	{
+		return;
+	}
+
 	EnsureBarrierComponentsCached();
 	ApplyBarrierVisualState();
 }
 
+bool AA_Spawn::CanApplyBarrierVisualState() const
+{
+	return bSupportsBarrierControl
+		&& bBarrierRuntimeReady
+		&& !IsTemplate()
+		&& !HasAnyFlags(RF_ClassDefaultObject | RF_ArchetypeObject)
+		&& GetWorld() != nullptr;
+}
+
 void AA_Spawn::EnsureBarrierComponentsCached()
 {
-	if (bBarrierComponentsCached)
+	if (!CanApplyBarrierVisualState() || bBarrierComponentsCached)
 	{
 		return;
 	}
+
+	BarrierComponents.Reset();
 	bBarrierComponentsCached = true;
 
 	TArray<UPrimitiveComponent*> AllPrimitives;
 	GetComponents<UPrimitiveComponent>(AllPrimitives);
 	for (UPrimitiveComponent* Comp : AllPrimitives)
 	{
-		if (Comp && Comp->ComponentHasTag(BarrierComponentTag))
+		if (IsValid(Comp)
+			&& !Comp->IsTemplate()
+			&& Comp->GetOwner() == this
+			&& Comp->IsRegistered()
+			&& Comp->ComponentHasTag(BarrierComponentTag))
 		{
 			BarrierComponents.Add(Comp);
 		}
@@ -80,12 +111,20 @@ void AA_Spawn::EnsureBarrierComponentsCached()
 
 void AA_Spawn::ApplyBarrierVisualState()
 {
+	if (!CanApplyBarrierVisualState())
+	{
+		return;
+	}
+
 	UE_LOG(LogTemp, Warning, TEXT("[A_Spawn] %s: ApplyBarrierVisualState bActive=%d ComponentCount=%d HasAuthority=%d NetMode=%d"),
 		*GetName(), bBarrierActive ? 1 : 0, BarrierComponents.Num(), HasAuthority() ? 1 : 0, (int32)GetWorld()->GetNetMode());
 
 	for (UPrimitiveComponent* Comp : BarrierComponents)
 	{
-		if (Comp)
+		if (IsValid(Comp)
+			&& !Comp->IsTemplate()
+			&& Comp->GetOwner() == this
+			&& Comp->IsRegistered())
 		{
 			// 콜리전이 켜질 때(방벽이 실제로 막고 있을 때) 메시도 같이 보이도록 한다.
 			Comp->SetVisibility(bBarrierActive, false);

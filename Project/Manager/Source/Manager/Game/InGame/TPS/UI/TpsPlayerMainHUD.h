@@ -9,6 +9,11 @@
 
 #define CardTotalNumber 3
 #define LvTotalNumber 8
+
+class STextBlock;
+class SWidget;
+struct FSlateBrush;
+
 /**
  * 
  */
@@ -30,6 +35,7 @@ public:
 
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 	virtual void NativeTick(const FGeometry& MyGeometry, float InDeltaTime) override;
 	virtual void StaticUI() override;
 protected:
@@ -43,6 +49,9 @@ protected:
 	void UpdateLevel(const struct FPlayerData& PlayerData) { UpdateLevel(); }
 	void UpdateLevel(const struct FAccumulatedUpgrades& Upgrades) { UpdateLevel(); }
 	void UpdateCompass();
+	void CreateGoldDisplay();
+	void UpdateGoldDisplay();
+	void RemoveGoldDisplay();
 
 	void OnOwnedCardsChanged(const TArray<struct FOwnedCardInfo>& NewCards);
 	void TryBindPlayerState();
@@ -172,6 +181,13 @@ private:
 
 	TWeakObjectPtr<class AMainPlayerState> CachedPlayerState;
 	bool bNeedPlayerStateBind = false;
+	TSharedPtr<SWidget> GoldDisplayOverlayWidget;
+	TSharedPtr<STextBlock> GoldDisplayTextWidget;
+	TSharedPtr<FSlateBrush> GoldDisplayIconBrush;
+	int32 LastDisplayedGold = -1;
+
+	UPROPERTY(Transient)
+	TObjectPtr<class UTexture2D> GoldDisplayIconTexture = nullptr;
 
 	ECardID Cards[CardTotalNumber];
 

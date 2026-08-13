@@ -19,7 +19,9 @@
 #include "EngineUtils.h"
 #include "Engine/LevelStreaming.h"
 #include "Engine/DirectionalLight.h"
+#include "Engine/GameViewportClient.h"
 #include "Engine/SkyLight.h"
+#include "Engine/Texture2D.h"
 #include "Default/Ability/Interface/AbilityOwnerInterface.h"
 #include "Game/InGame/TPS/Actor/Weapon/Weapon.h"
 #include "Game/InGame/TPS/Actor/Weapon/WeaponComponent.h"
@@ -33,7 +35,16 @@
 #include "Components/InputComponent.h"
 #include "Blueprint/UserWidget.h"
 #include "HAL/PlatformTime.h"
+#include "Styling/CoreStyle.h"
+#include "Styling/SlateBrush.h"
 #include "TimerManager.h"
+#include "Widgets/Images/SImage.h"
+#include "Widgets/Input/SButton.h"
+#include "Widgets/Layout/SBorder.h"
+#include "Widgets/Layout/SBox.h"
+#include "Widgets/SOverlay.h"
+#include "Widgets/SBoxPanel.h"
+#include "Widgets/Text/STextBlock.h"
 
 #include "Game/InGame/MainGameState.h"
 
@@ -56,6 +67,205 @@ namespace
 	constexpr int32 ServerPositionCorrectionMaxSends = 3;
 	constexpr float ServerPositionCorrectionDriftWarningDistance = 50.0f;
 	constexpr float ServerPositionCorrectionDriftWarningDegrees = 15.0f;
+	constexpr float TemporaryRoundResultVisibleSeconds = 7.0f;
+
+	FString ExtractResultLineValue(const FString& Source, const TCHAR* Key)
+	{
+		const FString Prefix = FString::Printf(TEXT("%s="), Key);
+		const int32 PrefixIndex = Source.Find(Prefix, ESearchCase::CaseSensitive);
+		if (PrefixIndex == INDEX_NONE)
+		{
+			return FString();
+		}
+
+		const int32 ValueStart = PrefixIndex + Prefix.Len();
+		int32 ValueEnd = Source.Len();
+		const int32 CarriageReturnIndex = Source.Find(TEXT("\r"), ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart);
+		const int32 LineFeedIndex = Source.Find(TEXT("\n"), ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart);
+		if (CarriageReturnIndex != INDEX_NONE)
+		{
+			ValueEnd = FMath::Min(ValueEnd, CarriageReturnIndex);
+		}
+		if (LineFeedIndex != INDEX_NONE)
+		{
+			ValueEnd = FMath::Min(ValueEnd, LineFeedIndex);
+		}
+
+		return Source.Mid(ValueStart, ValueEnd - ValueStart).TrimStartAndEnd();
+	}
+
+	FString ExtractResultTokenValue(const FString& Source, const TCHAR* Key)
+	{
+		const FString Prefix = FString::Printf(TEXT("%s="), Key);
+		const int32 PrefixIndex = Source.Find(Prefix, ESearchCase::CaseSensitive);
+		if (PrefixIndex == INDEX_NONE)
+		{
+			return FString();
+		}
+
+		const int32 ValueStart = PrefixIndex + Prefix.Len();
+		const int32 SpaceIndex = Source.Find(TEXT(" "), ESearchCase::CaseSensitive, ESearchDir::FromStart, ValueStart);
+		const int32 ValueEnd = SpaceIndex == INDEX_NONE ? Source.Len() : SpaceIndex;
+		return Source.Mid(ValueStart, ValueEnd - ValueStart).TrimStartAndEnd();
+	}
+
+	FString FormatSeotdaComboName(const FString& ComboName, int32 SubRank)
+	{
+		if (ComboName == TEXT("SamPalGwangDdang")) return TEXT("38광땡");
+		if (ComboName == TEXT("GwangDdang"))
+		{
+			if (SubRank == 4) return TEXT("13광땡");
+			if (SubRank == 9) return TEXT("18광땡");
+			return TEXT("광땡");
+		}
+		if (ComboName == TEXT("TtaengJabi")) return TEXT("땡잡이");
+		if (ComboName == TEXT("AmhaengEosa")) return TEXT("암행어사");
+		if (ComboName == TEXT("MeongteongguriGusa")) return TEXT("멍텅구리 구사");
+		if (ComboName == TEXT("Gusa")) return TEXT("구사");
+		if (ComboName == TEXT("Ali")) return TEXT("알리");
+		if (ComboName == TEXT("Doksa")) return TEXT("독사");
+		if (ComboName == TEXT("Guping")) return TEXT("구삥");
+		if (ComboName == TEXT("Jangping")) return TEXT("장삥");
+		if (ComboName == TEXT("Jangsa")) return TEXT("장사");
+		if (ComboName == TEXT("Seryuk")) return TEXT("세륙");
+		if (ComboName == TEXT("GapOh")) return TEXT("갑오");
+		if (ComboName == TEXT("Mangtong")) return TEXT("망통");
+		if (ComboName == TEXT("Invalid")) return TEXT("판정 불가");
+		if (ComboName == TEXT("None")) return TEXT("없음");
+
+		if (ComboName.EndsWith(TEXT("Ddang")))
+		{
+			const FString Month = ComboName.LeftChop(5);
+			if (Month.IsNumeric())
+			{
+				return FString::Printf(TEXT("%s땡"), *Month);
+			}
+		}
+
+		if (ComboName.EndsWith(TEXT("Gut")))
+		{
+			const FString Gut = ComboName.LeftChop(3);
+			if (Gut.IsNumeric())
+			{
+				return FString::Printf(TEXT("%s끗"), *Gut);
+			}
+		}
+
+		return ComboName.IsEmpty() ? TEXT("확인 중") : ComboName;
+	}
+
+	FString FormatSeotdaPayoutSummary(const FString& EncodedPayouts)
+	{
+		if (EncodedPayouts.IsEmpty() || EncodedPayouts == TEXT("None"))
+		{
+			return TEXT("정산 정보 없음");
+		}
+
+		TArray<FString> Entries;
+		EncodedPayouts.ParseIntoArray(Entries, TEXT(","), true);
+		TArray<FString> Lines;
+		Lines.Reserve(Entries.Num());
+
+		for (const FString& RawEntry : Entries)
+		{
+			const FString Entry = RawEntry.TrimStartAndEnd();
+			const int32 AwardSeparator = Entry.Find(TEXT(":+"), ESearchCase::CaseSensitive);
+			if (AwardSeparator == INDEX_NONE)
+			{
+				Lines.Add(Entry);
+				continue;
+			}
+
+			const FString PlayerName = Entry.Left(AwardSeparator);
+			const FString AwardAndBalance = Entry.Mid(AwardSeparator + 2);
+			const int32 BalanceSeparator = AwardAndBalance.Find(TEXT("=>"), ESearchCase::CaseSensitive);
+			if (BalanceSeparator == INDEX_NONE)
+			{
+				Lines.Add(Entry);
+				continue;
+			}
+
+			const FString Award = AwardAndBalance.Left(BalanceSeparator);
+			const FString Balance = AwardAndBalance.Mid(BalanceSeparator + 2);
+			const FString DisplayAward = Award.IsNumeric()
+				? FText::AsNumber(FCString::Atoi(*Award)).ToString()
+				: Award;
+			const FString DisplayBalance = Balance.IsNumeric()
+				? FText::AsNumber(FCString::Atoi(*Balance)).ToString()
+				: Balance;
+			Lines.Add(FString::Printf(
+				TEXT("%s: +%s골드 (보유 %s골드)"),
+				*PlayerName,
+				*DisplayAward,
+				*DisplayBalance));
+		}
+
+		return Lines.Num() > 0 ? FString::Join(Lines, TEXT("\n")) : TEXT("정산 정보 없음");
+	}
+
+	FString FormatWinnerLine(const FString& Winner, bool bFinalResult)
+	{
+		const TCHAR* SingleLabel = bFinalResult ? TEXT("최종 우승") : TEXT("승자");
+		const TCHAR* TieLabel = bFinalResult ? TEXT("공동 우승") : TEXT("공동 승자");
+		if (Winner.IsEmpty() || Winner == TEXT("None"))
+		{
+			return FString::Printf(TEXT("%s: 없음"), SingleLabel);
+		}
+
+		if (Winner.StartsWith(TEXT("Tie(")) && Winner.EndsWith(TEXT(")")))
+		{
+			FString TiePlayers = Winner.Mid(4, Winner.Len() - 5);
+			TiePlayers.ReplaceInline(TEXT(", Money="), TEXT(" / 골드 "));
+			return FString::Printf(TEXT("%s: %s"), TieLabel, *TiePlayers);
+		}
+
+		return FString::Printf(TEXT("%s: %s"), SingleLabel, *Winner);
+	}
+
+	FString BuildReadableResultText(const FString& ResultText)
+	{
+		if (ResultText.Contains(TEXT("[MATCH END]")))
+		{
+			const FString Winner = ExtractResultLineValue(ResultText, TEXT("Winner"));
+			const FString Round = ExtractResultLineValue(ResultText, TEXT("Round"));
+			FString Ranking = ExtractResultLineValue(ResultText, TEXT("Ranking"));
+			Ranking.ReplaceInline(TEXT(" | "), TEXT("\n"));
+			Ranking.ReplaceInline(TEXT("="), TEXT(" : 골드 "));
+
+			return FString::Printf(
+				TEXT("최종 게임 결과\n\n%s\n진행 라운드: %s\n\n최종 순위\n%s"),
+				*FormatWinnerLine(Winner, true),
+				Round.IsEmpty() ? TEXT("-") : *Round,
+				Ranking.IsEmpty() ? TEXT("집계 정보 없음") : *Ranking);
+		}
+
+		if (ResultText.Contains(TEXT("[ROUND ")) && ResultText.Contains(TEXT(" RESULT]")))
+		{
+			FString RoundLabel = TEXT("-");
+			const int32 RoundStart = ResultText.Find(TEXT("[ROUND "));
+			const int32 RoundEnd = ResultText.Find(TEXT(" RESULT]"));
+			if (RoundStart != INDEX_NONE && RoundEnd > RoundStart + 7)
+			{
+				RoundLabel = ResultText.Mid(RoundStart + 7, RoundEnd - (RoundStart + 7));
+			}
+
+			const FString Winner = ExtractResultTokenValue(ResultText, TEXT("Winner"));
+			const FString Combo = ExtractResultTokenValue(ResultText, TEXT("Combo"));
+			const int32 SubRank = FCString::Atoi(*ExtractResultTokenValue(ResultText, TEXT("SubRank")));
+			const FString Pot = ExtractResultTokenValue(ResultText, TEXT("Pot"));
+			const FString Payouts = ExtractResultTokenValue(ResultText, TEXT("Payouts"));
+
+			return FString::Printf(
+				TEXT("섯다 %s라운드 결과\n\n%s\n승리 족보: %s\n총 팟: %s골드\n\n정산\n%s"),
+				*RoundLabel,
+				*FormatWinnerLine(Winner, false),
+				*FormatSeotdaComboName(Combo, SubRank),
+				Pot.IsEmpty() ? TEXT("0") : *Pot,
+				*FormatSeotdaPayoutSummary(Payouts));
+		}
+
+		return ResultText;
+	}
 
 	float GetControllerRotationErrorDegrees(const FRotator& Left, const FRotator& Right)
 	{
@@ -146,6 +356,7 @@ void AMainPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	if (IsLocalController())
 	{
+		RemoveTemporaryResultOverlay();
 		UWidgetLayoutLibrary::RemoveAllWidgets(this);
 	}
 
@@ -1810,30 +2021,209 @@ void AMainPlayerController::Server_RequestSeotdaBetAction_Implementation(EBettin
 
     GM->GetCardGameService()->SubmitSeotdaBetAction(this, Action);
 }
+void AMainPlayerController::ShowTemporaryResultOverlay(const FString& ResultText, bool bMatchEnded)
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
+	RemoveTemporaryResultOverlay();
+
+	UWorld* World = GetWorld();
+	UGameViewportClient* Viewport = World ? World->GetGameViewport() : nullptr;
+	if (!World || !Viewport)
+	{
+		UE_LOG(LogTemp, Warning, TEXT("[CL] ResultOverlay skipped: no game viewport"));
+		return;
+	}
+
+	TemporaryResultLaurelTexture = LoadObject<UTexture2D>(
+		nullptr,
+		TEXT("/Game/InGame/UI/T_UI_FX_WinnerLaurel.T_UI_FX_WinnerLaurel"));
+	TemporaryResultLaurelBrush.Reset();
+	if (TemporaryResultLaurelTexture)
+	{
+		TemporaryResultLaurelBrush = MakeShared<FSlateBrush>();
+		TemporaryResultLaurelBrush->SetResourceObject(TemporaryResultLaurelTexture);
+		TemporaryResultLaurelBrush->SetImageSize(FVector2D(
+			TemporaryResultLaurelTexture->GetSizeX(),
+			TemporaryResultLaurelTexture->GetSizeY()));
+		TemporaryResultLaurelBrush->DrawAs = ESlateBrushDrawType::Image;
+	}
+
+	const FString DisplayText = BuildReadableResultText(ResultText);
+	TSharedRef<SVerticalBox> ResultContent = SNew(SVerticalBox);
+
+	if (TemporaryResultLaurelBrush.IsValid())
+	{
+		ResultContent->AddSlot()
+		.AutoHeight()
+		.HAlign(HAlign_Center)
+		.Padding(FMargin(0.0f, 0.0f, 0.0f, 8.0f))
+		[
+			SNew(SBox)
+			.WidthOverride(bMatchEnded ? 260.0f : 180.0f)
+			.HeightOverride(bMatchEnded ? 100.0f : 70.0f)
+			[
+				SNew(SImage)
+				.Image(TemporaryResultLaurelBrush.Get())
+			]
+		];
+	}
+
+	ResultContent->AddSlot()
+	.AutoHeight()
+	.HAlign(HAlign_Fill)
+	[
+		SNew(STextBlock)
+		.Text(FText::FromString(DisplayText))
+		.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), bMatchEnded ? 30 : 24))
+		.ColorAndOpacity(FLinearColor(0.96f, 0.84f, 0.48f, 1.0f))
+		.Justification(ETextJustify::Center)
+		.AutoWrapText(true)
+		.WrapTextAt(bMatchEnded ? 680.0f : 600.0f)
+	];
+
+	if (bMatchEnded)
+	{
+		const TWeakObjectPtr<AMainPlayerController> WeakThis(this);
+		ResultContent->AddSlot()
+		.AutoHeight()
+		.HAlign(HAlign_Center)
+		.Padding(FMargin(0.0f, 24.0f, 0.0f, 0.0f))
+		[
+			SNew(SButton)
+			.ContentPadding(FMargin(34.0f, 12.0f))
+			.ButtonColorAndOpacity(FLinearColor(0.72f, 0.48f, 0.10f, 1.0f))
+			.ForegroundColor(FLinearColor::Black)
+			.OnClicked_Lambda([WeakThis]()
+			{
+				if (AMainPlayerController* PC = WeakThis.Get())
+				{
+					PC->ReturnToLobbyFromMatchEnd();
+				}
+				return FReply::Handled();
+			})
+			[
+				SNew(STextBlock)
+				.Text(FText::FromString(TEXT("로비로 돌아가기")))
+				.Font(FCoreStyle::GetDefaultFontStyle(TEXT("Bold"), 22))
+				.ColorAndOpacity(FLinearColor::Black)
+			]
+		];
+	}
+
+	TSharedRef<SWidget> ResultPanel =
+		SNew(SBorder)
+		.BorderImage(FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+		.BorderBackgroundColor(FLinearColor(0.72f, 0.48f, 0.10f, 1.0f))
+		.Padding(2.0f)
+		[
+			SNew(SBorder)
+			.BorderImage(FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+			.BorderBackgroundColor(FLinearColor(0.025f, 0.02f, 0.015f, 0.96f))
+			.Padding(bMatchEnded ? FMargin(48.0f, 32.0f) : FMargin(36.0f, 22.0f))
+			[
+				ResultContent
+			]
+		];
+
+	TSharedRef<SOverlay> Overlay = SNew(SOverlay);
+	if (bMatchEnded)
+	{
+		Overlay->AddSlot()
+		[
+			SNew(SBorder)
+			.BorderImage(FCoreStyle::Get().GetBrush(TEXT("WhiteBrush")))
+			.BorderBackgroundColor(FLinearColor(0.0f, 0.0f, 0.0f, 0.72f))
+		];
+
+		Overlay->AddSlot()
+		.HAlign(HAlign_Center)
+		.VAlign(VAlign_Center)
+		.Padding(FMargin(36.0f))
+		[
+			SNew(SBox)
+			.WidthOverride(780.0f)
+			[
+				ResultPanel
+			]
+		];
+	}
+	else
+	{
+		Overlay->SetVisibility(EVisibility::HitTestInvisible);
+		Overlay->AddSlot()
+		.HAlign(HAlign_Center)
+		.VAlign(VAlign_Top)
+		.Padding(FMargin(24.0f, 64.0f, 24.0f, 0.0f))
+		[
+			SNew(SBox)
+			.WidthOverride(680.0f)
+			[
+				ResultPanel
+			]
+		];
+	}
+
+	TemporaryResultOverlayWidget = Overlay;
+	Viewport->AddViewportWidgetContent(Overlay, 10000);
+
+	if (bMatchEnded)
+	{
+		bShowMouseCursor = true;
+		FInputModeUIOnly InputMode;
+		InputMode.SetWidgetToFocus(TemporaryResultOverlayWidget);
+		InputMode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+		SetInputMode(InputMode);
+	}
+	else
+	{
+		World->GetTimerManager().SetTimer(
+			TemporaryResultOverlayTimerHandle,
+			this,
+			&AMainPlayerController::RemoveTemporaryResultOverlay,
+			TemporaryRoundResultVisibleSeconds,
+			false);
+	}
+}
+
+void AMainPlayerController::RemoveTemporaryResultOverlay()
+{
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().ClearTimer(TemporaryResultOverlayTimerHandle);
+		if (UGameViewportClient* Viewport = World->GetGameViewport())
+		{
+			if (TemporaryResultOverlayWidget.IsValid())
+			{
+				Viewport->RemoveViewportWidgetContent(TemporaryResultOverlayWidget.ToSharedRef());
+			}
+		}
+	}
+
+	TemporaryResultOverlayWidget.Reset();
+	TemporaryResultLaurelBrush.Reset();
+	TemporaryResultLaurelTexture = nullptr;
+}
+
 void AMainPlayerController::Client_ShowSeotdaResult_Implementation(const FString& ResultText)
 {
-UE_LOG(LogTemp, Warning, TEXT("[CL] Seotda Result: %s"), *ResultText);
+	UE_LOG(LogTemp, Warning, TEXT("[CL] Seotda Result: %s"), *ResultText);
 
-    SeotdaUiLastResultText = ResultText;
-    bSeotdaUiMatchEnded = ResultText.Contains(TEXT("[MATCH END]"));
+	SeotdaUiLastResultText = ResultText;
+	bSeotdaUiMatchEnded = ResultText.Contains(TEXT("[MATCH END]"));
 
-    if (bSeotdaUiMatchEnded)
-    {
-        if (UUManagerGameInstance* GI = GetGameInstance<UUManagerGameInstance>())
-        {
-            GI->MarkReturnToRoomAfterMatch();
-        }
-    }
+	if (bSeotdaUiMatchEnded)
+	{
+		if (UUManagerGameInstance* GI = GetGameInstance<UUManagerGameInstance>())
+		{
+			GI->MarkReturnToRoomAfterMatch();
+		}
+	}
 
-if (GEngine)
-{
-DS_SCREEN(
-2026062501,
-8.0f,
-FColor::Green,
-ResultText
-);
-}
+	ShowTemporaryResultOverlay(ResultText, bSeotdaUiMatchEnded);
 }
 
 void AMainPlayerController::Client_UpdateSeotdaState_Implementation(
@@ -1891,6 +2281,8 @@ void AMainPlayerController::ReturnToLobbyFromMatchEnd()
     }
 
     UE_LOG(LogTemp, Warning, TEXT("[CL] ReturnToLobbyFromMatchEnd OpenLevel /Game/Lobby/System/Lobby_Stage"));
+
+	RemoveTemporaryResultOverlay();
 
     bSeotdaUiMatchEnded = false;
     SeotdaUiLastResultText.Empty();
