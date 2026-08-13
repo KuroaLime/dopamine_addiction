@@ -42,6 +42,15 @@ void AGoldenGoblinCharacter::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (HasAuthority())
+	{
+		const int32 RangeMin = FMath::Min(MinGoldRewardAmount, MaxGoldRewardAmount);
+		const int32 RangeMax = FMath::Max(MinGoldRewardAmount, MaxGoldRewardAmount);
+		RolledGoldRewardAmount = FMath::RandRange(RangeMin, RangeMax);
+		UE_LOG(LogTemp, Warning, TEXT("[Goblin] Rolled gold reward: %d (range %d~%d)"),
+			RolledGoldRewardAmount, RangeMin, RangeMax);
+	}
+
 	if (HasAuthority() && AbilitySystemComponent && AbilitySystemComponent->AttributeSet)
 	{
 		UPFGAttributeSet* AttributeSet = AbilitySystemComponent->AttributeSet;
