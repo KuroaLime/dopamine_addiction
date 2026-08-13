@@ -5,6 +5,7 @@
 #include "Components/StaticMeshComponent.h"
 #include "Engine/StaticMesh.h"
 #include "Engine/World.h"
+#include "Materials/MaterialInterface.h"
 #include "Game/InGame/MainPlayerState.h"
 #include "GameFramework/Pawn.h"
 #include "Net/UnrealNetwork.h"
@@ -40,6 +41,13 @@ AGoldDropActor::AGoldDropActor()
 	if (CylinderMeshFinder.Succeeded())
 	{
 		GoldMesh->SetStaticMesh(CylinderMeshFinder.Object);
+	}
+
+	static ConstructorHelpers::FObjectFinder<UMaterialInterface> GoldMaterialFinder(
+		TEXT("/Game/InGame/TPS/M_GoldCoin.M_GoldCoin"));
+	if (GoldMaterialFinder.Succeeded())
+	{
+		GoldMesh->SetMaterial(0, GoldMaterialFinder.Object);
 	}
 }
 
