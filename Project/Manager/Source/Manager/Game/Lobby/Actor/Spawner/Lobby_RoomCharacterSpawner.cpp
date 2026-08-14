@@ -79,8 +79,8 @@ void ALobby_RoomCharacterSpawner::UpdateUserInfoWidget(const FRoomMemberInfoView
         if (URoomUserWidget* UserWidget = Cast<URoomUserWidget>(UserInfoWidget->GetUserWidgetObject()))
         {
 			UserWidget->UpdateUserInfo(MemberInfo.nickname, MemberInfo.isReady);
-            UserInfoWidget->SetWorldLocation(SpawnArrow->GetComponentTransform().GetLocation() + FVector(-60.f, 0.f, -115.f));
-            UserInfoWidget->SetWorldRotation(FRotator(0.f, 180.f, 0.f));
+            // 위치는 더 이상 코드에서 강제로 덮어쓰지 않는다 — 블루프린트에서 UserInfoWidget
+            // 컴포넌트에 직접 잡아준 상대 트랜스폼(위치/회전)이 그대로 적용된다.
             UserInfoWidget->SetVisibility(true);
         }
     }

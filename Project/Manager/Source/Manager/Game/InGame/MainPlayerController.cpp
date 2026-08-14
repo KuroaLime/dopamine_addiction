@@ -354,9 +354,15 @@ void AMainPlayerController::BeginPlay()
 
 void AMainPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
+	// PIE/에디터 종료 시점엔 여기 도달할 때 이미 Player가 정리되어 IsLocalController()가
+	// false를 반환할 수 있다. 그러면 TemporaryResultOverlayWidget/TemporaryResultLaurelBrush
+	// (TSharedPtr)가 Reset되지 않은 채 남아, 이미 파괴된 Slate 위젯을 계속 참조하다가
+	// 실제 네이티브 소멸자에서 크래시가 난다 — 그래서 이 정리는 IsLocalController() 여부와
+	// 무관하게 항상 실행한다 (내부적으로 World/Viewport/IsValid를 다 체크하는 안전한 함수).
+	RemoveTemporaryResultOverlay();
+
 	if (IsLocalController())
 	{
-		RemoveTemporaryResultOverlay();
 		UWidgetLayoutLibrary::RemoveAllWidgets(this);
 	}
 
