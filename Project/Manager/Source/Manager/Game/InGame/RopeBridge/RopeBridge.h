@@ -197,6 +197,10 @@ private:
 	FTransform MakeVerticalRopeTransform(const FVector& Top, const FVector& Bot) const;
 
 	// Spline-mesh pool + instanced-mesh reuse helpers (smooth, cheap per-frame updates).
+	// Keeps the bridge out of Lumen/DistanceField so its per-frame motion does not invalidate
+	// surface-cache pages. See the implementation comment for the measured cost.
+	static void ExcludeFromLumen(UPrimitiveComponent* Prim);
+	void ExcludeAllFromLumen();
 	USplineMeshComponent* AcquireSplineMesh();
 	void TrimSplineMeshPool(int32 KeepCount);
 	void ApplyInstances(UInstancedStaticMeshComponent* ISM, UStaticMesh* Mesh, const TArray<FTransform>& Xforms);
