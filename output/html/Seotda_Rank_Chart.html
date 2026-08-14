@@ -1,0 +1,333 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>섯다 족보표</title>
+  <style>
+    :root {
+      --navy: #0d1b2c;
+      --gold: #bd842a;
+      --gold-light: #e7c376;
+      --paper: #fff9eb;
+      --red: #65180f;
+      --line: rgba(167, 111, 29, .62);
+    }
+
+    * { box-sizing: border-box; }
+
+    html, body {
+      width: 864px;
+      margin: 0;
+      background: var(--navy);
+      color: var(--navy);
+      font-family: "Malgun Gothic", "Apple SD Gothic Neo", "Noto Sans KR", sans-serif;
+      font-kerning: normal;
+      text-rendering: geometricPrecision;
+    }
+
+    body { min-height: 0; }
+
+    .sheet {
+      position: relative;
+      width: 864px;
+      min-height: 0;
+      padding: 28px 34px 26px;
+      overflow: hidden;
+      background:
+        linear-gradient(rgba(255,255,255,.55), rgba(255,255,255,.55)),
+        repeating-linear-gradient(45deg, rgba(174,126,45,.035) 0 2px, transparent 2px 9px),
+        var(--paper);
+      border: 17px solid var(--navy);
+      outline: 3px solid var(--gold);
+      outline-offset: -22px;
+    }
+
+    .sheet::before,
+    .sheet::after {
+      content: "";
+      position: absolute;
+      z-index: 0;
+      width: 68px;
+      height: 68px;
+      border-color: var(--gold);
+      pointer-events: none;
+    }
+
+    .sheet::before {
+      left: 24px;
+      top: 24px;
+      border-left: 5px double var(--gold);
+      border-top: 5px double var(--gold);
+      border-radius: 18px 0 0;
+    }
+
+    .sheet::after {
+      right: 24px;
+      top: 24px;
+      border-right: 5px double var(--gold);
+      border-top: 5px double var(--gold);
+      border-radius: 0 18px 0 0;
+    }
+
+    header {
+      position: relative;
+      z-index: 1;
+      text-align: center;
+      padding: 18px 0 16px;
+    }
+
+    h1 {
+      margin: 0;
+      color: var(--navy);
+      font-size: 74px;
+      line-height: 1.05;
+      font-weight: 900;
+      letter-spacing: -.06em;
+    }
+
+    .subtitle {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      gap: 19px;
+      margin-top: 13px;
+      font-family: "Malgun Gothic", sans-serif;
+      font-size: 31px;
+      line-height: 1;
+      font-weight: 700;
+      letter-spacing: 0;
+    }
+
+    .subtitle::before,
+    .subtitle::after {
+      content: "";
+      width: 105px;
+      height: 2px;
+      background: linear-gradient(90deg, transparent, var(--gold), transparent);
+    }
+
+    .ranks {
+      position: relative;
+      z-index: 1;
+      border: 2px solid var(--line);
+      border-radius: 10px;
+      overflow: hidden;
+      box-shadow: 0 6px 22px rgba(43,25,7,.08);
+    }
+
+    .rank {
+      display: grid;
+      grid-template-columns: 275px 1fr;
+      min-height: 250px;
+      align-items: center;
+      padding: 15px 25px 15px 20px;
+      background: rgba(255,255,255,.2);
+    }
+
+    .rank + .rank { border-top: 2px solid var(--line); }
+
+    .rank-name {
+      display: flex;
+      align-items: center;
+      gap: 18px;
+      white-space: nowrap;
+    }
+
+    .badge {
+      display: inline-grid;
+      place-items: center;
+      width: 93px;
+      height: 82px;
+      flex: 0 0 auto;
+      border: 2px solid var(--gold);
+      border-radius: 18px;
+      color: white;
+      background: linear-gradient(145deg, #7f2117, #42100b);
+      box-shadow: inset 0 0 0 3px rgba(255,255,255,.06), 0 3px 10px rgba(60,20,8,.15);
+      font-size: 44px;
+      font-weight: 800;
+    }
+
+    .hand-name {
+      font-size: 39px;
+      font-weight: 900;
+      letter-spacing: -.06em;
+    }
+
+    .cards {
+      display: flex;
+      align-items: center;
+      justify-content: flex-end;
+      gap: 19px;
+    }
+
+    .card {
+      width: 152px;
+      height: 220px;
+      object-fit: cover;
+      border: 4px solid #5d170d;
+      border-radius: 11px;
+      box-shadow: 0 4px 9px rgba(44,25,11,.24);
+      background: #f6ead0;
+    }
+
+    .normal-table,
+    .special-table {
+      position: relative;
+      z-index: 1;
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      overflow: hidden;
+    }
+
+    .normal-wrap {
+      margin-top: 12px;
+      border: 2px solid var(--line);
+      border-radius: 9px;
+      overflow: hidden;
+      background: rgba(255,255,255,.24);
+    }
+
+    .normal-table th,
+    .normal-table td {
+      height: 42px;
+      padding: 4px 20px;
+      border-bottom: 1px solid var(--line);
+      font-size: 24px;
+      line-height: 1.05;
+    }
+
+    .normal-table tr:last-child th,
+    .normal-table tr:last-child td { border-bottom: 0; }
+
+    .normal-table th {
+      width: 185px;
+      border-right: 1px solid var(--line);
+      font-weight: 900;
+      text-align: center;
+      white-space: nowrap;
+    }
+
+    .normal-table td { font-weight: 600; }
+
+    .special-wrap {
+      margin-top: 12px;
+      overflow: hidden;
+      border: 3px solid var(--gold);
+      border-radius: 12px;
+      background: linear-gradient(120deg, #57120d, #8b2418 55%, #55110c);
+      box-shadow: inset 0 0 0 3px rgba(44,9,5,.38);
+      color: #fff8e9;
+    }
+
+    .special-table th,
+    .special-table td {
+      height: 55px;
+      padding: 8px 20px;
+      border-bottom: 1px solid rgba(230,186,90,.78);
+      font-size: 22px;
+      line-height: 1.18;
+    }
+
+    .special-table tr:last-child th,
+    .special-table tr:last-child td { border-bottom: 0; }
+
+    .special-table th {
+      width: 205px;
+      border-right: 1px solid rgba(230,186,90,.78);
+      font-size: 25px;
+      font-weight: 900;
+      white-space: nowrap;
+    }
+
+    .special-table td { font-weight: 600; }
+
+    footer {
+      position: relative;
+      z-index: 1;
+      margin: 14px 8px 0;
+      color: #d9a444;
+      text-align: center;
+      font-size: 21px;
+      line-height: 1.3;
+      font-weight: 800;
+      letter-spacing: .01em;
+    }
+
+    .exact-word {
+      font-family: "Malgun Gothic", "Noto Sans KR", sans-serif;
+      font-variant-ligatures: none;
+      letter-spacing: 0;
+    }
+
+    @media print {
+      @page { margin: 0; }
+      html, body { print-color-adjust: exact; -webkit-print-color-adjust: exact; }
+    }
+  </style>
+</head>
+<body>
+  <main class="sheet" aria-label="섯다 족보표">
+    <header>
+      <h1>족보표</h1>
+      <div class="subtitle">규칙</div>
+    </header>
+
+    <section class="ranks" aria-label="광땡 순위">
+      <article class="rank">
+        <div class="rank-name"><span class="badge">1위</span><span class="hand-name">38광땡</span></div>
+        <div class="cards">
+          <img class="card" src="assets/T_Card_05_Mar_Gwang.PNG" alt="3월 광">
+          <img class="card" src="assets/T_Card_15_Aug_Gwang.PNG" alt="8월 광">
+        </div>
+      </article>
+      <article class="rank">
+        <div class="rank-name"><span class="badge">2위</span><span class="hand-name">18광땡</span></div>
+        <div class="cards">
+          <img class="card" src="assets/T_Card_01_Jan_Gwang.PNG" alt="1월 광">
+          <img class="card" src="assets/T_Card_15_Aug_Gwang.PNG" alt="8월 광">
+        </div>
+      </article>
+      <article class="rank">
+        <div class="rank-name"><span class="badge">3위</span><span class="hand-name">13광땡</span></div>
+        <div class="cards">
+          <img class="card" src="assets/T_Card_01_Jan_Gwang.PNG" alt="1월 광">
+          <img class="card" src="assets/T_Card_05_Mar_Gwang.PNG" alt="3월 광">
+        </div>
+      </article>
+    </section>
+
+    <section class="normal-wrap" aria-label="일반 족보">
+      <table class="normal-table">
+        <tbody>
+          <tr><th>땡</th><td>10땡 &gt; 9땡 &gt; … &gt; 1땡</td></tr>
+          <tr><th>알리</th><td>1월 + 2월</td></tr>
+          <tr><th>독사</th><td>1월 + 4월</td></tr>
+          <tr><th>구삥</th><td>1월 + 9월</td></tr>
+          <tr><th>장삥</th><td>1월 + 10월</td></tr>
+          <tr><th>장사</th><td>4월 + 10월</td></tr>
+          <tr><th>세륙</th><td>4월 + 6월</td></tr>
+          <tr><th class="exact-word">갑오</th><td>두 장의 합 <span class="exact-word">끝수</span> 9</td></tr>
+          <tr><th class="exact-word">끗</th><td><span class="exact-word">8끗 &gt; 7끗 &gt; … &gt; 1끗</span></td></tr>
+          <tr><th>망통</th><td>두 장의 합 <span class="exact-word">끝수</span> 0</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <section class="special-wrap" aria-label="특수 족보">
+      <table class="special-table">
+        <tbody>
+          <tr><th>암행어사</th><td>4월 + 7월 · 38광땡을 제외한 광땡 제압</td></tr>
+          <tr><th>땡잡이</th><td>3월 + 7월 · 일반 땡 제압</td></tr>
+          <tr><th>구사</th><td>4월 + 9월 · 재경기</td></tr>
+          <tr><th>멍텅구리 구사</th><td>4월·9월 <span class="exact-word">열끗패</span> · 재경기</td></tr>
+        </tbody>
+      </table>
+    </section>
+
+    <footer>높은 족보가 승리 · 특수패는 상대 족보에 따라 적용</footer>
+  </main>
+</body>
+</html>
