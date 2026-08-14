@@ -407,21 +407,19 @@ void UTpsPlayerMainHUD::UpdateCardWidget()
 void UTpsPlayerMainHUD::UpdateWeaponCountWidget()
 {
     AMainCharacter* Character = Cast<AMainCharacter>(GetOwningPlayerPawn());
-    if (Character && WEAPONCountxt)
+    AWeapon* Weapon = Character ? Character->GetEquippedGun() : nullptr;
+    UWeaponComponent* WeaponComp = Weapon ? Weapon->Setting : nullptr;
+
+    // 현재 탄창에 남은 탄환 수.
+    if (WEAPONCountxt)
     {
-        AWeapon* Weapon = Character->GetEquippedGun();
-        if (Weapon && Weapon->Setting)
-        {
-            WEAPONCountxt->SetText(FText::AsNumber(Weapon->Setting->GetCurrentAmmo()));
-        }
-        else
-        {
-            WEAPONCountxt->SetText(FText::AsNumber(0));
-        }
+        WEAPONCountxt->SetText(FText::AsNumber(WeaponComp ? WeaponComp->GetCurrentAmmo() : 0));
     }
-    if (CurrentCharacterState.IsValid() && WEAPONMAXTxt)
+
+    // 한 탄창에 들어가는 최대 탄환 수(예비탄이 아니라 탄창 용량). 예비탄은 무제한이라 표시하지 않는다.
+    if (WEAPONMAXTxt)
     {
-        WEAPONMAXTxt->SetText(FText::AsNumber(CurrentCharacterState->GetCurrentAmmoCount()));
+        WEAPONMAXTxt->SetText(FText::AsNumber(WeaponComp ? WeaponComp->GetMaxMagazineCapacity() : 0));
     }
 }
 

@@ -85,7 +85,7 @@ void UWeaponComponent::ConsumeAmmo()
         CurrentAmmo = FMath::Max(0, CurrentAmmo - 1);
     }
 }
-void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& MuzzleLocation, const FVector& TargetLocation)
+void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& MuzzleLocation, const TArray<FVector>& TargetLocations)
 {
     FVector ActualMuzzleLoc = MuzzleLocation;
     AWeapon* Weapon = Cast<AWeapon>(GetOwner());
@@ -99,12 +99,16 @@ void UWeaponComponent::Multicast_PlayFireFeedback_Implementation(const FVector& 
         UGameplayStatics::PlaySoundAtLocation(GetWorld(), m_FireSound, ActualMuzzleLoc);
     }
 
-    // 총알 트레이서: 총구에서 명중점 방향으로 회전시켜 스폰.
+    // 총알 트레이서: 총구에서 각 펠릿의 도달 지점 방향으로 회전시켜 하나씩 스폰.
     // (NS_BulletTracer가 Local Space + 로컬 +X 속도라, 이 회전이 곧 날아가는 방향이 됨)
+    // 샷건처럼 펠릿이 여러 개면 방향마다 트레이서가 퍼져 나간다.
     if (BulletTracerFX && GetWorld())
     {
-        const FRotator AimRot = (TargetLocation - ActualMuzzleLoc).Rotation();
-        UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), BulletTracerFX, ActualMuzzleLoc, AimRot);
+        for (const FVector& TargetLocation : TargetLocations)
+        {
+            const FRotator AimRot = (TargetLocation - ActualMuzzleLoc).Rotation();
+            UNiagaraFunctionLibrary::SpawnSystemAtLocation(GetWorld(), BulletTracerFX, ActualMuzzleLoc, AimRot);
+        }
     }
     if (UMainAnimInstance* MainAnim = ResolveOwnerAnimAndSyncWeapon())
     {

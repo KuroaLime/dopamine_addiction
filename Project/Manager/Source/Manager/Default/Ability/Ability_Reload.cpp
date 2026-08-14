@@ -50,14 +50,12 @@ void UAbility_Reload::ActivateAbility()
 						{
 							int32 AmmoNeeded = MaxMagazineCapacity - CurrentAmmo;
 							EWeaponType WeaponType = PS->GetWeaponID();
-							int32 AvailableAmmo = PS->GetCarriedAmmoByWeaponType(WeaponType);
 
-							if (AvailableAmmo > 0)
+							// 예비탄 무제한: 보유량과 무관하게 항상 탄창을 가득 채운다(보유량 차감 없음).
 							{
-								int32 AmmoToLoad = FMath::Min(AmmoNeeded, AvailableAmmo);
+								int32 AmmoToLoad = AmmoNeeded;
 								CurrentAmmo += AmmoToLoad;
 								WeaponComp->SetCurrentAmmo(CurrentAmmo);
-								PS->AddCarriedAmmoByWeaponType(WeaponType, -AmmoToLoad);
 
 
 								// 장전 잠금: 이 시간 동안 사격 불가. 무기 데이터의 ReloadTime(초) 사용, 없으면 기본 1.5초.

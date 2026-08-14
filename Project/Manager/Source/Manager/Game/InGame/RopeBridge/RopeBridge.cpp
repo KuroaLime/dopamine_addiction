@@ -355,6 +355,10 @@ void ARopeBridge::RebuildBridge()
 
 	// Free any rope segment meshes left unused this rebuild.
 	TrimSplineMeshPool(SplineMeshCursor);
+
+	// Keep the whole bridge out of Lumen — see ExcludeFromLumen for the measured cost. Cheap to repeat:
+	// it early-outs once the flags are already cleared.
+	ExcludeAllFromLumen();
 }
 
 void ARopeBridge::UpdateSplinePoints(USplineComponent* Spline, const FVector& Start, const FVector& Mid, const FVector& End)
@@ -371,6 +375,44 @@ void ARopeBridge::UpdateSplinePoints(USplineComponent* Spline, const FVector& St
 	Spline->UpdateSpline();
 }
 
+void ARopeBridge::ExcludeFromLumen(UPrimitiveComponent* Prim)
+{
+	// The whole bridge moves every frame while the islands float, which invalidates Lumen
+	// surface-cache pages and makes CardPageRenderPasses re-render them every frame.
+	//
+	// Measured on the render thread (A/B/A/B in PIE, 5 bridges):
+	//   bridge in Lumen        UpdateLumenScene 2.4-3.5ms, CardPageRenderPasses 2.2-3.3ms
+	//   ropes only excluded    UpdateLumenScene 2.4ms      CardPageRenderPasses 2.2ms   (no help)
+	//   whole bridge excluded  UpdateLumenScene 0.15ms     CardPageRenderPasses gone
+	// The planks and pillars are the real cost, not the ropes: Lumen cards scale with surface area and
+	// the ropes are thin slivers. A bridge spanning open air contributes almost no bounce light, and
+	// clearing this flag only stops it from *contributing* GI - it is still lit normally.
+	//
+	// Applied on every rebuild rather than on creation: the components are serialised with the actor,
+	// so a freshly loaded level reuses them and never runs the NewObject path.
+	if (!Prim || (!Prim->bAffectDynamicIndirectLighting && !Prim->bAffectDistanceFieldLighting))
+	{
+		return;
+	}
+
+	Prim->bAffectDynamicIndirectLighting = false;
+	Prim->bAffectDistanceFieldLighting = false;
+	if (Prim->IsRegistered())
+	{
+		Prim->MarkRenderStateDirty();
+	}
+}
+
+void ARopeBridge::ExcludeAllFromLumen()
+{
+	TArray<UPrimitiveComponent*> Prims;
+	GetComponents<UPrimitiveComponent>(Prims);
+	for (UPrimitiveComponent* Prim : Prims)
+	{
+		ExcludeFromLumen(Prim);
+	}
+}
+
 USplineMeshComponent* ARopeBridge::AcquireSplineMesh()
 {
 	// Reuse a pooled component if available; otherwise create one. All segments live in actor-local
@@ -378,12 +420,14 @@ USplineMeshComponent* ARopeBridge::AcquireSplineMesh()
 	if (SplineMeshCursor < SplineMeshComponents.Num() && SplineMeshComponents[SplineMeshCursor])
 	{
 		USplineMeshComponent* Existing = SplineMeshComponents[SplineMeshCursor++];
+		ExcludeFromLumen(Existing);
 		return Existing;
 	}
 
 	USplineMeshComponent* Mesh = NewObject<USplineMeshComponent>(this);
 	Mesh->SetMobility(EComponentMobility::Movable);
 	Mesh->SetForwardAxis(ESplineMeshAxis::X);
+	ExcludeFromLumen(Mesh);
 	Mesh->AttachToComponent(RootComponent, FAttachmentTransformRules::KeepRelativeTransform);
 	Mesh->RegisterComponent();
 

@@ -29,8 +29,10 @@ public:
 	virtual void TickComponent(float DeltaTime, ELevelTick TickType, FActorComponentTickFunction* ThisTickFunction) override;
 
 
+	// 펠릿(샷건 등 다발) 각각의 도달 지점을 받아, 총구에서 그 방향으로 트레이서를 하나씩 스폰한다.
+	// 단발 무기는 원소 1개짜리 배열이 들어온다.
 	UFUNCTION(NetMulticast, Reliable)
-	virtual void Multicast_PlayFireFeedback(const FVector& MuzzleLocation, const FVector& TargetLocation);
+	virtual void Multicast_PlayFireFeedback(const FVector& MuzzleLocation, const TArray<FVector>& TargetLocations);
 
 	virtual void GetLifetimeReplicatedProps(TArray<FLifetimeProperty>& OutLifetimeProps) const;
 protected:

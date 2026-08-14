@@ -275,7 +275,10 @@ void UUManagerGameInstance::HandlePacket(PacketType type, const char* payload, u
                 AsyncTask(ENamedThreads::GameThread, [this]()
                     {
                         UE_ASYNC_GUARD
-                        UGameplayStatics::OpenLevel(GetWorld(), FName("Lobby_Stage"));
+                        UGameplayStatics::OpenLevel(
+                            this,
+                            FName(TEXT("/Game/Lobby/System/Lobby_Stage")),
+                            true);
                     });
                 break;
             }

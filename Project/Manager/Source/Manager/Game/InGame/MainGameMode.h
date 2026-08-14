@@ -116,7 +116,7 @@ public:
     int32 GetMaxCardsPerPlayerPerRound() const { return MaxCardsPerPlayerPerRound; }
     TSubclassOf<ACardDropActor> GetCardDropActorClass() const { return CardDropActorClass; }
     int32 GetSeotdaServerSeedPot() const { return SeotdaServerSeedPot; }
-    int32 GetSeotdaBaseCallBet() const { return SeotdaBaseCallBet; }
+    int32 GetSeotdaInitialBetPercent() const { return SeotdaInitialBetPercent; }
     float GetSeotdaSelectionTimeoutSeconds() const { return SeotdaSelectionTimeoutSeconds; }
     float GetSeotdaBetTurnTimeoutSeconds() const { return SeotdaBetTurnTimeoutSeconds; }
 
@@ -466,9 +466,9 @@ private:
     UPROPERTY(EditDefaultsOnly, Category = "Seotda|Betting")
     int32 SeotdaServerSeedPot = 2;
 
-    // 踰좏똿 ?쒖옉 吏곹썑 Call???꾩슂??湲곕낯 湲덉븸.
-    UPROPERTY(EditDefaultsOnly, Category = "Seotda|Betting")
-    int32 SeotdaBaseCallBet = 2;
+    // Percentage of participating players' average gold used as the initial call amount.
+    UPROPERTY(EditDefaultsOnly, Category = "Seotda|Betting", meta = (ClampMin = "0", ClampMax = "100"))
+    int32 SeotdaInitialBetPercent = 10;
 
     UPROPERTY(EditDefaultsOnly, Category = "Seotda|Timeout")
     float SeotdaSelectionTimeoutSeconds = 60.0f;
