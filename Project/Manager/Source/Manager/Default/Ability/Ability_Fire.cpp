@@ -529,8 +529,9 @@ void UAbility_Fire::Server_ExecuteFire()
 	FCollisionQueryParams Params;
 	Params.AddIgnoredActor(OwnerCharacter);
 
-	// 총알 트레이서가 향할 목표(피드백용 대표 지점): 첫 번째 펠릿 기준으로 명중하면 충돌점, 빗나가면 사거리 끝.
-	FVector RepresentativeTargetLoc = CamStart + (CamRot.Vector() * Range);
+	// 각 펠릿의 도달 지점(명중하면 충돌점, 빗나가면 사거리 끝). 펠릿마다 트레이서를 스폰하기 위해 모은다.
+	TArray<FVector> PelletTargetLocs;
+	PelletTargetLocs.Reserve(PelletCount);
 
 	for (int32 PelletIndex = 0; PelletIndex < PelletCount; ++PelletIndex)
 	{
@@ -555,10 +556,8 @@ void UAbility_Fire::Server_ExecuteFire()
 			DS_DRAW_SPHERE(World, DebugEndPoint, TraceRadius, 12, DebugColor, false, 3.f);
 		}
 
-		if (PelletIndex == 0)
-		{
-			RepresentativeTargetLoc = (bCamHit && CamHit.bBlockingHit) ? CamHit.ImpactPoint : CamEnd;
-		}
+		// 이 펠릿의 도달 지점을 트레이서 목록에 추가(방향별로 트레이서가 퍼져 나가게 한다).
+		PelletTargetLocs.Add((bCamHit && CamHit.bBlockingHit) ? CamHit.ImpactPoint : CamEnd);
 
 		if (bCamHit && CamHit.GetActor())
 		{
@@ -592,9 +591,9 @@ void UAbility_Fire::Server_ExecuteFire()
 		}
 	}
 
-	if (IsActive() && bIsServerFire && IsValid(EquippedGun) && IsValid(EquippedGun->Setting))
+	if (IsActive() && bIsServerFire && IsValid(EquippedGun) && IsValid(EquippedGun->Setting) && PelletTargetLocs.Num() > 0)
 	{
-		EquippedGun->Setting->Multicast_PlayFireFeedback(MuzzleLoc, RepresentativeTargetLoc);
+		EquippedGun->Setting->Multicast_PlayFireFeedback(MuzzleLoc, PelletTargetLocs);
 	}
 }
 

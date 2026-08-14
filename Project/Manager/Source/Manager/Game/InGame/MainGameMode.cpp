@@ -949,6 +949,8 @@ bool AMainGameMode::TryRespawnPlayerAuthoritatively(AMainCharacter* Character, c
         if (EquippedWeapon->Setting)
         {
             EquippedWeapon->Setting->CancelReloadLock();
+            // 부활할 때마다 현재 탄창을 최대로 채운다.
+            EquippedWeapon->Setting->SetCurrentAmmo(EquippedWeapon->Setting->GetMaxMagazineCapacity());
         }
         EquippedWeapon->ForceNetUpdate();
     }
