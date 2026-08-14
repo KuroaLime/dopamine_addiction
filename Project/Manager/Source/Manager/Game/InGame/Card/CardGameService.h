@@ -143,7 +143,7 @@ private:
     int32 MaxCardsPerPlayerPerRound = 3;
     TSubclassOf<ACardDropActor> CardDropActorClass;
     int32 SeotdaServerSeedPot = 2;
-    int32 SeotdaBaseCallBet = 2;
+    int32 SeotdaInitialBetPercent = 10;
 
     // ----- 런타임 상태 -----
     int32 NextCardInstanceId = 1;
@@ -157,6 +157,7 @@ private:
     TMap<int64, FSeotdaPlayerRoundState> ReconnectSeotdaStates;
     TMap<int64, TArray<int32>> ReconnectTurnOrderIndices;
     int32 SeotdaPot = 0;
+    int32 SeotdaBaseCallBet = 0;
     int32 SeotdaCurrentBet = 0;
     int32 SeotdaCurrentTurnIndex = 0;
     bool bSeotdaBettingActive = false;

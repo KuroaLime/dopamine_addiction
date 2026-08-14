@@ -27,7 +27,7 @@ void UCardGameService::Init(AMainGameMode* InOwner)
     MaxCardsPerPlayerPerRound = OwnerGM->GetMaxCardsPerPlayerPerRound();
     CardDropActorClass = OwnerGM->GetCardDropActorClass();
     SeotdaServerSeedPot = OwnerGM->GetSeotdaServerSeedPot();
-    SeotdaBaseCallBet = OwnerGM->GetSeotdaBaseCallBet();
+    SeotdaInitialBetPercent = FMath::Clamp(OwnerGM->GetSeotdaInitialBetPercent(), 0, 100);
 }
 
 UWorld* UCardGameService::GetWorld() const
@@ -641,7 +641,7 @@ void UCardGameService::ResetSeotdaRoundStates()
     SeotdaPot = FMath::Max(0, SeotdaServerSeedPot);
 
     // Call???뚮?????媛??뚮젅?댁뼱媛 湲곕낯 2?먯쓣 ?대룄濡??쒖옉 湲곗? 踰좏똿??2濡??붾떎.
-    SeotdaCurrentBet = FMath::Max(0, SeotdaBaseCallBet);
+    SeotdaCurrentBet = 0;
 
     SeotdaCurrentTurnIndex = 0;
     bSeotdaBettingActive = false;
@@ -896,7 +896,7 @@ void UCardGameService::StartSeotdaBettingRound()
     SeotdaPot = FMath::Max(0, SeotdaServerSeedPot);
 
     // Call???뚮?????媛??뚮젅?댁뼱媛 湲곕낯 2?먯쓣 ?대룄濡??쒖옉 湲곗? 踰좏똿??2濡??붾떎.
-    SeotdaCurrentBet = FMath::Max(0, SeotdaBaseCallBet);
+    SeotdaCurrentBet = 0;
 
     SeotdaCurrentTurnIndex = 0;
 
@@ -950,6 +950,43 @@ void UCardGameService::StartSeotdaBettingRound()
         State->BetMoney = 0;
         SeotdaTurnOrder.Add(PS);
     }
+
+    int64 TotalParticipantGold = 0;
+    int32 ParticipantCount = 0;
+    for (const TWeakObjectPtr<AMainPlayerState>& PlayerPtr : SeotdaTurnOrder)
+    {
+        const AMainPlayerState* ParticipantPS = PlayerPtr.Get();
+        if (!ParticipantPS)
+        {
+            continue;
+        }
+
+        TotalParticipantGold += FMath::Max(0, GetSeotdaPlayerMoney(ParticipantPS));
+        ++ParticipantCount;
+    }
+
+    const int32 AverageParticipantGold = ParticipantCount > 0
+        ? static_cast<int32>(TotalParticipantGold / ParticipantCount)
+        : 0;
+    const int32 SafeInitialBetPercent = FMath::Clamp(SeotdaInitialBetPercent, 0, 100);
+
+    SeotdaBaseCallBet = 0;
+    if (ParticipantCount > 0 && TotalParticipantGold > 0 && SafeInitialBetPercent > 0)
+    {
+        const int64 RawInitialBet =
+            (TotalParticipantGold * SafeInitialBetPercent) /
+            (static_cast<int64>(ParticipantCount) * 100);
+        SeotdaBaseCallBet = static_cast<int32>(
+            FMath::Clamp<int64>(RawInitialBet, 1, MAX_int32));
+    }
+    SeotdaCurrentBet = SeotdaBaseCallBet;
+
+    DS_LOG(TEXT("[DS] Seotda InitialBet players=%d totalGold=%lld averageGold=%d percent=%d baseBet=%d"),
+        ParticipantCount,
+        static_cast<long long>(TotalParticipantGold),
+        AverageParticipantGold,
+        SafeInitialBetPercent,
+        SeotdaBaseCallBet);
 
     DS_LOG(TEXT("[DS] Seotda BettingStart players=%d pot=%d currentBet=%d round=%d"),
         SeotdaTurnOrder.Num(),
@@ -1475,17 +1512,40 @@ if (!OwnerGM->HasAuthority() || !GetWorld())
 return;
 }
 
-AMainPlayerState* TurnPS = GetCurrentSeotdaTurnPlayer();
+AMainPlayerState* TurnPS = bSeotdaBettingActive ? GetCurrentSeotdaTurnPlayer() : nullptr;
 const FString TurnName = TurnPS ? TurnPS->GetPlayerName() : TEXT("None");
 
-// 좌석 순서(SeotdaTurnOrder) 기준으로 전체 플레이어의 좌석 정보를 한 번만 만들어 두고,
-// 아래 루프에서 각 클라이언트별로 "자기 자신만 제외"해서 재사용한다.
-// (자기 제외 판단은 이름이 아니라 AMainPlayerState 포인터로 해야 동명이인 문제가 없다.)
-TArray<TPair<AMainPlayerState*, FSeotdaOpponentInfo>> AllSeatInfo;
-AllSeatInfo.Reserve(SeotdaTurnOrder.Num());
-for (int32 SeatIndex = 0; SeatIndex < SeotdaTurnOrder.Num(); ++SeatIndex)
+// SeotdaTurnOrder is populated only after every final hand is submitted. Public-card
+// selection happens earlier, so build a complete UI seat order from the connected
+// PlayerStates as well. Existing turn slots stay first to keep betting seats stable.
+TArray<AMainPlayerState*> SeotdaSeatOrder;
+SeotdaSeatOrder.Reserve(SeotdaTurnOrder.Num());
+
+for (const TWeakObjectPtr<AMainPlayerState>& PlayerPtr : SeotdaTurnOrder)
 {
-AMainPlayerState* SeatPS = SeotdaTurnOrder[SeatIndex].Get();
+if (AMainPlayerState* SeatPS = PlayerPtr.Get())
+{
+SeotdaSeatOrder.AddUnique(SeatPS);
+}
+}
+
+for (FConstPlayerControllerIterator It = GetWorld()->GetPlayerControllerIterator(); It; ++It)
+{
+AMainPlayerController* SeatPC = Cast<AMainPlayerController>(It->Get());
+AMainPlayerState* SeatPS = SeatPC ? SeatPC->GetPlayerState<AMainPlayerState>() : nullptr;
+if (SeatPS)
+{
+SeotdaSeatOrder.AddUnique(SeatPS);
+}
+}
+
+// Build once, then exclude only the receiving client's PlayerState from its payload.
+// Pointer comparison preserves correctness even when two players have the same name.
+TArray<TPair<AMainPlayerState*, FSeotdaOpponentInfo>> AllSeatInfo;
+AllSeatInfo.Reserve(SeotdaSeatOrder.Num());
+for (int32 SeatIndex = 0; SeatIndex < SeotdaSeatOrder.Num(); ++SeatIndex)
+{
+AMainPlayerState* SeatPS = SeotdaSeatOrder[SeatIndex];
 if (!SeatPS)
 {
 continue;
