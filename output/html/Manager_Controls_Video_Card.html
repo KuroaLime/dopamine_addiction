@@ -1,0 +1,110 @@
+<!doctype html>
+<html lang="ko">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=1920, initial-scale=1">
+  <title>도파민 어딕션 - 조작 안내</title>
+  <style>
+    :root{--black:#090807;--ink:#130d09;--red:#9f241c;--red2:#5f100d;--gold:#d8a94f;--gold2:#f0d28b;--cream:#f3e6c7;--muted:#b9aa8e}
+    *{box-sizing:border-box}
+    html,body{width:1920px;height:1080px;margin:0;overflow:hidden}
+    body{font-family:"Malgun Gothic","Apple SD Gothic Neo","Noto Sans KR",sans-serif;color:var(--cream);background:#050403;text-rendering:geometricPrecision}
+    .screen{position:relative;width:1920px;height:1080px;padding:50px 78px 56px;overflow:hidden;background:
+      linear-gradient(rgba(5,4,3,.38),rgba(5,4,3,.72)),
+      url("../../Project/Manager/Resource/Texture/shop/Down_Banner.png") center/100% 100% no-repeat,
+      radial-gradient(circle at 50% 42%,#2b1b12 0,#0c0907 65%,#020201 100%)}
+    .screen::after{content:"";position:absolute;inset:19px;border:1px solid rgba(226,174,72,.38);pointer-events:none}
+    .card-deco{position:absolute;right:45px;bottom:-105px;width:245px;opacity:.16;transform:rotate(13deg);filter:saturate(.8);pointer-events:none}
+    header{position:relative;display:flex;align-items:center;height:205px;margin-bottom:25px;border-bottom:1px solid rgba(216,169,79,.4)}
+    .logo{width:355px;height:208px;object-fit:contain;object-position:center;margin:-4px 30px 0 -18px;filter:drop-shadow(0 7px 12px rgba(0,0,0,.7))}
+    .title-block{padding-left:30px;border-left:1px solid rgba(216,169,79,.46)}
+    h1{margin:0;font-family:"Batang","Noto Serif KR",serif;font-size:54px;line-height:1;font-weight:800;letter-spacing:-.055em;color:var(--gold2);text-shadow:0 2px 8px #000}
+    .subtitle{margin:16px 0 0;color:#d5c5a6;font-size:20px;font-weight:650;letter-spacing:-.02em}
+    .verified{position:absolute;right:5px;bottom:25px;color:#8e8069;font-size:14px;font-weight:700;letter-spacing:.02em}
+    .content{position:relative;display:grid;grid-template-columns:665px 1fr;gap:24px;height:744px}
+    .panel{position:relative;border:1px solid rgba(216,169,79,.57);background:linear-gradient(145deg,rgba(29,22,17,.96),rgba(9,8,7,.98));box-shadow:0 15px 32px rgba(0,0,0,.56),inset 0 0 0 3px rgba(0,0,0,.55)}
+    .panel::before,.panel::after{content:"";position:absolute;width:35px;height:35px;border-color:var(--gold);opacity:.76;pointer-events:none}.panel::before{left:8px;top:8px;border-left:2px solid;border-top:2px solid}.panel::after{right:8px;bottom:8px;border-right:2px solid;border-bottom:2px solid}
+    .section-title{display:flex;align-items:center;gap:12px;margin:0;color:var(--gold2);font-family:"Batang","Noto Serif KR",serif;font-size:28px;letter-spacing:-.04em}
+    .section-title::before{content:"";width:8px;height:28px;background:var(--red);border:1px solid #c95545;box-shadow:0 0 12px rgba(191,47,35,.5)}
+    .move{padding:30px 34px 26px;display:flex;flex-direction:column}
+    .move-body{display:grid;grid-template-columns:1.12fr .88fr;align-items:center;flex:1;margin-top:18px}
+    .wasd-area{text-align:center}
+    .wasd{display:grid;grid-template-columns:repeat(3,96px);grid-template-rows:repeat(2,86px);gap:11px;justify-content:center}
+    .key{display:flex;flex-direction:column;align-items:center;justify-content:center;border:1px solid #dbb86d;border-bottom:6px solid #48100c;border-radius:8px;background:linear-gradient(150deg,#bd392d 0,#8b1b16 52%,#5c100d 100%);box-shadow:0 7px 14px rgba(0,0,0,.48),inset 0 1px rgba(255,241,201,.28);color:#fff7e8;font-weight:900}
+    .key strong{font-family:Arial,sans-serif;font-size:38px;line-height:1}.key small{margin-top:7px;color:#e9cf9c;font-size:12px;font-weight:800}
+    .key.w{grid-column:2}.key.a{grid-column:1;grid-row:2}.key.s{grid-column:2;grid-row:2}.key.d{grid-column:3;grid-row:2}
+    .label{margin-top:19px;color:#f4e7ca;font-size:22px;font-weight:850}.sub-label{margin-top:7px;color:var(--muted);font-size:14px;font-weight:650}
+    .mouse-area{display:flex;flex-direction:column;align-items:center;padding-left:26px;border-left:1px solid rgba(216,169,79,.22)}
+    .mouse{position:relative;width:113px;height:166px;border:4px solid var(--gold2);border-radius:58px 58px 48px 48px;background:linear-gradient(145deg,rgba(159,36,28,.19),rgba(255,255,255,.025));box-shadow:0 0 25px rgba(216,169,79,.1)}
+    .mouse::before{content:"";position:absolute;left:50%;top:0;width:3px;height:59px;background:var(--gold2)}
+    .mouse::after{content:"";position:absolute;left:50%;top:17px;transform:translateX(-50%);width:11px;height:27px;border:2px solid var(--gold2);border-radius:7px}
+    .arrows{margin:15px 0 -1px;color:var(--gold);font-size:23px;letter-spacing:6px}
+    .move-note{display:flex;justify-content:center;gap:10px;padding-top:19px;border-top:1px solid rgba(216,169,79,.2);color:#a99a80;font-size:14px;font-weight:700}
+    .move-note span{padding:7px 12px;border:1px solid rgba(216,169,79,.27);background:rgba(216,169,79,.05)}
+    .actions{padding:30px 34px 26px;display:flex;flex-direction:column}
+    .action-grid{display:grid;grid-template-columns:1fr 1fr;gap:11px;margin-top:21px;flex:1}
+    .action{display:grid;grid-template-columns:116px 1fr;align-items:center;gap:16px;min-height:89px;padding:12px 16px;border:1px solid rgba(216,169,79,.2);background:linear-gradient(90deg,rgba(255,255,255,.035),rgba(255,255,255,.012))}
+    .action.wide{grid-column:1/-1;grid-template-columns:222px 1fr}
+    .keys{display:flex;align-items:center;justify-content:center;gap:7px}
+    .k{display:grid;place-items:center;min-width:60px;height:52px;padding:0 12px;border:1px solid #dbb86d;border-bottom:5px solid #46100d;border-radius:7px;background:linear-gradient(150deg,#b93329,#7e1712);box-shadow:0 5px 10px rgba(0,0,0,.38),inset 0 1px rgba(255,255,255,.2);color:#fff5df;font-family:Arial,"Malgun Gothic",sans-serif;font-size:21px;font-weight:900;white-space:nowrap}
+    .k.mouse-key{min-width:74px;font-family:"Malgun Gothic",sans-serif;font-size:15px}.k.dark{border-color:#9f8d6e;border-bottom-color:#271e17;background:linear-gradient(150deg,#4b4033,#28221c)}.k.esc{border-color:#e3c985;background:linear-gradient(150deg,#75572f,#3f2a18)}
+    .slash{color:#8e7e67;font-size:14px;font-weight:800;white-space:nowrap}
+    .desc strong{display:block;color:#f6ead2;font-size:21px;letter-spacing:-.025em}.desc span{display:block;margin-top:5px;color:#ae9f86;font-size:13px;line-height:1.4;font-weight:650}
+    .tip{display:flex;align-items:center;gap:15px;margin-top:14px;padding:13px 16px;border:1px solid rgba(192,54,42,.55);background:linear-gradient(90deg,rgba(132,27,21,.38),rgba(85,17,13,.13));color:#e8d4ae;font-size:15px;font-weight:750}.tip b{color:#f1c66e}
+    .brush{display:inline-block;padding:5px 13px;background:linear-gradient(90deg,#7c1712,#aa2c21 60%,transparent);color:#fff0d1;font-weight:850}
+  </style>
+</head>
+<body>
+<main class="screen">
+  <img class="card-deco" src="../../Project/Manager/Resource/Texture/Card/T_Card_Back_D.png" alt="">
+  <header>
+    <img class="logo" src="../../문서/제출 작업본/Title.png" alt="도파민 어딕션">
+    <div class="title-block">
+      <h1>조작 안내</h1>
+      <p class="subtitle">전투에 필요한 기본 조작을 확인하세요.</p>
+    </div>
+    <div class="verified">현재 게임 입력 기준</div>
+  </header>
+
+  <section class="content">
+    <article class="panel move">
+      <h2 class="section-title">이동과 시점</h2>
+      <div class="move-body">
+        <div class="wasd-area">
+          <div class="wasd">
+            <div class="key w"><strong>W</strong><small>앞으로</small></div>
+            <div class="key a"><strong>A</strong><small>왼쪽</small></div>
+            <div class="key s"><strong>S</strong><small>뒤로</small></div>
+            <div class="key d"><strong>D</strong><small>오른쪽</small></div>
+          </div>
+          <div class="label">캐릭터 이동</div>
+          <div class="sub-label">방향키로도 이동할 수 있습니다.</div>
+        </div>
+        <div class="mouse-area">
+          <div class="mouse"></div>
+          <div class="arrows">↔ ↕</div>
+          <div class="label">마우스 시점</div>
+        </div>
+      </div>
+      <div class="move-note"><span>WASD 이동</span><span>방향키 지원</span><span>마우스 시점</span></div>
+    </article>
+
+    <article class="panel actions">
+      <h2 class="section-title">전투와 상호작용</h2>
+      <div class="action-grid">
+        <div class="action"><div class="keys"><span class="k dark">SPACE</span></div><div class="desc"><strong>점프</strong><span>장애물을 뛰어넘습니다.</span></div></div>
+        <div class="action"><div class="keys"><span class="k dark">CTRL</span></div><div class="desc"><strong>앉기</strong><span>누르는 동안 자세를 낮춥니다.</span></div></div>
+        <div class="action"><div class="keys"><span class="k mouse-key dark">좌클릭</span></div><div class="desc"><strong>발사</strong><span>장착한 무기를 발사합니다.</span></div></div>
+        <div class="action"><div class="keys"><span class="k mouse-key dark">우클릭</span></div><div class="desc"><strong>조준</strong><span>정밀 조준을 사용합니다.</span></div></div>
+        <div class="action"><div class="keys"><span class="k">F</span></div><div class="desc"><strong>카드 줍기</strong><span>가까운 카드를 획득합니다.</span></div></div>
+        <div class="action"><div class="keys"><span class="k dark">R</span></div><div class="desc"><strong>재장전</strong><span>무기의 탄약을 채웁니다.</span></div></div>
+        <div class="action wide"><div class="keys"><span class="k">Q</span><span class="slash">짧게 / 길게</span></div><div class="desc"><strong>버릴 카드 선택 / 버리기</strong><span>짧게 눌러 선택 이동 · 0.6초 이상 눌러 선택한 카드 버리기</span></div></div>
+        <div class="action"><div class="keys"><span class="k">K</span></div><div class="desc"><strong>상점</strong><span>허용된 상황에서 열고 닫습니다.</span></div></div>
+        <div class="action"><div class="keys"><span class="k esc">ESC</span></div><div class="desc"><strong>게임 메뉴</strong><span>인게임 메뉴를 엽니다.</span></div></div>
+      </div>
+      <div class="tip"><span class="brush">TIP</span><span><b>Q를 0.6초 이상</b> 누르면 선택한 카드를 버립니다.</span></div>
+    </article>
+  </section>
+</main>
+</body>
+</html>
