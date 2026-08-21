@@ -80,3 +80,18 @@ Project/Manager/Binaries/Win64/*.pdb
 Project/Manager/Binaries/Win64/*.exp
 Project/Manager/Binaries/Win64/*.lib
 Project/Manager/Binaries/Win64/*.pdb
+
+# 에디터/게임 타깃 빌드 산출물. 빌드할 때마다 재생성되므로 공유하지 않는다.
+# 전용 서버용 ManagerServer.*만 위의 예외 규칙대로 계속 공유한다.
+Project/Manager/Binaries/Win64/*.target
+Project/Manager/Binaries/Win64/*.modules
+!Project/Manager/Binaries/Win64/ManagerServer.target
+!Project/Manager/Binaries/Win64/ManagerServer.modules
+
+# =========================================================
+# IOCP 서버 (MSVC) 중간 산출물
+# 머신마다 내용이 달라져 pull 때마다 충돌만 유발함
+# =========================================================
+Project/Manager/Server/IOCP_Server/Debug/
+Project/Manager/Server/IOCP_Server/Release/
+Project/Manager/Server/IOCP_Server/x64/
