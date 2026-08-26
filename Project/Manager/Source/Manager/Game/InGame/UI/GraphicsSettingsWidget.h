@@ -28,6 +28,11 @@ class MANAGER_API UGraphicsSettingsWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
+public:
+	// 현재 UGameUserSettings 값으로 인덱스·표시 텍스트를 다시 맞춘다.
+	// 메뉴를 다시 열 때(위젯이 재사용될 때) 상태가 낡지 않도록 외부에서 호출한다.
+	void SyncFromCurrentSettings();
+
 protected:
 	virtual void NativeConstruct() override;
 

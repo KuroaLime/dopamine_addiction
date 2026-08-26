@@ -295,6 +295,13 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "UI")
 	void CloseEscapeMenu();
 
+	// 메뉴가 열려 있는 동안의 입력 모드(UI 전용 + 커서 + 메뉴에 포커스). 게임 입력이 새어들지 않게 한다.
+	void EnterEscapeMenuInputMode();
+
+	// 메뉴를 닫은 뒤 게임 입력/포커스를 복구한다. Slate의 ESC 이벤트 처리가 끝난 다음 틱에 실행해
+	// 포커스가 뷰포트로 깔끔히 돌아오게 한다(닫은 직후 첫 ESC 씹힘 + 마우스 재캡처로 인한 연속클릭 방지).
+	void RestoreGameInputAfterEscapeMenu();
+
 UFUNCTION(Client, Reliable)
 void Client_UpdateSeotdaState(
 int32 Round,
