@@ -64,6 +64,8 @@ public:
 		return PlayerWidget;
 	};
 
+	void NotifyPlayerStateReady();
+
 	//임시방편
 	UUserWidget* GetManagedWidget() const { return ManagedWidget; }
 };

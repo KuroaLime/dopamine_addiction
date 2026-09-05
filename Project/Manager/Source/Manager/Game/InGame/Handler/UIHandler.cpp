@@ -83,6 +83,14 @@ void UUIHandler::CreateHUD()
 	}
 }
 
+void UUIHandler::NotifyPlayerStateReady()
+{
+	if (UWidgetParent* WidgetParent = Cast<UWidgetParent>(PlayerWidget))
+	{
+		WidgetParent->OnPlayerStateReady();
+	}
+}
+
 void UUIHandler::ShowHUD()
 {
 	SetWidgetVisibility(ESlateVisibility::Visible);

@@ -36,6 +36,7 @@ protected:
 	virtual void BeginPlay() override;
 	virtual void EndPlay(const EEndPlayReason::Type EndPlayReason) override;
 	virtual void BeginDestroy() override;
+	virtual void OnRep_PlayerState() override;
 
 public:
 	virtual void SetupInputComponent() override;
@@ -224,7 +225,7 @@ public:
 	int32 GetStaticUpgradeCost(EUpgradeType Type, int32 CurrentLevel);
 
 	UFUNCTION()
-	int32 GetCurrentUpgradeLevel(class AMainPlayerState* PS, EUpgradeType Type);
+	int32 GetCurrentUpgradeLevel(class AMainPlayerState* PS, EUpgradeType Type) const;
 
 	UPROPERTY()
 	TArray<FRandomCardOption> CurrentUpgradeOptions;
@@ -266,7 +267,7 @@ public:
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_PurchaseWeaponUpgrade(int32 SlotIndex);
 
-	int32 GetWeaponUpgradePurchaseCost() const;
+	int32 GetWeaponUpgradeCost(EUpgradeType Type) const;
 
 	UFUNCTION(Server, Reliable, WithValidation)
 	void Server_RequestDiscardCard(int32 CardInstanceId);

@@ -353,6 +353,19 @@ void AMainPlayerController::BeginPlay()
 	ApplySwitchMode(CurrentPhase);
 }
 
+void AMainPlayerController::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	for (auto& Pair : UIHandlerMap)
+	{
+		if (IsValid(Pair.Value))
+		{
+			Pair.Value->NotifyPlayerStateReady();
+		}
+	}
+}
+
 void AMainPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// PIE/에디터 종료 시점엔 여기 도달할 때 이미 Player가 정리되어 IsLocalController()가
@@ -1816,7 +1829,7 @@ int32 AMainPlayerController::GetStaticUpgradeCost(EUpgradeType Type, int32 Curre
 	return BaseCost + (CurrentLevel * 50);
 }
 // 현재 레벨을 조회하는 헬퍼
-int32 AMainPlayerController::GetCurrentUpgradeLevel(AMainPlayerState* PS, EUpgradeType Type)
+int32 AMainPlayerController::GetCurrentUpgradeLevel(AMainPlayerState* PS, EUpgradeType Type) const
 {
 	if (!PS) return 0;
 
@@ -1825,6 +1838,11 @@ int32 AMainPlayerController::GetCurrentUpgradeLevel(AMainPlayerState* PS, EUpgra
 	case EUpgradeType::Player_Health: return PS->PlayerData.LvHealth;
 	case EUpgradeType::Player_MoveSpeed: return PS->PlayerData.LvMovementSpeed;
 	case EUpgradeType::Player_HealthRegeneration: return PS->PlayerData.LvHealthRegeneration;
+	case EUpgradeType::Weapon_Damage:   return PS->GetWeaponStatLV(EWeaponStatType::Damage);
+	case EUpgradeType::Weapon_FireRate: return PS->GetWeaponStatLV(EWeaponStatType::FireRate);
+	case EUpgradeType::Weapon_Range:    return PS->GetWeaponStatLV(EWeaponStatType::Range);
+	case EUpgradeType::Weapon_Magazine: return PS->GetWeaponStatLV(EWeaponStatType::MagazineCapacity);
+	case EUpgradeType::Weapon_Reload:   return PS->GetWeaponStatLV(EWeaponStatType::ReloadTime);
 	default: return 0;
 	}
 }
@@ -1858,7 +1876,6 @@ void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int3
 		return;
 
 	int32 CurrentLevel = GetCurrentUpgradeLevel(PS, UpgradeType);
-	constexpr int32 MaxUpgradeLevel = 5;
 	if (CurrentLevel >= MaxUpgradeLevel)
 	{
 		return;
@@ -1876,10 +1893,13 @@ void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int3
 
 }
 
-int32 AMainPlayerController::GetWeaponUpgradePurchaseCost() const
+int32 AMainPlayerController::GetWeaponUpgradeCost(EUpgradeType Type) const
 {
-	// 캐릭터 고정 스탯 강화(기본 100 Gold)보다 조금 더 싸게 책정된 총기 개조 상품 가격.
-	return 70;
+	constexpr int32 BaseCost = 80;
+	constexpr int32 CostPerLevel = 50;
+
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	return BaseCost + (GetCurrentUpgradeLevel(PS, Type) * CostPerLevel);
 }
 
 bool AMainPlayerController::Server_PurchaseWeaponUpgrade_Validate(int32 SlotIndex)
@@ -1916,7 +1936,12 @@ void AMainPlayerController::Server_PurchaseWeaponUpgrade_Implementation(int32 Sl
 	}
 	EUpgradeType UpgradeType = GS->ShopWeaponUpgradeOptions[SlotIndex];
 
-	int32 Cost = GetWeaponUpgradePurchaseCost();
+	if (GetCurrentUpgradeLevel(PS, UpgradeType) >= MaxUpgradeLevel)
+	{
+		return;
+	}
+
+	int32 Cost = GetWeaponUpgradeCost(UpgradeType);
 	if (PS->CurPlayerData.HoldingGold < Cost)
 	{
 		return;

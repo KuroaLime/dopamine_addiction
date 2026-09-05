@@ -75,10 +75,10 @@ protected:
 	// 이 범위 내에서 무작위 골드 보상을 굴린다. 고정값이면 "이 몬스터만 잡으면 확정으로 이긴다"는
 	// 식으로 공략이 고정돼버리는 걸 막기 위함.
 	UPROPERTY(EditAnywhere, Category = "Reward", meta = (ClampMin = "0"))
-	int32 MinGoldRewardAmount = 100;
+	int32 MinGoldRewardAmount = 60;
 
 	UPROPERTY(EditAnywhere, Category = "Reward", meta = (ClampMin = "0"))
-	int32 MaxGoldRewardAmount = 3000;
+	int32 MaxGoldRewardAmount = 140;
 
 private:
 	void HandleDeath();
