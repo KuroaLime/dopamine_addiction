@@ -143,9 +143,6 @@ public:
 	float GetCurrentMaxHP() const { return GetFinalMaxHP(BaseMaxHealth); }
 	float GetFinalRegenRate(float BaseRegen) const;
 	float GetFinalMoveSpeed(float BaseMoveSpeed) const;
-	float GetFinalWeaponDamageMultiplier() const;
-	float GetFinalFireDelayMultiplier() const;
-	float GetFinalWeaponRangeMultiplier() const;
 	float GetFinalMaxMagazine(float BaseMaxAmmo) const;
 	float GetFinalReloadTimeMultiplier() const;
 

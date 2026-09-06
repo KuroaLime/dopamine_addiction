@@ -23,6 +23,7 @@ class MANAGER_API UTpsPlayerMainHUD : public UWidgetParent
 	GENERATED_BODY()
 public:
 	virtual void BindCharacterState(class UCharacterStateComponent* NewCharacterState) override;
+	virtual void OnPlayerStateReady() override;
 
 	UFUNCTION(BlueprintCallable, Category = "Card")
 	void OnCardFlipMidpoint();
@@ -180,7 +181,6 @@ private:
 	UUserWidget* Compass = nullptr;
 
 	TWeakObjectPtr<class AMainPlayerState> CachedPlayerState;
-	bool bNeedPlayerStateBind = false;
 	TSharedPtr<SWidget> GoldDisplayOverlayWidget;
 	TSharedPtr<STextBlock> GoldDisplayTextWidget;
 	TSharedPtr<FSlateBrush> GoldDisplayIconBrush;

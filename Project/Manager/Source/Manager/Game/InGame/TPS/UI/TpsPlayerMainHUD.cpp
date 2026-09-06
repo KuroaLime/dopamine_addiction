@@ -50,7 +50,6 @@ void UTpsPlayerMainHUD::BindCharacterState(UCharacterStateComponent* NewCharacte
     StaticUI();
     UpdateHPWidget();
     UpdateLevel();
-    bNeedPlayerStateBind = true;
     TryBindPlayerState();
 
     if (CRoundandTimer_UI)
@@ -147,8 +146,6 @@ void UTpsPlayerMainHUD::NativeTick(const FGeometry& MyGeometry, float InDeltaTim
     UpdateCompass();
     UpdateWeaponCountWidget();
     UpdateAim(InDeltaTime);
-    if (bNeedPlayerStateBind)
-        TryBindPlayerState();
     UpdateNameWidget();
     UpdateGoldDisplay();
 }
@@ -353,6 +350,11 @@ void UTpsPlayerMainHUD::OnOwnedCardsChanged(const TArray<FOwnedCardInfo>& NewCar
     TriggerCardFlip();
 }
 
+void UTpsPlayerMainHUD::OnPlayerStateReady()
+{
+    TryBindPlayerState();
+}
+
 void UTpsPlayerMainHUD::TryBindPlayerState()
 {
     if (CachedPlayerState.IsValid()) return;
@@ -374,7 +376,7 @@ void UTpsPlayerMainHUD::TryBindPlayerState()
         OnOwnedCardsChanged(PS->OwnedCards);
 
     UpdateNameWidget();
-    bNeedPlayerStateBind = false;
+    UpdateLevel();
 }
 
 void UTpsPlayerMainHUD::TriggerCardFlip()
@@ -518,14 +520,14 @@ void UTpsPlayerMainHUD::UpdateLevel()
 
         // 0: Health, 1: HealthRegen, 2: MoveSpeed, 3: WeaponDamage, 4: FireRate, 5: Range, 6: Magazine, 7: Reload
         const int32 Levels[LvTotalNumber] = {
-            CachedPlayerState->PlayerData.LvHealth + Upgrades.LvHealth,
-            CachedPlayerState->PlayerData.LvHealthRegeneration + Upgrades.LvHealthRegen,
-            CachedPlayerState->PlayerData.LvMovementSpeed + Upgrades.LvMoveSpeed,
-            Upgrades.LvWeaponDamage,
-            Upgrades.LvWeaponFireRate,
-            Upgrades.LvWeaponRange,
-            Upgrades.LvWeaponMagazine,
-            Upgrades.LvWeaponReload
+            CachedPlayerState->PlayerData.LvHealth + FMath::RoundToInt(Upgrades.LvHealth),
+            CachedPlayerState->PlayerData.LvHealthRegeneration + FMath::RoundToInt(Upgrades.LvHealthRegen),
+            CachedPlayerState->PlayerData.LvMovementSpeed + FMath::RoundToInt(Upgrades.LvMoveSpeed),
+            CachedPlayerState->GetWeaponStatLV(EWeaponStatType::Damage),
+            CachedPlayerState->GetWeaponStatLV(EWeaponStatType::FireRate),
+            CachedPlayerState->GetWeaponStatLV(EWeaponStatType::Range),
+            CachedPlayerState->GetWeaponStatLV(EWeaponStatType::MagazineCapacity),
+            CachedPlayerState->GetWeaponStatLV(EWeaponStatType::ReloadTime)
         };
 
         for (int32 i = 0; i < LvTotalNumber; ++i)

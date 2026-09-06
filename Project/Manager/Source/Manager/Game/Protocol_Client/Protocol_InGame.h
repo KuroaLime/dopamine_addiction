@@ -120,7 +120,8 @@ namespace CardDebug
     }
 }
 }
-#define Max_UpgradeLevel 10
+inline constexpr int32 MaxUpgradeLevel = 5;
+
 UENUM(BlueprintType)
 enum class EUpgradeType : uint8 {
     None,

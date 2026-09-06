@@ -34,6 +34,7 @@
 #include "Game/InGame/UI/EscapeMenuWidget.h"
 #include "Components/InputComponent.h"
 #include "Blueprint/UserWidget.h"
+#include "Framework/Application/SlateApplication.h"
 #include "HAL/PlatformTime.h"
 #include "Styling/CoreStyle.h"
 #include "Styling/SlateBrush.h"
@@ -352,6 +353,19 @@ void AMainPlayerController::BeginPlay()
 	ApplySwitchMode(CurrentPhase);
 }
 
+void AMainPlayerController::OnRep_PlayerState()
+{
+	Super::OnRep_PlayerState();
+
+	for (auto& Pair : UIHandlerMap)
+	{
+		if (IsValid(Pair.Value))
+		{
+			Pair.Value->NotifyPlayerStateReady();
+		}
+	}
+}
+
 void AMainPlayerController::EndPlay(const EEndPlayReason::Type EndPlayReason)
 {
 	// PIE/에디터 종료 시점엔 여기 도달할 때 이미 Player가 정리되어 IsLocalController()가
@@ -452,14 +466,36 @@ void AMainPlayerController::OpenEscapeMenu()
 		EscapeMenuWidget->AddToViewport(1000);
 	}
 
+	// 위젯이 재사용되므로 열 때마다 첫 탭 + 현재 설정값으로 재동기화(두 번째 열 때 낡은 상태 방지).
+	EscapeMenuWidget->RefreshForOpen();
+
 	bEscapeMenuOpen = true;
 
 	// 메뉴가 열려 있는 동안 이동/시점 입력을 잠근다(닫을 때 원래 상태로 복구).
 	bGameplayInputLockedBeforeEscapeMenu = bGameplayInputLocked;
 	ApplyGameplayInputLock(true, TEXT("EscapeMenu"));
 
+	EnterEscapeMenuInputMode();
+}
+
+void AMainPlayerController::EnterEscapeMenuInputMode()
+{
+	if (!IsLocalController())
+	{
+		return;
+	}
+
 	bShowMouseCursor = true;
-	SetInputMode(FInputModeGameAndUI());
+
+	// UI 전용 입력: 게임 뷰포트가 마우스를 잡지 못하게 해서(룩/사격 입력 차단),
+	// 버튼이 down/up을 반복 수신해 "연속 클릭"되는 문제를 막는다. 포커스는 메뉴 위젯에 준다.
+	FInputModeUIOnly Mode;
+	Mode.SetLockMouseToViewportBehavior(EMouseLockMode::DoNotLock);
+	if (EscapeMenuWidget)
+	{
+		Mode.SetWidgetToFocus(EscapeMenuWidget->TakeWidget());
+	}
+	SetInputMode(Mode);
 }
 
 void AMainPlayerController::CloseEscapeMenu()
@@ -476,10 +512,38 @@ void AMainPlayerController::CloseEscapeMenu()
 		EscapeMenuWidget->RemoveFromParent();
 	}
 
-	// 이동/시점 입력 잠금을 메뉴 열기 직전 상태로 되돌린다.
-	ApplyGameplayInputLock(bGameplayInputLockedBeforeEscapeMenu, TEXT("EscapeMenuClose"));
+	// 게임 입력을 확실히 복구한다.
+	// 메뉴 사용 중 해상도/화면모드 변경으로 뷰포트가 재생성되면 입력모드·포커스가 리셋되면서
+	// 이동/시점 잠금이 남아 WASD·카메라가 먹통이 되는 문제가 있었다. 그래서 잠금은 조건 없이 풀고,
+	// 창 재생성 중 놓친 키의 "눌린 채로 남음"도 정리한다.
+	bGameplayInputLocked = false;
+	ResetIgnoreMoveInput();
+	ResetIgnoreLookInput();
+	FlushPressedKeys();
 
-	// 현재 페이즈의 입력 상태(입력모드/커서)를 다시 적용해 원래대로 되돌린다.
+	// 입력/포커스 복구는 다음 틱에 한다.
+	// CloseEscapeMenu는 위젯의 ESC 키 이벤트 처리(NativeOnKeyDown) 도중에 불릴 수 있는데,
+	// 그 자리에서 바로 입력모드를 바꾸면 Slate가 이벤트 종료 후 포커스를 되돌려 서로 충돌한다.
+	// 다음 틱에 복구하면 포커스가 게임 뷰포트로 깔끔히 돌아와 첫 ESC 씹힘/마우스 재캡처 문제가 없다.
+	if (UWorld* World = GetWorld())
+	{
+		World->GetTimerManager().SetTimerForNextTick(this, &AMainPlayerController::RestoreGameInputAfterEscapeMenu);
+	}
+	else
+	{
+		RestoreGameInputAfterEscapeMenu();
+	}
+}
+
+void AMainPlayerController::RestoreGameInputAfterEscapeMenu()
+{
+	// 그 사이 메뉴가 다시 열렸으면 게임 입력을 복구하지 않는다.
+	if (bEscapeMenuOpen)
+	{
+		return;
+	}
+
+	// 현재 페이즈의 입력 상태(입력모드/커서/매핑)를 다시 적용해 원래대로 되돌린다.
 	if (UInputHandler* Handler = InputHandlerMap.FindRef(CurrentPhase))
 	{
 		Handler->InputActivate();
@@ -652,13 +716,24 @@ void AMainPlayerController::ApplySwitchMode(EGamePhase NewPhase)
 
 	if (InputHandlerMap.Contains(NewPhase))
 	{
-		InputHandlerMap[NewPhase]->InputActivate();
+		// ESC 설정 메뉴가 열려 있으면 페이즈가 바뀌어도 게임 입력모드로 덮어쓰지 않는다(메뉴 우선).
+		// 실제 페이즈 컨트롤은 메뉴를 닫을 때 CloseEscapeMenu가 CurrentPhase 기준으로 적용한다.
+		if (!bEscapeMenuOpen)
+		{
+			InputHandlerMap[NewPhase]->InputActivate();
+		}
 	}
 	if (UIHandlerMap.Contains(NewPhase))
 	{
 		UIHandlerMap[NewPhase]->UIActivate();
 	}
 	CurrentPhase = NewPhase;
+
+	// 메뉴가 열려 있으면 페이즈 전환 중 커서/입력모드가 흐트러지지 않도록 UI 입력을 다시 고정한다.
+	if (bEscapeMenuOpen && IsLocalController())
+	{
+		EnterEscapeMenuInputMode();
+	}
 
 	UpdateEnvironmentLightsForPhase(NewPhase);
 }
@@ -1420,12 +1495,20 @@ void AMainPlayerController::Client_SwitchState_Implementation(EGamePhase NewPhas
 
 	if (InputHandlerMap.Contains(NewPhase))
 	{
-		InputHandlerMap[NewPhase]->InputActivate();
+		// ESC 설정 메뉴가 열려 있으면 게임 입력모드로 덮어쓰지 않는다(메뉴 우선). 닫을 때 적용된다.
+		if (!bEscapeMenuOpen)
+		{
+			InputHandlerMap[NewPhase]->InputActivate();
+		}
 	}
 	if (UIHandlerMap.Contains(NewPhase))
 	{
 		UIHandlerMap[NewPhase]->UIActivate();
 		UIHandlerMap[NewPhase]->SetIsFocusable(false);
+	}
+	if (bEscapeMenuOpen && IsLocalController())
+	{
+		EnterEscapeMenuInputMode();
 	}
 	CurrentPhase = NewPhase;
 }
@@ -1471,12 +1554,17 @@ void AMainPlayerController::Multicast_PushMode_Implementation(EGamePhase NewPhas
 
 	PhaseStack.Push(CurrentPhase);
 
-	if (InputHandlerMap.Contains(NewPhase))
+	if (InputHandlerMap.Contains(NewPhase) && !bEscapeMenuOpen)
 		InputHandlerMap[NewPhase]->InputActivate();
 	if (UIHandlerMap.Contains(NewPhase))
 		UIHandlerMap[NewPhase]->UIActivate();
 
 	CurrentPhase = NewPhase;
+
+	if (bEscapeMenuOpen && IsLocalController())
+	{
+		EnterEscapeMenuInputMode();
+	}
 }
 
 void AMainPlayerController::Server_PopMode_Implementation()
@@ -1511,10 +1599,15 @@ void AMainPlayerController::Multicast_PopMode_Implementation()
 
 	EGamePhase PrevPhase = PhaseStack.Pop();
 
-	if (InputHandlerMap.Contains(PrevPhase))
+	if (InputHandlerMap.Contains(PrevPhase) && !bEscapeMenuOpen)
 		InputHandlerMap[PrevPhase]->InputActivate();
 
 	CurrentPhase = PrevPhase;
+
+	if (bEscapeMenuOpen && IsLocalController())
+	{
+		EnterEscapeMenuInputMode();
+	}
 }
 
 void AMainPlayerController::Server_RequestRandomUpgradeOptions_Implementation()
@@ -1736,7 +1829,7 @@ int32 AMainPlayerController::GetStaticUpgradeCost(EUpgradeType Type, int32 Curre
 	return BaseCost + (CurrentLevel * 50);
 }
 // 현재 레벨을 조회하는 헬퍼
-int32 AMainPlayerController::GetCurrentUpgradeLevel(AMainPlayerState* PS, EUpgradeType Type)
+int32 AMainPlayerController::GetCurrentUpgradeLevel(AMainPlayerState* PS, EUpgradeType Type) const
 {
 	if (!PS) return 0;
 
@@ -1745,6 +1838,11 @@ int32 AMainPlayerController::GetCurrentUpgradeLevel(AMainPlayerState* PS, EUpgra
 	case EUpgradeType::Player_Health: return PS->PlayerData.LvHealth;
 	case EUpgradeType::Player_MoveSpeed: return PS->PlayerData.LvMovementSpeed;
 	case EUpgradeType::Player_HealthRegeneration: return PS->PlayerData.LvHealthRegeneration;
+	case EUpgradeType::Weapon_Damage:   return PS->GetWeaponStatLV(EWeaponStatType::Damage);
+	case EUpgradeType::Weapon_FireRate: return PS->GetWeaponStatLV(EWeaponStatType::FireRate);
+	case EUpgradeType::Weapon_Range:    return PS->GetWeaponStatLV(EWeaponStatType::Range);
+	case EUpgradeType::Weapon_Magazine: return PS->GetWeaponStatLV(EWeaponStatType::MagazineCapacity);
+	case EUpgradeType::Weapon_Reload:   return PS->GetWeaponStatLV(EWeaponStatType::ReloadTime);
 	default: return 0;
 	}
 }
@@ -1778,7 +1876,6 @@ void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int3
 		return;
 
 	int32 CurrentLevel = GetCurrentUpgradeLevel(PS, UpgradeType);
-	constexpr int32 MaxUpgradeLevel = 5;
 	if (CurrentLevel >= MaxUpgradeLevel)
 	{
 		return;
@@ -1796,10 +1893,13 @@ void AMainPlayerController::Server_SelectStaticUpgradeOption_Implementation(int3
 
 }
 
-int32 AMainPlayerController::GetWeaponUpgradePurchaseCost() const
+int32 AMainPlayerController::GetWeaponUpgradeCost(EUpgradeType Type) const
 {
-	// 캐릭터 고정 스탯 강화(기본 100 Gold)보다 조금 더 싸게 책정된 총기 개조 상품 가격.
-	return 70;
+	constexpr int32 BaseCost = 80;
+	constexpr int32 CostPerLevel = 50;
+
+	AMainPlayerState* PS = GetPlayerState<AMainPlayerState>();
+	return BaseCost + (GetCurrentUpgradeLevel(PS, Type) * CostPerLevel);
 }
 
 bool AMainPlayerController::Server_PurchaseWeaponUpgrade_Validate(int32 SlotIndex)
@@ -1836,7 +1936,12 @@ void AMainPlayerController::Server_PurchaseWeaponUpgrade_Implementation(int32 Sl
 	}
 	EUpgradeType UpgradeType = GS->ShopWeaponUpgradeOptions[SlotIndex];
 
-	int32 Cost = GetWeaponUpgradePurchaseCost();
+	if (GetCurrentUpgradeLevel(PS, UpgradeType) >= MaxUpgradeLevel)
+	{
+		return;
+	}
+
+	int32 Cost = GetWeaponUpgradeCost(UpgradeType);
 	if (PS->CurPlayerData.HoldingGold < Cost)
 	{
 		return;

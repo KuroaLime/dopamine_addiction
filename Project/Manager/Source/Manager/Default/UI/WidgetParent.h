@@ -16,6 +16,8 @@ class MANAGER_API UWidgetParent : public UUserWidget
 public:
 	virtual void BindCharacterState(class UCharacterStateComponent* NewCharacterState);
 
+	virtual void OnPlayerStateReady();
+
 protected:
 	virtual void NativeConstruct() override;
 	virtual void NativeDestruct() override;

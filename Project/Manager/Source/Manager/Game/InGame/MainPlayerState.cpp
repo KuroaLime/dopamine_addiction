@@ -9,7 +9,7 @@
 
 AMainPlayerState::AMainPlayerState()
 {
-	CurPlayerData.HoldingGold = 10000;
+	CurPlayerData.HoldingGold = 200;
 	CurPlayerData.CurrentHP = FMath::RoundToInt(BaseMaxHealth);
 
 
@@ -374,8 +374,6 @@ void AMainPlayerState::Server_ApplyUpgrad_Implementation(EUpgradeType Type)
 		return;
 	}
 
-	constexpr int32 MaxUpgradeLevel = 5;
-
 	switch (Type)
 	{
 	case EUpgradeType::Player_Health:
@@ -464,7 +462,7 @@ void AMainPlayerState::ApplyWeaponUpgradePurchase(EUpgradeType Type)
 {
 	if (!HasAuthority()) return;
 
-	constexpr float WeaponUpgradePurchaseAmount = 0.5f;
+	constexpr float WeaponUpgradePurchaseAmount = 1.0f;
 	switch (Type)
 	{
 	case EUpgradeType::Weapon_Damage:
@@ -503,20 +501,11 @@ float AMainPlayerState::GetFinalRegenRate(float BaseRegen) const {
 float AMainPlayerState::GetFinalMoveSpeed(float BaseMoveSpeed) const {
 	return BaseMoveSpeed + (PlayerData.LvMovementSpeed * 100.0f) + AccumulatedUpgrades.LvMoveSpeed;
 }
-float AMainPlayerState::GetFinalWeaponDamageMultiplier() const {
-	return 1.0f + (WeaponData.LvDamage * 0.15f) + AccumulatedUpgrades.LvWeaponDamage;
-}
-float AMainPlayerState::GetFinalFireDelayMultiplier() const {
-	return 1.0f + (WeaponData.LvFireRate * 0.10f) + AccumulatedUpgrades.LvWeaponFireRate;
-}
-float AMainPlayerState::GetFinalWeaponRangeMultiplier() const {
-	return 1.0f + (WeaponData.LvRange * 0.15f) + AccumulatedUpgrades.LvWeaponRange;
-}
 float AMainPlayerState::GetFinalMaxMagazine(float BaseMaxAmmo) const {
-	return BaseMaxAmmo + (WeaponData.LvMagazineCapacity * 4.0f) + AccumulatedUpgrades.LvWeaponMagazine;
+	return BaseMaxAmmo + (GetWeaponStatLV(EWeaponStatType::MagazineCapacity) * 4.0f);
 }
 float AMainPlayerState::GetFinalReloadTimeMultiplier() const {
-	return 1.0f + (WeaponData.LvReloadTime * 0.12f) + AccumulatedUpgrades.LvWeaponReload;
+	return 1.0f + (GetWeaponStatLV(EWeaponStatType::ReloadTime) * 0.12f);
 }
 
 int32 AMainPlayerState::GetCarriedAmmoByWeaponType(EWeaponType WeaponType) const

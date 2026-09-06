@@ -80,6 +80,12 @@ private:
 	void TryBindGameStateDelegate();
 	bool bBoundGameStateDelegate = false;
 
+	void SetShopMainContentHidden(bool bHidden);
+	TMap<TWeakObjectPtr<class UWidget>, ESlateVisibility> SavedShopVisibilities;
+
+	void HandleGameStateSet(class AGameStateBase* NewGameState);
+	FDelegateHandle GameStateSetHandle;
+
 protected:
 	UFUNCTION()
 	void HandleUpgradePurchase(int32 ItemID);
@@ -94,15 +100,16 @@ protected:
 	void SendToSelectionCardID(int32 CardID);
 public:
 	virtual void BindCharacterState(class UCharacterStateComponent* NewCharacterState) override;
+	virtual void OnPlayerStateReady() override;
 protected:
 	virtual void NativeConstruct() override;
+	virtual void NativeDestruct() override;
 
 public:
 	void Update_UpgradeSelectionWidget(const TArray<FRandomCardOption>& Options);
 	void UpdateUpgradeButtons();
 
 private:
-	FTimerHandle BindingTimerHandle;
 	bool bBoundDelegates = false;
 	void TryBindPlayerStateDelegates();
 	void OnPlayerDataChanged(const FPlayerData& NewPlayerData);

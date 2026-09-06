@@ -8,6 +8,7 @@
 
 class UButton;
 class UWidgetSwitcher;
+class UGraphicsSettingsWidget;
 
 /**
  * 인게임 ESC 메뉴. 좌측 탭(그래픽/소리/…) + 우측 설정 콘텐츠 + 하단 2버튼(로비로 나가기/돌아가기).
@@ -27,8 +28,19 @@ class MANAGER_API UEscapeMenuWidget : public UUserWidget
 {
 	GENERATED_BODY()
 
+public:
+	// 메뉴를 열 때마다 호출: 첫 탭 선택 + 그래픽 설정값을 현재 상태로 재동기화한다.
+	// (위젯이 재사용되어 상태가 낡는 문제 방지)
+	void RefreshForOpen();
+
 protected:
 	virtual void NativeConstruct() override;
+	// UI 전용 입력모드에선 ESC가 컨트롤러로 안 가므로, 메뉴가 직접 받아 닫는다.
+	virtual FReply NativeOnKeyDown(const FGeometry& InGeometry, const FKeyEvent& InKeyEvent) override;
+
+	// 그래픽 설정 콘텐츠 위젯(ContentSwitcher 안). WBP에서 이름을 GraphicsSettings로 두면 연결됨.
+	UPROPERTY(meta = (BindWidgetOptional))
+	UGraphicsSettingsWidget* GraphicsSettings = nullptr;
 
 	// --- 좌측 탭 (선택: 없으면 건너뜀) ---
 	UPROPERTY(meta = (BindWidgetOptional))

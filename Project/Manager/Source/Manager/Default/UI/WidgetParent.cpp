@@ -7,7 +7,11 @@
 
 
 void UWidgetParent::BindCharacterState(UCharacterStateComponent* NewCharacterState) {
-	
+
+}
+
+void UWidgetParent::OnPlayerStateReady() {
+
 }
 
 void UWidgetParent::NativeConstruct() {
