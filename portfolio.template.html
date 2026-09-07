@@ -1,0 +1,701 @@
+<title>도파민 어딕션 개발기</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,400;0,9..144,600;1,9..144,500;1,9..144,600&family=Noto+Serif+KR:wght@500;600;700&family=Noto+Sans+KR:wght@400;500;600;700&display=swap');
+
+  :root{
+    --ink:#0b1310;
+    --surface:#121a16;
+    --surface-2:#182019;
+    --surface-3:#1c2721;
+    --line:#28352d;
+    --line-soft:#20291f;
+    --text:#eee7d8;
+    --text-dim:#a3ada2;
+    --text-faint:#71796f;
+    --gold:#dcaa4e;
+    --gold-bright:#f0c56b;
+    --gold-dim:#8a6a34;
+    --red:#c24a3f;
+    --red-dim:#8a4941;
+    --felt:#356a4e;
+    --felt-dim:#20382b;
+    --shadow: 0 20px 50px -25px rgba(0,0,0,0.7);
+  }
+
+  *{box-sizing:border-box;}
+  body{
+    background:var(--ink);
+    color:var(--text);
+    font-family:'Noto Sans KR','IBM Plex Sans',system-ui,sans-serif;
+    font-weight:400;
+    line-height:1.7;
+    -webkit-font-smoothing:antialiased;
+  }
+
+  h1,h2,h3,h4{
+    font-family:'Noto Serif KR',serif;
+    font-weight:700;
+    color:var(--text);
+    text-wrap:balance;
+    margin:0;
+  }
+
+  .eyebrow{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-weight:500;
+    font-size:0.82rem;
+    letter-spacing:0.14em;
+    text-transform:uppercase;
+    color:var(--gold);
+  }
+
+  a{color:var(--gold-bright);}
+  a:hover{color:var(--gold);}
+  a:focus-visible, button:focus-visible, summary:focus-visible{
+    outline:2px solid var(--gold-bright);
+    outline-offset:3px;
+  }
+
+  img{display:block;max-width:100%;}
+
+  .wrap{
+    max-width:920px;
+    margin:0 auto;
+    padding:0 28px;
+  }
+
+  /* ---------- HERO ---------- */
+  .hero{
+    position:relative;
+    min-height:560px;
+    display:flex;
+    align-items:flex-end;
+    background:
+      linear-gradient(180deg, rgba(11,19,16,0.35) 0%, rgba(11,19,16,0.55) 40%, rgba(11,19,16,0.97) 96%),
+      url('{{IMG_TITLE}}') center 32% / cover no-repeat;
+    border-bottom:1px solid var(--line);
+  }
+  .hero-inner{
+    width:100%;
+    max-width:920px;
+    margin:0 auto;
+    padding:120px 28px 44px;
+    display:flex;
+    flex-direction:column;
+    gap:18px;
+  }
+  .hero-badge{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    width:fit-content;
+    padding:6px 12px;
+    border:1px solid var(--gold-dim);
+    border-radius:999px;
+    background:rgba(220,170,78,0.08);
+    font-size:0.78rem;
+    color:var(--gold-bright);
+    letter-spacing:0.04em;
+  }
+  .hero-badge .dot{width:6px;height:6px;border-radius:50%;background:var(--gold-bright);}
+  .hero h1{
+    font-size:clamp(2.6rem, 6vw, 4.2rem);
+    line-height:1.05;
+    letter-spacing:-0.01em;
+  }
+  .hero-en{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-weight:500;
+    color:var(--text-dim);
+    font-size:1.05rem;
+    letter-spacing:0.02em;
+    margin-top:-8px;
+  }
+  .hero-desc{
+    max-width:640px;
+    color:var(--text-dim);
+    font-size:1.02rem;
+  }
+  .hero-links{
+    display:flex;
+    flex-wrap:wrap;
+    gap:12px;
+    margin-top:6px;
+  }
+  .btn{
+    display:inline-flex;
+    align-items:center;
+    gap:8px;
+    padding:10px 18px;
+    border-radius:8px;
+    font-size:0.92rem;
+    font-weight:600;
+    text-decoration:none;
+    border:1px solid var(--line);
+    transition:border-color .15s ease, background .15s ease;
+  }
+  .btn-primary{
+    background:var(--gold);
+    color:#1b1408;
+    border-color:var(--gold);
+  }
+  .btn-primary:hover{background:var(--gold-bright);color:#1b1408;}
+  .btn-ghost{color:var(--text);}
+  .btn-ghost:hover{border-color:var(--gold-dim);color:var(--gold-bright);}
+
+  /* ---------- STAT RAIL ---------- */
+  .stat-rail{
+    border-bottom:1px solid var(--line);
+    background:var(--surface);
+    overflow-x:auto;
+  }
+  .stat-rail-inner{
+    max-width:920px;
+    margin:0 auto;
+    display:grid;
+    grid-template-columns:repeat(6, minmax(140px,1fr));
+    gap:0;
+  }
+  .stat{
+    padding:22px 20px;
+    border-left:1px solid var(--line-soft);
+  }
+  .stat:first-child{border-left:none;}
+  .stat-label{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-size:0.72rem;
+    letter-spacing:0.08em;
+    text-transform:uppercase;
+    color:var(--text-faint);
+    margin-bottom:6px;
+  }
+  .stat-value{
+    font-size:0.94rem;
+    font-weight:600;
+    color:var(--text);
+    line-height:1.4;
+  }
+  .stat-value.gold{color:var(--gold-bright);}
+
+  /* ---------- SECTION ---------- */
+  section{padding:76px 0;}
+  section + section{border-top:1px solid var(--line-soft);}
+  .section-head{
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+    margin-bottom:40px;
+  }
+  .section-head h2{font-size:clamp(1.7rem, 3.4vw, 2.3rem);}
+  .lede{
+    color:var(--text-dim);
+    max-width:680px;
+    font-size:1rem;
+  }
+
+  p{margin:0 0 1em;}
+  p:last-child{margin-bottom:0;}
+
+  /* ---------- MERMAID ---------- */
+  .diagram{
+    background:var(--surface-2);
+    border:1px solid var(--line);
+    border-radius:10px;
+    padding:22px;
+    margin:28px 0;
+    overflow-x:auto;
+  }
+  .diagram-cap{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-size:0.8rem;
+    color:var(--text-faint);
+    margin-top:12px;
+    text-align:center;
+  }
+
+  /* ---------- INTRO CARDS (게임 소개) ---------- */
+  .intro-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:22px;
+  }
+  .intro-card{
+    border:1px solid var(--line);
+    border-radius:12px;
+    background:var(--surface);
+    overflow:hidden;
+  }
+  .intro-card summary{
+    list-style:none;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    justify-content:space-between;
+    gap:16px;
+    padding:18px 22px;
+  }
+  .intro-card summary::-webkit-details-marker{display:none;}
+  .intro-card summary .t{
+    display:flex;
+    align-items:baseline;
+    gap:12px;
+  }
+  .intro-card summary h3{
+    font-size:1.15rem;
+  }
+  .intro-card summary .tag{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-size:0.78rem;
+    color:var(--text-faint);
+  }
+  .chev{
+    width:22px;height:22px;flex:none;
+    border:1px solid var(--line);
+    border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    color:var(--gold);
+    font-size:0.85rem;
+    transition:transform .18s ease;
+  }
+  details[open] > summary .chev{transform:rotate(45deg);}
+  .intro-body{
+    padding:0 22px 26px;
+    border-top:1px solid var(--line-soft);
+  }
+  .intro-body img{
+    border-radius:8px;
+    margin:18px 0;
+    border:1px solid var(--line);
+  }
+  .intro-body p{color:var(--text-dim);}
+
+  /* ---------- SYSTEM CASE CARDS ---------- */
+  .case{
+    border:1px solid var(--line);
+    border-radius:12px;
+    background:var(--surface);
+    margin-bottom:16px;
+    overflow:hidden;
+  }
+  .case summary{
+    list-style:none;
+    cursor:pointer;
+    display:flex;
+    align-items:center;
+    gap:18px;
+    padding:20px 22px;
+  }
+  .case summary::-webkit-details-marker{display:none;}
+  .case-num{
+    font-family:'Fraunces',serif;
+    font-weight:600;
+    font-size:1.6rem;
+    color:var(--gold-dim);
+    flex:none;
+    width:2.4ch;
+  }
+  details[open] .case-num{color:var(--gold-bright);}
+  .case-head{flex:1;min-width:0;}
+  .case-head h3{font-size:1.12rem;margin-bottom:4px;}
+  .case-tag{
+    font-size:0.8rem;
+    color:var(--text-faint);
+  }
+  .case-body{
+    padding:4px 24px 30px;
+    border-top:1px solid var(--line-soft);
+  }
+  .case-body h4{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-weight:500;
+    font-size:0.98rem;
+    color:var(--gold);
+    margin:26px 0 10px;
+  }
+  .case-body h4:first-child{margin-top:22px;}
+  .case-body p{color:var(--text-dim);}
+  .case-body p b, .case-body li b{color:var(--text);font-weight:600;}
+
+  .note{
+    border-left:3px solid var(--red-dim);
+    background:rgba(194,74,63,0.08);
+    padding:12px 16px;
+    border-radius:0 8px 8px 0;
+    font-size:0.94rem;
+    color:var(--text-dim);
+    margin:16px 0;
+  }
+  .note b{color:var(--red);}
+
+  ul.results{
+    list-style:none;
+    padding:0;
+    margin:10px 0 0;
+    display:flex;
+    flex-direction:column;
+    gap:10px;
+  }
+  ul.results li{
+    position:relative;
+    padding-left:20px;
+    color:var(--text-dim);
+    font-size:0.96rem;
+  }
+  ul.results li::before{
+    content:"◆";
+    position:absolute;
+    left:0;
+    top:0.05em;
+    color:var(--gold-dim);
+    font-size:0.7rem;
+  }
+
+  /* ---------- CODE ---------- */
+  .code-block{
+    margin:16px 0;
+    border:1px solid var(--line);
+    border-radius:10px;
+    overflow:hidden;
+    background:var(--surface-3);
+  }
+  .code-tag{
+    display:flex;
+    justify-content:space-between;
+    align-items:center;
+    padding:8px 14px;
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-size:0.74rem;
+    letter-spacing:0.06em;
+    color:var(--text-faint);
+    border-bottom:1px solid var(--line-soft);
+    background:var(--surface-2);
+  }
+  pre{
+    margin:0;
+    padding:16px 18px;
+    overflow-x:auto;
+    font-family:'JetBrains Mono','IBM Plex Mono',ui-monospace,'Noto Sans KR',monospace;
+    font-size:0.84rem;
+    line-height:1.65;
+  }
+  code{font-family:inherit;}
+  .hljs{background:transparent !important;color:var(--text) !important;}
+  .hljs-comment,.hljs-quote{color:var(--text-faint) !important;font-style:italic;}
+  .hljs-keyword,.hljs-built_in,.hljs-type{color:var(--gold-bright) !important;}
+  .hljs-string,.hljs-meta-string{color:#a7c08e !important;}
+  .hljs-number,.hljs-literal{color:#d29a6b !important;}
+  .hljs-title,.hljs-title.function_,.hljs-title.class_{color:#e7cf8e !important;}
+  .hljs-variable,.hljs-params,.hljs-attr{color:var(--text) !important;}
+  .hljs-operator,.hljs-punctuation{color:var(--text-dim) !important;}
+
+  /* ---------- TABLE ---------- */
+  .table-wrap{overflow-x:auto;margin:18px 0;}
+  table{
+    width:100%;
+    border-collapse:collapse;
+    font-size:0.9rem;
+  }
+  th,td{
+    text-align:left;
+    padding:10px 14px;
+    border-bottom:1px solid var(--line-soft);
+    vertical-align:top;
+  }
+  th{
+    font-family:'Fraunces',serif;
+    font-style:italic;
+    font-weight:500;
+    color:var(--gold);
+    font-size:0.82rem;
+    letter-spacing:0.03em;
+    border-bottom:1px solid var(--line);
+  }
+  td{color:var(--text-dim);}
+  td code{
+    background:var(--surface-3);
+    padding:1px 6px;
+    border-radius:4px;
+    font-size:0.86em;
+    color:var(--gold-bright);
+  }
+
+  /* ---------- CONCLUSION ---------- */
+  .pull{
+    font-family:'Noto Serif KR',serif;
+    font-weight:600;
+    font-size:clamp(1.3rem,3vw,1.7rem);
+    color:var(--gold-bright);
+    line-height:1.5;
+    border-left:3px solid var(--gold);
+    padding-left:22px;
+    margin:0 0 36px;
+  }
+  .concl-grid{
+    display:grid;
+    grid-template-columns:1fr;
+    gap:22px;
+  }
+  .concl-item{
+    padding:20px 22px;
+    background:var(--surface);
+    border:1px solid var(--line);
+    border-radius:10px;
+  }
+  .concl-item .eyebrow{display:block;margin-bottom:8px;}
+  .concl-item p{color:var(--text-dim);font-size:0.95rem;margin:0;}
+  .next-box{
+    margin-top:22px;
+    padding:18px 22px;
+    border:1px dashed var(--gold-dim);
+    border-radius:10px;
+    background:rgba(220,170,78,0.05);
+  }
+  .next-box .eyebrow{display:block;margin-bottom:8px;}
+  .next-box p{color:var(--text-dim);margin:0;font-size:0.95rem;}
+
+  /* ---------- FOOTER ---------- */
+  footer{
+    padding:52px 0 64px;
+    border-top:1px solid var(--line);
+    background:var(--surface);
+  }
+  .foot-grid{
+    display:flex;
+    flex-wrap:wrap;
+    justify-content:space-between;
+    align-items:flex-end;
+    gap:24px;
+  }
+  .foot-title{font-family:'Noto Serif KR',serif;font-weight:700;font-size:1.3rem;}
+  .foot-sub{color:var(--text-faint);font-size:0.86rem;margin-top:4px;}
+  .foot-links{display:flex;gap:22px;flex-wrap:wrap;}
+  .foot-links a{
+    font-size:0.9rem;
+    text-decoration:none;
+    border-bottom:1px solid var(--gold-dim);
+    padding-bottom:2px;
+  }
+
+  @media (max-width:720px){
+    .stat-rail-inner{grid-template-columns:repeat(2,1fr);}
+    .stat:nth-child(2n+1){border-left:none;}
+    .stat{border-top:1px solid var(--line-soft);}
+    .stat:nth-child(-n+2){border-top:none;}
+    .hero-inner{padding-top:88px;}
+  }
+
+  @media (prefers-reduced-motion: reduce){
+    *{transition:none !important;}
+  }
+</style>
+
+<!-- HERO -->
+<div class="hero">
+  <div class="hero-inner">
+    <span class="hero-badge"><span class="dot"></span>GRADUATION CAPSTONE · UNREAL ENGINE 5 / C++</span>
+    <h1>도파민 어딕션</h1>
+    <div class="hero-en">Dopamine Addiction — a round-based hybrid multiplayer</div>
+    <p class="hero-desc">3인칭 슈팅 액션, 전통 카드(섯다), 상점 성장이라는 서로 다른 세 장르를 한 라운드 안에서 순서대로 겪게 만드는 데디케이티드 서버 기반 온라인 멀티플레이어 게임입니다. 4인 팀에서 클라이언트 프로그래머로 참여했습니다.</p>
+    <div class="hero-links">
+      <a class="btn btn-primary" href="https://github.com/KuroaLime/dopamine_addiction/tree/Gil_Refactoring" target="_blank" rel="noopener">GitHub 저장소</a>
+      <a class="btn btn-ghost" href="https://youtu.be/Gi9b-EheNaE" target="_blank" rel="noopener">유튜브 트레일러</a>
+    </div>
+  </div>
+</div>
+
+<!-- STAT RAIL -->
+<div class="stat-rail">
+  <div class="stat-rail-inner">
+    <div class="stat">
+      <div class="stat-label">Engine</div>
+      <div class="stat-value">Unreal Engine 5, C++<br>(Dedicated Server)</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Genre</div>
+      <div class="stat-value">TPS × 전통 카드(섯다)<br>× 상점 성장 하이브리드</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Team</div>
+      <div class="stat-value">4인 팀<br>클라이언트 프로그래머</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Duration</div>
+      <div class="stat-value">2025.09 – 2026.09<br>(약 12개월)</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Mode</div>
+      <div class="stat-value">온라인 멀티플레이<br>3라운드제</div>
+    </div>
+    <div class="stat">
+      <div class="stat-label">Status</div>
+      <div class="stat-value gold">✔ 달성 완료</div>
+    </div>
+  </div>
+</div>
+
+<div class="wrap">
+
+<!-- GAME INTRO -->
+<section id="intro">
+  <div class="section-head">
+    <span class="eyebrow">Game Overview</span>
+    <h2>게임 소개</h2>
+    <p class="lede">TPS 전투, 섯다, 상점 성장을 한 라운드의 순환 구조로 엮었습니다. 전투만으로는 얻을 수 없는 승부(섯다의 심리전)와, 전투로만 얻을 수 있는 자원(카드)을 서로 맞물리게 해서 한 라운드 안에서도 여러 번 판도가 바뀌도록 설계했습니다.</p>
+  </div>
+
+  <div class="diagram">
+    <pre class="mermaid">
+%%{init: {'theme':'dark', 'themeVariables': {'primaryColor':'#1c2721','primaryTextColor':'#eee7d8','primaryBorderColor':'#dcaa4e','lineColor':'#dcaa4e','secondaryColor':'#182019','tertiaryColor':'#182019','fontFamily':'Noto Sans KR'}}}%%
+flowchart LR
+    Shop["상점: 스탯 준비"] --> Battle["TPS 전투: 카드 획득"]
+    Battle --> Seotda["섯다: 카드로 승부"]
+    Seotda -->|다음 라운드| Shop
+    Seotda -->|3라운드 종료| Result["최다 골드 보유자 승리"]
+    </pre>
+    <div class="diagram-cap">3라운드가 모두 끝난 시점에 가장 많은 골드를 보유한 플레이어가 승리하며, 동률이면 공동 우승으로 처리합니다.</div>
+  </div>
+
+  <div class="intro-grid">
+
+    <details class="intro-card" open>
+      <summary>
+        <span class="t"><h3>전투 (TPS)</h3><span class="tag">5분 · 카드 파밍</span></span>
+        <span class="chev">+</span>
+      </summary>
+      <div class="intro-body">
+        <img src="{{IMG_LOBBY0}}" alt="로비 화면" loading="lazy">
+        <p>전투 라운드(5분)에는 모든 플레이어가 같은 맵에 풀려 서로를 상대로 총기 교전을 벌입니다. 무기마다 탄창 용량·연사속도·재장전 시간이 다르고, 상점에서 미리 올려둔 스탯(체력, 이동속도, 체력 재생, 무기 스탯)이 전투 내내 그대로 적용됩니다. 이전 라운드 섯다 게임에서 얻은 카드는 전투 맵 위 섬들에 흩어져 드롭되어 있어, 교전 중에 직접 주우러 가야 합니다. 즉 전투 라운드의 목표는 상대를 제압하는 것뿐 아니라 다음 섯다 판에 쓸 카드를 최대한 많이 확보하는 것이기도 합니다.</p>
+        <p>전투 중 데미지를 입어도 일정 시간 공격을 받지 않으면 체력이 서서히 자연 회복됩니다. 이 때문에 무리하게 교전을 이어가기보다 잠깐 거리를 벌리는 것도 유효한 선택이 됩니다. 드물게 "황금 고블린"이라는 레어 몬스터가 전투 중 등장하는데, 처치하면 상당한 골드를 보상으로 얻을 수 있습니다.</p>
+      </div>
+    </details>
+
+    <details class="intro-card">
+      <summary>
+        <span class="t"><h3>카드(섯다) 게임</h3><span class="tag">전통 화투 규칙</span></span>
+        <span class="chev">+</span>
+      </summary>
+      <div class="intro-body">
+        <img src="{{IMG_SEOTDA_PLAY}}" alt="카드(섯다) 게임 진행 화면" loading="lazy">
+        <p>전투가 끝나면 별도 스테이지로 전환되어, 전투 중 모은 카드로 화투 두 장짜리 전통 섯다 규칙에 따라 승부를 겨룹니다. 카드 조합으로 기본 순위(광땡 → 땡 → 알리/독사 같은 특수 조합 → 끗)가 정해지고, "땡잡이"나 "암행어사"처럼 특정 상황에서 상위 조합을 오히려 뒤집는 전통 섯다 특수 패도 그대로 구현했습니다.</p>
+        <img src="{{IMG_SEOTDA_END}}" alt="카드(섯다) 게임 종료 화면" loading="lazy">
+        <p>베팅은 체크·콜·쿼터·하프·따당·삥·다이·올인까지 실제 섯다에서 쓰이는 베팅 액션을 그대로 재현해서, 카드 패만큼이나 베팅 타이밍과 심리전이 승부에 영향을 줍니다. 이 라운드의 승패에 따라 보유 골드가 오르내리고, 그 골드가 다음 상점 라운드의 실질적인 시드가 됩니다.</p>
+      </div>
+    </details>
+
+    <details class="intro-card">
+      <summary>
+        <span class="t"><h3>상점 &amp; 성장</h3><span class="tag">두 갈래 성장 경로</span></span>
+        <span class="chev">+</span>
+      </summary>
+      <div class="intro-body">
+        <img src="{{IMG_SHOP}}" alt="상점 창 화면" loading="lazy">
+        <p>각 라운드 전투가 시작되기 전 짧은 상점 시간이 주어지며, 이동이 제한된 채 그동안 모은 골드로 스탯을 업그레이드하는 데에만 집중하게 됩니다. 성장 경로는 두 갈래입니다 — 매번 무작위로 제시되는 카드 강화(체력/이동속도/체력재생 등 캐릭터 고정 스탯 위주)를 뽑아 사는 방법과, 무기 스탯(공격력·연사력·사거리·탄창·재장전) 5종 중 매 라운드 무작위로 열리는 3종을 직접 지목해 사는 방법입니다. 무기 개조 쪽은 카드 강화보다 저렴한 대신 스탯 증가폭도 더 작게 잡아, 확률에 기대는 카드 뽑기의 가치를 깎아먹지 않으면서도 확실한 보강 수단을 하나 더 제공하는 보조 경로로 자리잡고 있습니다.</p>
+      </div>
+    </details>
+
+    <details class="intro-card">
+      <summary>
+        <span class="t"><h3>황금 고블린</h3><span class="tag">레어 몬스터 조우</span></span>
+        <span class="chev">+</span>
+      </summary>
+      <div class="intro-body">
+        <img src="{{IMG_GOBLIN_ENC}}" alt="황금 고블린 조우 장면" loading="lazy">
+        <p>전투 라운드 중 낮은 확률로 등장하는 회피형 레어 몬스터입니다. 고정된 위치나 완전히 무작위로 등장하는 대신, 최근에 전투가 있었는지를 계속 지켜보다가 전투가 한동안 잠잠해진 "적절한 순간"에만, 모든 플레이어에게서 충분히 떨어진 위치에만 나타나도록 만들었습니다. 평소에는 배회하다가 플레이어를 발견하면 정면 승부 대신 거리를 벌리며 도망치고, 끝까지 쫓아가 처치하면 그 자리에서 상당한 골드를 남기고 사라집니다.</p>
+        <img src="{{IMG_GOBLIN_REWARD}}" alt="황금 고블린 토벌 후 보상 드랍" loading="lazy">
+        <p>이 몬스터를 직접 설계·구현한 과정은 아래 <b>담당 시스템 07</b>에서 AI 디렉터 구조로 자세히 다룹니다.</p>
+      </div>
+    </details>
+
+  </div>
+</section>
+
+<!-- COLLAB -->
+<section id="collab">
+  <div class="section-head">
+    <span class="eyebrow">Workflow</span>
+    <h2>협업 방식</h2>
+  </div>
+  <p>브랜치 단위로 기능을 개발한 뒤 병합하는 방식으로 협업했습니다. <code>Gil5</code>, <code>Gil5Lee_Test</code>, <code>Gil5Lee_Card</code>, <code>Gil_Refactoring</code> 등 개인 작업 브랜치를 운용하며, 각자 자신의 브랜치에서 기능 단위로 커밋을 쌓은 뒤 원 브랜치로 병합했습니다.</p>
+</section>
+
+<!-- SYSTEMS -->
+<section id="systems">
+  <div class="section-head">
+    <span class="eyebrow">System Log · 01–09</span>
+    <h2>담당 시스템</h2>
+    <p class="lede">클라이언트 프로그래머로서 직접 설계·구현한 9개 시스템의 문제 정의, 구현 과정, 그리고 겪은 시행착오를 기록했습니다. 각 항목을 펼치면 문제/배경 → 설계 및 구현 → 결과 순으로 확인할 수 있습니다.</p>
+  </div>
+
+  {{SYSTEM_01}}
+  {{SYSTEM_02}}
+  {{SYSTEM_03}}
+  {{SYSTEM_04}}
+  {{SYSTEM_05}}
+  {{SYSTEM_06}}
+  {{SYSTEM_07}}
+  {{SYSTEM_08}}
+  {{SYSTEM_09}}
+
+</section>
+
+<!-- CONCLUSION -->
+<section id="conclusion">
+  <div class="section-head">
+    <span class="eyebrow">Synthesis</span>
+    <h2>종합 결론</h2>
+  </div>
+
+  <p class="pull">"이 값을 누가 소유하고, 클라이언트에는 어디까지 보여줄 것인가" — 서버 권위(Authority) 원칙을 얼마나 일관되게 지킬 것인가가 담당 시스템 전체를 관통하는 질문이었습니다.</p>
+
+  <div class="concl-grid">
+    <div class="concl-item">
+      <span class="eyebrow">Architecture</span>
+      <p>Pawn / PlayerState / GameState의 생명주기 차이를 이론이 아니라 실제 리팩토링 비용(시스템 04)으로 체감했고, 이후 시스템(05, 06)을 설계할 때는 "이 데이터가 어떤 객체와 생명주기를 같이 해야 하는가"를 먼저 따지는 습관이 생겼습니다.</p>
+    </div>
+    <div class="concl-item">
+      <span class="eyebrow">Collaboration</span>
+      <p>브랜치 단위로 독립 작업 후 병합하는 구조에서, 팀원의 리팩토링 커밋이 제가 만든 코드의 암묵적 전제(시스템 06 — 이미지·머티리얼 배열이 항상 같이 존재한다는 가정)를 깨뜨리며 실제 크래시로 드러난 경험은, 코드의 정확성만큼이나 "다른 사람이 내 가정을 깰 수 있다"는 방어적 설계의 필요성을 체감하게 했습니다.</p>
+    </div>
+    <div class="concl-item">
+      <span class="eyebrow">AI Director</span>
+      <p>황금 고블린 AI(시스템 07)에서는 Left 4 Dead식 AI 디렉터 패턴을 요구사항 정의 단계부터 클래스 구조, Behavior Tree, 스폰 페이싱까지 직접 설계·구현했습니다.</p>
+    </div>
+    <div class="concl-item">
+      <span class="eyebrow">Measurement</span>
+      <p>렌더링 성능 조사(시스템 08)에서는 에디터 PIE 측정만 믿고 내렸던 첫 결론("GPU가 무겁다")이 Standalone 빌드로 다시 측정하면서 뒤집혔고, 카드 배치 진단 로깅(시스템 09)에서는 판정 로직은 그대로 둔 채 실패 원인을 진단 가능하게 만드는 관측성 개선을 시도했습니다. 두 작업 모두 "감으로 판단하지 말고 측정하거나 진단 가능하게 만들자"는 같은 태도에서 나왔습니다.</p>
+    </div>
+  </div>
+
+  <div class="next-box">
+    <span class="eyebrow">Next</span>
+    <p>렌더링 조사(시스템 08)가 밝혀낸 근본 원인(씬 전체가 Movable)은 아직 해결 전입니다. 가장 큰 효과가 기대되는 섬별 정적 장식물의 ISM/HISM 병합을 실제로 적용하는 것, 그리고 아직 감으로 판단하고 있는 나머지 부분(상점 밸런스 추정치 등)도 마저 계측해 데이터로 뒷받침하는 것이 다음 목표입니다.</p>
+  </div>
+</section>
+
+</div>
+
+<footer>
+  <div class="wrap foot-grid">
+    <div>
+      <div class="foot-title">도파민 어딕션</div>
+      <div class="foot-sub">Unreal Engine 5 · C++ · 4인 팀 졸업작품 (2025.09 – 2026.09)</div>
+    </div>
+    <div class="foot-links">
+      <a href="https://github.com/KuroaLime/dopamine_addiction/tree/Gil_Refactoring" target="_blank" rel="noopener">GitHub</a>
+      <a href="https://youtu.be/Gi9b-EheNaE" target="_blank" rel="noopener">YouTube</a>
+      <a href="mailto:jdh095648@gmail.com">jdh095648@gmail.com</a>
+    </div>
+  </div>
+</footer>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/11.9.0/highlight.min.js"></script>
+<script>
+  try{ hljs.highlightAll(); }catch(e){}
+</script>
