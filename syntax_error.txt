@@ -1,3 +1,0 @@
-SyntaxError('invalid syntax. Perhaps you forgot a comma?', ('<unknown>', 499, 5, "    '<h4>문제/배경</h4>'", 586, 10))
-lineno=499 offset=5 end_lineno=586 end_offset=10
-text="    '<h4>문제/배경</h4>'"
